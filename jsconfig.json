@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "target": "ES2022",
+    "types": ["node"]
+  },
+  "include": ["apps/**/*.js", "apps/**/*.d.ts", "packages/**/*.js", "scripts/**/*.js", "tests/**/*.js"],
+  "exclude": [
+    "**/dist/**",
+    "**/build/**",
+    "**/node_modules/**",
+    "toolchain/**",
+    "examples/**/build/**"
+  ]
+}

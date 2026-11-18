@@ -1,0 +1,43 @@
+# Dependencies and package output
+node_modules/
+*.tgz
+npm-debug.log*
+
+# Build systems and generated artifacts
+build/
+build-*/
+dist/
+out/
+coverage/
+managed_components/
+dependencies.lock
+compile_commands.json
+
+# ESP-IDF and SDK files
+sdkconfig
+sdkconfig.old
+**/sdkconfig
+**/sdkconfig.old
+
+# Firmware and compiler artifacts
+*.elf
+*.bin
+*.wasm
+*.wasm.gz
+*.map
+*.uf2
+*.hex
+*.o
+*.a
+
+# Downloaded toolchains and framework sources
+toolchain/esp32-c3/esp-idf/
+toolchain/esp32-c3/cache/
+.wicro/
+
+# Temporary and editor state
+*.tmp
+*.log
+.DS_Store
+.vscode/
+.idea/

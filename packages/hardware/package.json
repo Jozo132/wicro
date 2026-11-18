@@ -1,0 +1,17 @@
+{
+  "name": "@wicro/hardware",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.js",
+  "scripts": {
+    "test": "node --test",
+    "check:types": "tsc --noEmit -p ../../jsconfig.json"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "serialport": "^13.0.0"
+  }
+}

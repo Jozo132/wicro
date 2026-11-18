@@ -1,0 +1,33 @@
+{
+  "name": "@jozo132/wicro",
+  "version": "0.1.0",
+  "description": "Universal embedded development platform",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "wicro": "./bin/wicro.js"
+  },
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check:types": "tsc --noEmit -p ../../jsconfig.json",
+    "prepack": "npm test"
+  },
+  "keywords": [
+    "wicro",
+    "embedded",
+    "development",
+    "cli"
+  ]
+}

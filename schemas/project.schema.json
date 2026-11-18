@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wicro.dev/schemas/project.schema.json",
+  "title": "Wicro project manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name"],
+  "properties": {
+    "$schema": { "type": "string", "format": "uri" },
+    "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "board": { "type": "string" },
+    "framework": { "type": "string" },
+    "toolchain": { "type": "string" },
+    "packages": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "minLength": 1 }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "flags": { "type": "array", "items": { "type": "string" } },
+        "defines": { "type": "array", "items": { "type": "string" } },
+        "sources": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

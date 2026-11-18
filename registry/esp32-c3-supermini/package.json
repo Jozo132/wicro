@@ -1,0 +1,29 @@
+{
+  "name": "esp32-c3-supermini",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "ESP32-C3 SuperMini board package",
+  "license": "MIT",
+  "sha256": "",
+  "dependencies": {
+    "esp-idf": "^6.1.0",
+    "riscv32-esp-elf": "^1.0.0"
+  },
+  "metadata": {
+    "manufacturer": "Espressif",
+    "mcu": "ESP32-C3",
+    "architecture": "riscv32",
+    "flashAutoDetect": true,
+    "led": { "pin": 8, "activeLow": true },
+    "bootPin": 9,
+    "nativeUsbPins": [18, 19],
+    "usbVendorId": "303a",
+    "usbProductId": "1001",
+    "uploadBaud": 460800,
+    "monitorBaud": 115200,
+    "memory": {
+      "iram": "0x4037c000",
+      "dram": "0x3fc80000"
+    }
+  }
+}
