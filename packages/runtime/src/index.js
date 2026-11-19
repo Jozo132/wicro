@@ -3,6 +3,8 @@ import { closeSync, openSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { mkdir } from 'node:fs/promises';
 
 /** @typedef {object} WasiRunOptions @property {string[]} [args] @property {Record<string,string>} [env] @property {Record<string,string>} [preopens] @property {boolean} [returnOnExit] */
 
@@ -146,22 +148,60 @@ export class LlvmWasmToolchain {
     throw new Error(`Unsupported LLVM target: ${target}`);
   }
 
-  /** @param {string} source @param {string} target @param {{march?:string,mabi?:string,mcpu?:string,mcu?:string}} [targetOptions] */
-  async compileC(source, target = 'riscv32', targetOptions = {}) {
+/**
+ * Compile C, C++, or assembly source with the shared LLVM WASM compiler.
+ * @param {string} source
+ * @param {string} target
+ * @param {{march?:string,mabi?:string,mcpu?:string,mcu?:string}} [targetOptions]
+ * @param {{language?:'c'|'c++'|'assembly',includeDirs?:string[],cacheDirectory?:string,files?:Record<string,string|Uint8Array>,diagnostics?:string[]}} [options]
+ */
+  async compileSource(source, target = 'riscv32', targetOptions = {}, options = {}) {
+    const language = options.language ?? 'c';
+    const extension = language === 'c++' ? 'cpp' : language === 'assembly' ? 's' : 'c';
     const directory = await mkdtemp(join(tmpdir(), 'wicro-llvm-'));
 
     try {
-      await writeFile(join(directory, 'main.c'), source);
+      await writeFile(join(directory, `main.${extension}`), source);
+      for (const [name, data] of Object.entries(options.files ?? {})) {
+        if (name.includes('..') || name.startsWith('/')) throw new Error(`Unsafe include file path: ${name}`);
+        const path = join(directory, name);
+        await mkdir(join(directory, name).slice(0, join(directory, name).lastIndexOf('/')), { recursive: true });
+        await writeFile(path, data);
+      }
+
+      const cacheKey = createHash('sha256').update(JSON.stringify({
+        source,
+        target,
+        targetOptions,
+        language,
+        includeDirs: options.includeDirs ?? [],
+        files: Object.fromEntries(Object.entries(options.files ?? {}).map(([name, data]) => [name, typeof data === 'string' ? data : createHash('sha256').update(data).digest('hex')]))
+      })).digest('hex');
+      const cacheDirectory = options.cacheDirectory;
+      const cachedObject = cacheDirectory ? join(cacheDirectory, `${cacheKey}.o`) : undefined;
+
+      if (cachedObject) {
+        try {
+          const object = await readFile(cachedObject);
+          return { object, target, cache: 'hit', diagnostics: options.diagnostics ?? [] };
+        } catch {
+          // Compile on a cache miss.
+        }
+      }
+
+      const args = [
+        'clang',
+        ...this.targetArgs(target, targetOptions),
+        ...(language === 'c++' ? ['-x', 'c++'] : language === 'assembly' ? ['-x', 'assembler'] : []),
+        ...((options.includeDirs ?? []).flatMap((directoryName) => ['-I', `/tmp/${directoryName}`])),
+        '-nostdlib',
+        '-c',
+        `/tmp/main.${extension}`,
+        '-o',
+        '/tmp/main.o'
+      ];
       const result = await this.runner.run(this.llvmPath, {
-        args: [
-          'clang',
-          ...this.targetArgs(target, targetOptions),
-          '-nostdlib',
-          '-c',
-          '/tmp/main.c',
-          '-o',
-          '/tmp/main.o'
-        ],
+        args,
         preopens: { '/tmp': directory }
       });
 
@@ -170,10 +210,19 @@ export class LlvmWasmToolchain {
       }
 
       const object = await readFile(join(directory, 'main.o'));
-      return { object, target, diagnostics: result.stderr ? [result.stderr] : [] };
+      if (cachedObject) {
+        await mkdir(/** @type {string} */ (cacheDirectory), { recursive: true });
+        await writeFile(cachedObject, object);
+      }
+      return { object, target, cache: 'miss', diagnostics: result.stderr ? [result.stderr] : (options.diagnostics ?? []) };
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  }
+
+  /** @param {string} source @param {string} target @param {{march?:string,mabi?:string,mcpu?:string,mcu?:string}} [targetOptions] */
+  async compileC(source, target = 'riscv32', targetOptions = {}) {
+    return this.compileSource(source, target, targetOptions, { language: 'c' });
   }
 
   /**

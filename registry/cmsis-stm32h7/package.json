@@ -4,7 +4,6 @@
   "kind": "cmsis",
   "description": "CMSIS baseline package for STM32H7 targets",
   "license": "MIT",
-  "sha256": "",
   "metadata": {
     "targets": ["stm32h723vg"],
     "families": ["stm32h7"]

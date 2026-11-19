@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { cp, mkdir, readFile, stat } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { unzipSync } from 'fflate';
 
@@ -30,7 +30,14 @@ export class PackageInstaller {
       return this.installLocal(new URL(source).pathname, options);
     }
 
-    return this.installLocal(resolve(source), options);
+    const local = resolve(source);
+    const details = await stat(local);
+    if (details.isDirectory()) return this.installLocal(local, options);
+
+    const bytes = await readFile(local);
+    if (options.sha256) verifySha256(bytes, options.sha256);
+    if (!isZip(bytes)) throw new Error(`Package archive is not a ZIP: ${local}`);
+    return this.installZip(bytes, options);
   }
 
   /** @param {string} url @param {InstallOptions} [options] */
@@ -50,13 +57,20 @@ export class PackageInstaller {
   async installZip(bytes, options = {}) {
     const entries = unzipSync(bytes);
     const installed = [];
+    const name = options.name ?? 'package';
 
     for (const [rawName, data] of Object.entries(entries)) {
-      const name = safeArchivePath(rawName);
+      const safeName = safeArchivePath(rawName);
       if (rawName.endsWith('/') || rawName.endsWith('\\')) continue;
 
-      if (this.files) await this.files.writeFile(`/${options.name ?? 'packages'}/${name}`, data);
-      installed.push(name);
+      if (this.files) await this.files.writeFile(`/${name}/${safeName}`, data);
+
+      if (options.cacheDirectory) {
+        const cachePath = resolve(options.cacheDirectory, name, safeName);
+        await mkdir(cachePath.slice(0, cachePath.lastIndexOf('/')), { recursive: true });
+        await (await import('node:fs/promises')).writeFile(cachePath, data);
+      }
+      installed.push(safeName);
     }
 
     return { ok: true, kind: 'zip', count: installed.length, files: installed };
@@ -68,13 +82,22 @@ export class PackageInstaller {
     const details = await stat(source);
     if (!details.isDirectory()) throw new Error(`Package source is not a directory: ${source}`);
 
+    const name = options.name ?? inferPackageName(source);
     const target = options.cacheDirectory
-      ? resolve(options.cacheDirectory, options.name ?? 'package')
-      : resolve('.wicro/packages', options.name ?? 'package');
+      ? resolve(options.cacheDirectory, name)
+      : resolve('.wicro/packages', name);
+    await rm(target, { recursive: true, force: true });
     await mkdir(target, { recursive: true });
     await cp(source, target, { recursive: true, dereference: true, preserveTimestamps: true });
 
-    return { ok: true, kind: 'directory', source, target };
+    return { ok: true, kind: 'directory', source, target, name };
+  }
+
+  /** @param {string} name @param {{directory?:string}} [options] */
+  async remove(name, options = {}) {
+    const target = resolve(options.directory ?? '.wicro/packages', name);
+    await rm(target, { recursive: true, force: true });
+    return { ok: true, removed: name, target };
   }
 }
 
@@ -84,6 +107,11 @@ export const verifySha256 = (bytes, expected) => {
   if (actual !== expected.toLowerCase()) {
     throw new Error(`SHA-256 mismatch: expected ${expected.toLowerCase()}, got ${actual}`);
   }
+};
+
+/** @param {string} directory */
+const inferPackageName = (directory) => {
+  return directory.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? 'package';
 };
 
 /** @param {Uint8Array} bytes */

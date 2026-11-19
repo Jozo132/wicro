@@ -85,17 +85,28 @@ const connectButton = document.querySelector('#connect');
 const targetSelect = /** @type {HTMLSelectElement|null} */ (document.querySelector('#target'));
 const firmwareInput = /** @type {HTMLInputElement|null} */ (document.querySelector('#firmware'));
 
-/** @type {Record<string,{label:string,args:string[]}>} */
-const targetConfigs = {
-  'esp32-c3': { label: 'RISC-V RV32IMC', args: ['--target=riscv32-esp-elf', '-march=rv32imc', '-mabi=ilp32'] },
-  'esp32-original': { label: 'Xtensa LX6', args: ['--target=xtensa-esp-elf', '-mcpu=esp32'] },
-  'esp8266': { label: 'Xtensa L106', args: ['--target=xtensa-esp-elf', '-mcpu=esp8266'] },
-  'stm32f103cb': { label: 'ARM Cortex-M3', args: ['--target=arm-none-eabi', '-mcpu=cortex-m3', '-mthumb', '-mfloat-abi=soft'] },
-  'stm32h723vg': { label: 'ARM Cortex-M7', args: ['--target=arm-none-eabi', '-mcpu=cortex-m7', '-mthumb', '-mfloat-abi=hard'] },
-  'stm32f401rc': { label: 'ARM Cortex-M4', args: ['--target=arm-none-eabi', '-mcpu=cortex-m4', '-mthumb', '-mfloat-abi=hard'] },
-  'rp2040': { label: 'ARM Cortex-M0+', args: ['--target=arm-none-eabi', '-mcpu=cortex-m0plus', '-mthumb'] },
-  'rp2350': { label: 'ARM Cortex-M33', args: ['--target=arm-none-eabi', '-mcpu=cortex-m33', '-mthumb', '-mfloat-abi=hard'] },
-  'arduino-uno': { label: 'AVR ATmega328P', args: ['--target=avr', '-mmcu=atmega328p'] }
+/** @typedef {{label:string,build:{target:'riscv32'|'xtensa'|'armv7-m'|'armv7e-m'|'armv6m'|'armv8m-mainline'|'avr',targetOptions:{march?:string,mabi?:string,mcpu?:string,mcu?:string}}}} BoardConfig */
+/** @type {Record<string,BoardConfig>|null} */
+let targetConfigs = null;
+
+/** @returns {Promise<Record<string,BoardConfig>>} */
+const loadTargetConfigs = async () => {
+  if (targetConfigs) return targetConfigs;
+  const response = await fetch('/boards.json', { cache: 'no-cache' });
+  if (!response.ok) throw new Error(`Board manifest failed (${response.status})`);
+  targetConfigs = /** @type {Record<string,BoardConfig>} */ (await response.json());
+  return targetConfigs;
+};
+
+/** @param {BoardConfig['build']} build */
+const buildArgs = (build) => {
+  if (build.target === 'riscv32') return ['--target=riscv32-esp-elf', `-march=${build.targetOptions.march ?? 'rv32imc'}`, `-mabi=${build.targetOptions.mabi ?? 'ilp32'}`];
+  if (build.target === 'xtensa') return ['--target=xtensa-esp-elf', `-mcpu=${build.targetOptions.mcpu ?? 'esp32'}`];
+  if (build.target === 'avr') return ['--target=avr', `-mmcu=${build.targetOptions.mcu ?? 'atmega328p'}`];
+  if (build.target === 'armv6m') return ['--target=arm-none-eabi', `-mcpu=${build.targetOptions.mcpu ?? 'cortex-m0plus'}`, '-mthumb'];
+  if (build.target === 'armv7-m') return ['--target=arm-none-eabi', `-mcpu=${build.targetOptions.mcpu ?? 'cortex-m3'}`, '-mthumb', '-mfloat-abi=soft'];
+  if (build.target === 'armv7e-m') return ['--target=arm-none-eabi', `-mcpu=${build.targetOptions.mcpu ?? 'cortex-m4'}`, '-mthumb', '-mfloat-abi=hard'];
+  return ['--target=arm-none-eabi', `-mcpu=${build.targetOptions.mcpu ?? 'cortex-m33'}`, '-mthumb', '-mfloat-abi=hard'];
 };
 
 /** @param {string} text */
@@ -103,18 +114,24 @@ const setStatus = (text) => {
   if (status) status.textContent = text;
 };
 
-targetSelect?.addEventListener('change', () => {
+targetSelect?.addEventListener('change', async () => {
   const targetName = targetSelect.value;
   const targetStatus = document.querySelector('#target-status');
-  const targetConfig = targetConfigs[targetName];
-  if (targetStatus && targetConfig) targetStatus.textContent = targetConfig.label;
+  try {
+    const configs = await loadTargetConfigs();
+    const targetConfig = configs[targetName];
+    if (targetStatus && targetConfig) targetStatus.textContent = targetConfig.label;
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Board manifest failed');
+  }
 });
 
 compileButton?.addEventListener('click', async () => {
   setStatus('Loading shared LLVM WASM toolchain…');
   try {
     const targetName = targetSelect?.value ?? 'esp32-c3';
-    const targetConfig = targetConfigs[targetName];
+    const configs = await loadTargetConfigs();
+    const targetConfig = configs[targetName];
     if (!targetConfig) throw new Error(`Unknown board target: ${targetName}`);
 
     const manifestResponse = await fetch('/toolchain/manifest.json', { cache: 'no-cache' });
@@ -133,7 +150,7 @@ compileButton?.addEventListener('click', async () => {
     let stderr = '';
     const wasi = new WASI([
       'clang',
-      ...targetConfig.args,
+      ...buildArgs(targetConfig.build),
       '-nostdlib',
       '-c',
       'main.c',

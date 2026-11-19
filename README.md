@@ -11,6 +11,10 @@ The npm package is `@jozo132/wicro`. Its command-line executable is `wicro`.
 - Package manifest, semver, archive and virtual filesystem foundations
 - Parallel build task DAG with cycle detection
 - Shared LLVM/LLD WASM compiler covering ARM, AVR, RISC-V 32/64 and Xtensa targets, with WASM ELF/BIN linking for STM32 bare-metal examples
+- Manifest-driven build recipes shared by CLI, browser and VS Code surfaces
+- Registry installation, removal, updates, transitive resolution and lockfiles for local, URL and ZIP sources
+- Persistent object cache and C/C++/assembly WASM compilation coverage
+- A public custom-programmer protocol registry with simulated hardware tests
 - STM32F401RC Cortex-M4 bare-metal ELF/BIN reference fixture
 - RISC-V WebAssembly compiler execution for ELF32 object generation
 - ESP32-C3 SuperMini hardware discovery through USB-Serial/JTAG
@@ -79,13 +83,12 @@ For ESP-IDF firmware work, the compiler is staged under `toolchain/llvm-wasm/cac
 
 ## Repository status
 
-In progress:
+Remaining integration work:
 
-- Full WASM firmware linking and ESP/STM32 firmware image generation
-- Incremental object caching and header dependency tracking
-- PlatformIO, Arduino and CMSIS registry adapters
-- VS Code extension integration
-- Complete browser upload and monitor implementation
+- ESP-IDF/Pico SDK/CMSIS/Arduino SDK distributions must provide their complete headers and startup artifacts before full SDK firmware linking can be claimed
+- Header dependency tracking and incremental relinking need project-wide cache integration
+- ST-LINK, USB DFU/DfuSe, STM32 UART, AVR STK500 and PICOBOOT protocol implementations are public extension surfaces but are not yet hardware-verified
+- Physical firmware verification is target-specific and must be reported separately from source and build success
 
 See [docs/compatibility.md](docs/compatibility.md) for the current implemented, planned and hardware-verified matrix.
 

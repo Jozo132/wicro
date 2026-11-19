@@ -1,0 +1,12 @@
+{
+  "name": "pico-sdk",
+  "version": "2.1.0",
+  "kind": "framework",
+  "description": "Raspberry Pi Pico SDK package manifest",
+  "license": "BSD-3-Clause",
+  "repository": "https://github.com/raspberrypi/pico-sdk",
+  "metadata": {
+    "targets": ["rp2040", "rp2350"],
+    "source": "external"
+  }
+}

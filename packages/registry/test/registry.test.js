@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createManifestValidator, PackageRegistry } from '../src/index.js';
+import { createManifestValidator, PackageRegistry, PlatformIoRegistry } from '../src/index.js';
 
 /** @type {import('../src/index.js').WicroPackageManifest} */
 const validManifest = {
@@ -36,4 +36,45 @@ test('rejects duplicate package versions', async () => {
   await registry.add(validManifest);
 
   await assert.rejects(() => registry.add(validManifest), /already exists/);
+});
+
+test('PlatformIO adapter normalizes registry search and package lookup', async () => {
+  const responses = new Map([
+    ['search', { ok: true, status: 200, json: async () => ({ items: [{ name: 'Demo', ownername: 'acme', type: 'library', version: '1.0.0' }] }) }],
+    ['package', { ok: true, status: 200, json: async () => ({ name: 'Demo', version: '1.0.0', url: 'https://example.invalid/demo.zip' }) }]
+  ]);
+  const registry = new PlatformIoRegistry({
+    fetch: async (/** @type {string|URL|Request} */ input) => {
+      const url = String(input);
+      return /** @type {any} */ (url.includes('/search') ? responses.get('search') : responses.get('package'));
+    }
+  });
+
+  const search = await registry.search('demo');
+  assert.equal(search[0].name, 'Demo');
+  assert.equal(search[0].owner, 'acme');
+  const packageInfo = await registry.get('acme', 'library', 'Demo');
+  assert.equal(packageInfo.version, '1.0.0');
+});
+
+test('resolves transitive dependencies once', async () => {
+  const registry = new PackageRegistry();
+  await registry.add({
+    name: 'cmsis/core',
+    version: '1.0.0',
+    kind: 'framework',
+    description: 'CMSIS core',
+    license: 'Apache-2.0'
+  });
+  await registry.add({
+    name: 'board/demo',
+    version: '1.0.0',
+    kind: 'board',
+    description: 'Demo board',
+    license: 'MIT',
+    dependencies: { 'cmsis/core': '^1.0.0' }
+  });
+
+  const tree = registry.resolveTree('board/demo');
+  assert.deepEqual(tree.map((item) => item.name), ['board/demo', 'cmsis/core']);
 });

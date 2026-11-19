@@ -10,7 +10,7 @@
     "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
     "kind": {
       "type": "string",
-      "enum": ["toolchain", "platform", "framework", "microcontroller", "board", "library", "programmer", "tool", "template"]
+      "enum": ["toolchain", "platform", "framework", "cmsis", "microcontroller", "board", "library", "programmer", "tool", "template"]
     },
     "description": { "type": "string", "minLength": 1, "maxLength": 500 },
     "license": { "type": "string", "minLength": 1 },

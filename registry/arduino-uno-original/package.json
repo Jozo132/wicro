@@ -4,10 +4,8 @@
   "kind": "board",
   "description": "Original Arduino UNO board package",
   "license": "MIT",
-  "sha256": "",
   "dependencies": {
-    "llvm-wasm-espressif": "^20.1.1",
-    "avr-gcc": "^1.0.0"
+    "llvm-wasm-espressif": "^20.1.1"
   },
   "metadata": {
     "manufacturer": "Arduino",
@@ -15,6 +13,13 @@
     "package": "DIP-28",
     "architecture": "avr",
     "cpu": "avr5",
+    "build": {
+      "kind": "object",
+      "target": "avr",
+      "targetOptions": { "mcu": "atmega328p" },
+      "source": "main.c",
+      "output": ".wicro/build"
+    },
     "clockHz": 16000000,
     "flashCapacityBytes": 32256,
     "sramCapacityBytes": 2048,

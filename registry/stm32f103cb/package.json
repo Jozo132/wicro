@@ -4,11 +4,9 @@
   "kind": "board",
   "description": "STM32F103CB Blue Pill compatible board package",
   "license": "MIT",
-  "sha256": "",
   "dependencies": {
     "llvm-wasm-espressif": "^20.1.1",
-    "cmsis-stm32f1": "^1.0.0",
-    "arm-none-eabi": "^1.0.0"
+    "cmsis-stm32f1": "^1.0.0"
   },
   "metadata": {
     "manufacturer": "STMicroelectronics",
@@ -16,6 +14,15 @@
     "package": "LQFP48",
     "architecture": "armv7-m",
     "cpu": "cortex-m3",
+    "build": {
+      "kind": "bare-metal",
+      "target": "armv7-m",
+      "targetOptions": { "mcpu": "cortex-m3" },
+      "source": "main.c",
+      "startupSource": "startup.c",
+      "linkerScript": "stm32f103cb.ld",
+      "output": ".wicro/build"
+    },
     "flashCapacityBytes": 131072,
     "sramCapacityBytes": 20480,
     "clockHz": 72000000,

@@ -4,7 +4,6 @@
   "kind": "board",
   "description": "ESP32-C3 SuperMini board package",
   "license": "MIT",
-  "sha256": "",
   "dependencies": {
     "esp-idf": "^6.1.0",
     "llvm-wasm-espressif": "^20.1.1"
@@ -13,6 +12,13 @@
     "manufacturer": "Espressif",
     "mcu": "ESP32-C3",
     "architecture": "riscv32",
+    "build": {
+      "kind": "object",
+      "target": "riscv32",
+      "targetOptions": { "march": "rv32imc", "mabi": "ilp32" },
+      "source": "main/main.c",
+      "output": ".wicro/build"
+    },
     "flashAutoDetect": true,
     "led": { "pin": 8, "activeLow": true },
     "bootPin": 9,

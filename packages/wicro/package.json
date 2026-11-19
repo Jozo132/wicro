@@ -13,6 +13,9 @@
   "files": [
     "bin",
     "src",
+    "vendor",
+    "registry",
+    "toolchain",
     "README.md",
     "LICENSE"
   ],
@@ -22,7 +25,16 @@
   "scripts": {
     "test": "node --test",
     "check:types": "tsc --noEmit -p ../../jsconfig.json",
-    "prepack": "npm test"
+    "prepack": "node ../../scripts/prepare-wicro-package.js && npm test"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "esptool-js": "^0.7.1",
+    "fflate": "^0.8.3",
+    "semver": "^7.8.6",
+    "serialport": "^13.0.0",
+    "usb": "^3.3.1"
   },
   "keywords": [
     "wicro",

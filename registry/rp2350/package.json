@@ -4,7 +4,6 @@
   "kind": "board",
   "description": "Raspberry Pi RP2350 board package",
   "license": "MIT",
-  "sha256": "",
   "dependencies": {
     "llvm-wasm-espressif": "^20.1.1",
     "pico-sdk": "^2.1.0"
@@ -13,6 +12,13 @@
     "manufacturer": "Raspberry Pi",
     "mcu": "RP2350",
     "architecture": "armv8m-mainline",
+    "build": {
+      "kind": "object",
+      "target": "armv8m-mainline",
+      "targetOptions": { "mcpu": "cortex-m33" },
+      "source": "main.c",
+      "output": ".wicro/build"
+    },
     "cpu": "cortex-m33",
     "flashCapacityBytes": 4194304,
     "sramCapacityBytes": 532480,

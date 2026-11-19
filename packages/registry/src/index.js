@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { rcompare, satisfies } from 'semver';
 import { readFile } from 'node:fs/promises';
 
-/** @typedef {'toolchain'|'platform'|'framework'|'microcontroller'|'board'|'library'|'programmer'|'tool'|'template'} PackageKind */
+/** @typedef {'toolchain'|'platform'|'framework'|'cmsis'|'microcontroller'|'board'|'library'|'programmer'|'tool'|'template'} PackageKind */
 
 /**
  * @typedef {object} WicroPackageManifest
@@ -42,6 +42,8 @@ export const createManifestValidator = async () => {
   };
 };
 
+export { PlatformIoRegistry } from './platformio.js';
+
 export class PackageRegistry {
   constructor() {
     /** @type {Map<string, WicroPackageManifest[]>} */
@@ -76,6 +78,38 @@ export class PackageRegistry {
   list(name) {
     if (name) return [...(this.packages.get(name) ?? [])];
     return [...this.packages.values()].flatMap((versions) => [...versions]);
+  }
+
+  /**
+   * Resolve a package and all transitive dependencies.
+   * @param {string} name
+   * @param {string} [range]
+   * @returns {WicroPackageManifest[]}
+   */
+  resolveTree(name, range = '*') {
+    const resolved = new Map();
+
+    /** @param {string} packageName @param {string} packageRange */
+    const visit = (packageName, packageRange) => {
+      const manifest = this.resolve(packageName, packageRange);
+      if (!manifest) throw new Error(`Package not found: ${packageName}@${packageRange}`);
+
+      const previous = resolved.get(packageName);
+      if (previous) {
+        if (previous.version !== manifest.version) {
+          throw new Error(`Dependency conflict: ${packageName} resolved to both ${previous.version} and ${manifest.version}`);
+        }
+        return;
+      }
+
+      resolved.set(packageName, manifest);
+      for (const [dependencyName, dependencyRange] of Object.entries(manifest.dependencies ?? {})) {
+        visit(dependencyName, dependencyRange);
+      }
+    };
+
+    visit(name, range);
+    return [...resolved.values()];
   }
 }
 

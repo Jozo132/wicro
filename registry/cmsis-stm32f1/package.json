@@ -4,7 +4,6 @@
   "kind": "cmsis",
   "description": "CMSIS baseline package for STM32F1 targets",
   "license": "MIT",
-  "sha256": "",
   "metadata": {
     "targets": ["stm32f103c8", "stm32f103cb"],
     "families": ["stm32f1"]

@@ -75,11 +75,31 @@ test('package list returns registry packages', () => {
   assert.ok(report.items.some((/** @type {{name:string}} */ item) => item.name === 'stm32f103cb'));
 });
 
-test('planned commands return an explicit exit code', () => {
-  const result = run('install', '--json');
+test('install, update and uninstall manage registry packages and a lockfile', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'wicro-packages-'));
 
-  assert.equal(result.status, 2);
-  assert.equal(JSON.parse(result.stdout).implemented, false);
+  try {
+    const install = runIn(directory, 'install', 'stm32f103cb', '--json');
+    assert.equal(install.status, 0);
+    const installReport = JSON.parse(install.stdout);
+    assert.equal(installReport.ok, true);
+    assert.equal(installReport.implemented, true);
+    assert.ok(installReport.packages.some((/** @type {{name:string}} */ item) => item.name === 'stm32f103cb'));
+
+    const lock = JSON.parse(await readFile(join(directory, '.wicro', 'wicro-lock.json'), 'utf8'));
+    assert.equal(lock.lockfileVersion, 1);
+    assert.ok(lock.packages['stm32f103cb']);
+
+    const update = runIn(directory, 'update', 'stm32f103cb', '--json');
+    assert.equal(update.status, 0);
+    assert.equal(JSON.parse(update.stdout).ok, true);
+
+    const uninstall = runIn(directory, 'uninstall', 'stm32f103cb', '--json');
+    assert.equal(uninstall.status, 0);
+    assert.equal(JSON.parse(uninstall.stdout).ok, true);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test('unknown commands use a usage exit code', () => {

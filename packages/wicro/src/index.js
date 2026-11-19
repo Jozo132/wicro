@@ -9,7 +9,40 @@ const packageJson = require('../package.json');
 export const version = packageJson.version;
 
 export const help = () => {
-  return `Wicro ${version}\n\nUsage:\n  wicro <command> [options]\n\nCommands:\n  init [name]       Create a Wicro project\n  build             Build firmware with the Node ESP-IDF host adapter\n  rebuild           Rebuild firmware\n  clean             Remove Wicro build and cache directories\n  upload            Upload an ESP32-C3 firmware image\n  monitor           Monitor the ESP32-C3 serial console\n  install           Install package dependencies (planned)\n  uninstall         Remove package dependencies (planned)\n  update            Update package dependencies (planned)\n  board list        List available boards\n  device list       List detected ESP32-C3 devices\n  package list      List registry packages\n  doctor            Inspect the Node.js host environment\n  test              Run workspace tests\n\nOptions:\n  -h, --help        Show this help message\n  -V, --version     Show the version\n      --json        Emit machine-readable JSON\n`;
+  return `Wicro ${version}\n\nUsage:\n  wicro <command> [options]\n\nCommands:\n  init [name]       Create a Wicro project\n  build             Build firmware with the shared WASM engine\n  rebuild           Rebuild firmware\n  clean             Remove Wicro build and cache directories\n  upload            Upload an ESP32-C3 firmware image\n  monitor           Monitor the ESP32-C3 serial console\n  install           Install packages and transitive dependencies\n  uninstall         Remove installed packages\n  update            Update packages and refresh the lockfile\n  board list        List available boards\n  device list       List detected ESP32-C3 devices\n  package list      List registry packages\n  doctor            Inspect the Node.js host environment\n  test              Run workspace tests\n\nOptions:\n  -h, --help        Show this help message\n  -V, --version     Show the version\n      --json        Emit machine-readable JSON\n`;
+};
+
+/** @returns {Promise<string>} */
+const findRegistryRoot = async () => {
+  const { readdir } = await import('node:fs/promises');
+  const candidates = [
+    resolve(new URL('../../../registry', import.meta.url).pathname),
+    resolve(new URL('../registry', import.meta.url).pathname)
+  ];
+  for (const candidate of candidates) {
+    try {
+      await readdir(candidate);
+      return candidate;
+    } catch {
+      // Try the next packaged or repository location.
+    }
+  }
+  throw new Error('Wicro package registry is unavailable');
+};
+
+/** @param {string} source */
+const inferPackageName = (source) => {
+  try {
+    if (/^https?:\/\//.test(source) || /^file:\/\//.test(source)) {
+      const pathname = /^https?:\/\//.test(source) ? new URL(source).pathname : new URL(source).pathname;
+      const basename = pathname.split('/').filter(Boolean).pop() ?? 'package';
+      return basename.replace(/\.(zip|tgz)$/i, '').replace(/[^a-z0-9._~-]/gi, '-');
+    }
+  } catch {
+    // Fall through to the local path basename.
+  }
+  const basename = source.replace(/\\/g, '/').split('/').filter(Boolean).pop() ?? 'package';
+  return basename.replace(/\.(zip|tgz)$/i, '').replace(/[^a-z0-9._~-]/gi, '-');
 };
 
 /**
@@ -71,54 +104,53 @@ export const main = async (args = []) => {
   }
 
   if (command === 'build' || command === 'rebuild') {
-    const project = flags.find((arg) => arg.startsWith('--project='))?.slice('--project='.length) ?? 'examples/esp32-c3-supermini/blink';
+    const project = flags.find((arg) => arg.startsWith('--project='))?.slice('--project='.length) ?? '.';
+    const board = flags.find((arg) => arg.startsWith('--board='))?.slice('--board='.length);
     const target = resolve(project);
 
-    if (project.includes('esp8266')) {
-      const build = spawnSync('arduino-cli', ['compile', '--fqbn', 'esp8266:esp8266:generic', target], {
-        cwd: process.cwd(),
-        env: process.env,
-        encoding: 'utf8'
-      });
-      if (build.error) {
-        emit({ ok: false, command, error: build.error.message }, json, `Build failed: ${build.error.message}`);
+    try {
+      /** @type {typeof import('../../core/src/index.js')} */
+      let coreModule;
+      try {
+        coreModule = await import('../../core/src/index.js');
+      } catch {
+        coreModule = await import('../vendor/core/src/index.js');
+      }
+      const { createWicroEngine } = coreModule;
+      const { readFile, writeFile } = await import('node:fs/promises');
+      const { dirname } = await import('node:path');
+      /** @type {import('../vendor/core/src/index.js').WicroHostAdapter} */
+      const host = {
+        host: 'node',
+        readFile: async (/** @type {string} */ path, options) => {
+          if (options?.encoding === 'utf8') return readFile(resolve(path), 'utf8');
+          return readFile(resolve(path));
+        },
+        writeFile: async (/** @type {string} */ path, /** @type {string|Uint8Array} */ data) => {
+          const { mkdir } = await import('node:fs/promises');
+          const absolute = resolve(path);
+          await mkdir(dirname(absolute), { recursive: true });
+          await writeFile(absolute, data);
+        }
+      };
+      const llvmPath = resolve('toolchain/llvm-wasm/cache/llvm.wasm');
+      const engine = createWicroEngine({ host, llvmPath });
+      const result = await engine.execute({ command: 'build', project: target, board });
+      if (!result.ok) {
+        const message = result.diagnostics?.map((diagnostic) => diagnostic.message).join('; ') ?? 'Build failed';
+        emit({ ok: false, command, error: message }, json, `Build failed: ${message}`);
         return 1;
       }
-      if (build.status !== 0) {
-        emit({ ok: false, command, status: build.status, stderr: build.stderr }, json, build.stderr || 'ESP8266 Arduino build failed');
-        return build.status ?? 1;
-      }
-      emit({ ok: true, command, adapter: 'arduino-cli', path: target, stdout: build.stdout }, json, `Built ${target}`);
+      const value = result.value && typeof result.value === 'object'
+        ? /** @type {Record<string, unknown>} */ (result.value)
+        : {};
+      emit({ ok: true, command, adapter: 'shared-wasm-engine', ...value }, json, `Built ${board ?? 'configured target'} with the shared WASM engine`);
       return 0;
-    }
-
-    const idfRoot = resolve('toolchain/esp32-c3/esp-idf');
-    const python = resolve(process.env.HOME ?? '', '.espressif/python_env/idf6.1_py3.12_env/bin/python');
-    const idfPy = resolve(idfRoot, 'tools/idf.py');
-    const idfTarget = project.includes('esp32-original') ? 'esp32' : 'esp32c3';
-    const env = {
-      ...process.env,
-      IDF_PATH: idfRoot,
-      IDF_PYTHON_ENV_PATH: resolve(process.env.HOME ?? '', '.espressif/python_env/idf6.1_py3.12_env'),
-      ESP_IDF_VERSION: '6.1.1'
-    };
-    const build = spawnSync(python, [idfPy, 'set-target', idfTarget, 'build'], {
-      cwd: target,
-      env,
-      encoding: 'utf8'
-    });
-
-    if (build.error) {
-      emit({ ok: false, command, error: build.error.message }, json, `Build failed: ${build.error.message}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emit({ ok: false, command, error: message }, json, `Build failed: ${message}`);
       return 1;
     }
-    if (build.status !== 0) {
-      emit({ ok: false, command, status: build.status, stderr: build.stderr }, json, build.stderr || 'ESP-IDF build failed');
-      return build.status ?? 1;
-    }
-
-    emit({ ok: true, command, adapter: 'esp-idf-native-reference', target: idfTarget, path: target, stdout: build.stdout }, json, `Built ${target}`);
-    return 0;
   }
 
   if (command === 'clean') {
@@ -147,7 +179,7 @@ export const main = async (args = []) => {
   if (command === 'board' && flags[1] === 'list') {
     try {
       const { readdir, readFile } = await import('node:fs/promises');
-      const registryRoot = resolve(new URL('../../../registry', import.meta.url).pathname);
+      const registryRoot = await findRegistryRoot();
       const names = await readdir(registryRoot);
       const items = [];
       for (const name of names) {
@@ -171,7 +203,14 @@ export const main = async (args = []) => {
 
   if (command === 'device' && flags[1] === 'list') {
     try {
-      const { NodeSerialHost } = await import('../../hardware/src/index.js');
+      /** @type {typeof import('../../hardware/src/index.js')} */
+      let hardwareModule;
+      try {
+        hardwareModule = await import('../../hardware/src/index.js');
+      } catch {
+        hardwareModule = await import('../vendor/hardware/src/index.js');
+      }
+      const { NodeSerialHost } = hardwareModule;
       const items = await new NodeSerialHost().discover();
       emit({ ok: true, command: 'device list', implemented: true, items }, json,
         items.map((item) => `${item.path}${item.manufacturer ? ` (${item.manufacturer})` : ''}`).join('\n') || 'No serial devices found');
@@ -187,7 +226,7 @@ export const main = async (args = []) => {
   if (command === 'package' && flags[1] === 'list') {
     try {
       const { readdir, readFile } = await import('node:fs/promises');
-      const registryRoot = resolve(new URL('../../../registry', import.meta.url).pathname);
+      const registryRoot = await findRegistryRoot();
       const names = await readdir(registryRoot);
       const items = [];
       for (const name of names) {
@@ -211,7 +250,14 @@ export const main = async (args = []) => {
 
   if (command === 'monitor') {
     try {
-      const { Esp32C3NodeProgrammer } = await import('../../programmers/src/index.js');
+      /** @type {typeof import('../../programmers/src/index.js')} */
+      let programmerModule;
+      try {
+        programmerModule = await import('../../programmers/src/index.js');
+      } catch {
+        programmerModule = await import('../vendor/programmers/src/index.js');
+      }
+      const { Esp32C3NodeProgrammer } = programmerModule;
       const port = flags.find((arg) => arg.startsWith('--port='))?.slice('--port='.length);
       const baudText = flags.find((arg) => arg.startsWith('--baud='))?.slice('--baud='.length);
       const monitor = await new Esp32C3NodeProgrammer().monitor({
@@ -233,7 +279,14 @@ export const main = async (args = []) => {
 
   if (command === 'upload') {
     try {
-      const { Esp32C3NodeProgrammer } = await import('../../programmers/src/index.js');
+      /** @type {typeof import('../../programmers/src/index.js')} */
+      let programmerModule;
+      try {
+        programmerModule = await import('../../programmers/src/index.js');
+      } catch {
+        programmerModule = await import('../vendor/programmers/src/index.js');
+      }
+      const { Esp32C3NodeProgrammer } = programmerModule;
       const { readFile } = await import('node:fs/promises');
       const project = flags.find((arg) => arg.startsWith('--project='))?.slice('--project='.length) ?? 'examples/esp32-c3-supermini/blink';
       const target = resolve(project);
@@ -275,12 +328,99 @@ export const main = async (args = []) => {
     return 0;
   }
 
-  const planned = new Set(['install', 'uninstall', 'update']);
-  if (planned.has(command)) {
-    const message = `The '${command}' command is planned but not implemented yet`;
-    if (json) process.stdout.write(`${JSON.stringify({ ok: false, command, implemented: false, error: message })}\n`);
-    else process.stderr.write(`${message}\n`);
-    return 2;
+  if (command === 'install' || command === 'uninstall' || command === 'update') {
+    try {
+      const { readdir, readFile, writeFile, mkdir } = await import('node:fs/promises');
+      /** @type {typeof import('../../registry/src/index.js')} */
+      let registryModule;
+      /** @type {typeof import('../../registry/src/installer.js')} */
+      let installerModule;
+      try {
+        registryModule = await import('../../registry/src/index.js');
+        installerModule = await import('../../registry/src/installer.js');
+      } catch {
+        registryModule = await import('../vendor/registry/src/index.js');
+        installerModule = await import('../vendor/registry/src/installer.js');
+      }
+      const { PackageRegistry } = registryModule;
+      const { PackageInstaller } = installerModule;
+      const registry = new PackageRegistry();
+      const registryRoot = await findRegistryRoot();
+
+      for (const name of await readdir(registryRoot)) {
+        try {
+          const manifest = JSON.parse(await readFile(resolve(registryRoot, name, 'package.json'), 'utf8'));
+          await registry.add(manifest);
+        } catch {
+          // Ignore registry entries that are incomplete or not package manifests.
+        }
+      }
+
+      const nameFlag = flags.find((arg) => arg.startsWith('--name='))?.slice('--name='.length);
+      const shaFlag = flags.find((arg) => arg.startsWith('--sha256='))?.slice('--sha256='.length);
+      const cacheFlag = flags.find((arg) => arg.startsWith('--cache='))?.slice('--cache='.length);
+      const sourceFlag = flags.find((arg) => arg.startsWith('--source='))?.slice('--source='.length);
+      const packageName = sourceFlag ?? nameFlag ?? flags.slice(1).find((arg) => !arg.startsWith('--'));
+      const cacheDirectory = resolve(cacheFlag ?? '.wicro/cache/packages');
+
+      await mkdir(resolve('.wicro'), { recursive: true });
+      await mkdir(cacheDirectory, { recursive: true });
+
+      if (command === 'uninstall') {
+        if (!packageName) throw new Error('A package name is required');
+        const installer = new PackageInstaller();
+        const removed = await installer.remove(packageName);
+        emit({ command, implemented: true, ...removed }, json, `Removed ${packageName}`);
+        return 0;
+      }
+
+      if (!packageName) throw new Error('A package name or source is required');
+      const installer = new PackageInstaller();
+      const installed = [];
+
+      if (/^https?:\/\//.test(packageName) || /^file:\/\//.test(packageName) || /(^|\/)[^/]+\.(zip|tgz)$/.test(packageName)) {
+        const name = nameFlag ?? inferPackageName(packageName);
+        const result = await installer.install(packageName, {
+          name,
+          sha256: shaFlag,
+          cacheDirectory
+        });
+        await mkdir(resolve('.wicro/packages'), { recursive: true });
+        const packageTarget = resolve('.wicro/packages', name);
+        const fsPromises = await import('node:fs/promises');
+        await fsPromises.rm(packageTarget, { recursive: true, force: true });
+        const cachedSource = resolve(cacheDirectory, name);
+        await fsPromises.cp(cachedSource, packageTarget, { recursive: true, dereference: true });
+        installed.push({ name, version: 'custom', source: packageName, kind: result.kind });
+      } else {
+        const manifests = registry.resolveTree(packageName);
+        for (const manifest of manifests) {
+          const sourceDirectory = resolve(registryRoot, manifest.name);
+          const result = await installer.installLocal(sourceDirectory, {
+            name: manifest.name,
+            cacheDirectory
+          });
+          await mkdir(resolve('.wicro/packages', manifest.name), { recursive: true });
+          const packageTarget = resolve('.wicro/packages', manifest.name);
+          await (await import('node:fs/promises')).cp(sourceDirectory, packageTarget, { recursive: true, dereference: true });
+          installed.push({ name: manifest.name, version: manifest.version, source: sourceDirectory, kind: result.kind });
+        }
+      }
+
+      const lock = {
+        lockfileVersion: 1,
+        packages: Object.fromEntries(installed.map((item) => [item.name, { version: item.version, source: item.source }]))
+      };
+      await writeFile(resolve('.wicro/wicro-lock.json'), `${JSON.stringify(lock, null, 2)}\n`);
+
+      emit({ ok: true, command, implemented: true, count: installed.length, packages: installed, lockfile: '.wicro/wicro-lock.json' }, json,
+        `${command === 'update' ? 'Updated' : 'Installed'} ${installed.length} package${installed.length === 1 ? '' : 's'}${command === 'update' ? '' : ''}`);
+      return 0;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emit({ ok: false, command, implemented: false, error: message }, json, `${command} failed: ${message}`);
+      return 1;
+    }
   }
 
   const message = `Unknown command: ${command}`;

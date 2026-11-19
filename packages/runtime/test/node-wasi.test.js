@@ -121,6 +121,29 @@ test('shared LLVM toolchain compiles an RP2350 object', async () => {
   assert.equal(result.object.length > 100, true);
 });
 
+test('shared LLVM toolchain compiles C++ and assembly sources', async () => {
+  const toolchain = new LlvmWasmToolchain({ llvmPath: llvmUrl.pathname });
+  const cpp = await toolchain.compileSource('int value() { return 7; }\n', 'riscv32', undefined, { language: 'c++' });
+  const assembly = await toolchain.compileSource('.global value\nvalue:\n  nop\n', 'riscv32', undefined, { language: 'assembly' });
+
+  assert.equal(cpp.object.subarray(0, 4).toString('hex'), '7f454c46');
+  assert.equal(assembly.object.subarray(0, 4).toString('hex'), '7f454c46');
+});
+
+test('shared LLVM object cache reports persistent hits', async () => {
+  const cache = await mkdtemp(join(tmpdir(), 'wicro-object-cache-'));
+  const toolchain = new LlvmWasmToolchain({ llvmPath: llvmUrl.pathname });
+
+  try {
+    const first = await toolchain.compileSource('int main(void) { return 7; }\n', 'riscv32', undefined, { cacheDirectory: cache });
+    const second = await toolchain.compileSource('int main(void) { return 7; }\n', 'riscv32', undefined, { cacheDirectory: cache });
+    assert.equal(first.cache, 'miss');
+    assert.equal(second.cache, 'hit');
+  } finally {
+    await rm(cache, { recursive: true, force: true });
+  }
+});
+
 test('shared LLVM toolchain compiles an AVR object', async () => {
   const toolchain = new LlvmWasmToolchain({ llvmPath: llvmUrl.pathname });
   const result = await toolchain.compileC('int main(void) { return 7; }\n', 'avr', { mcu: 'atmega328p' });

@@ -3,6 +3,7 @@ import { ESPLoader, ClassicReset, UsbJtagSerialReset, HardReset } from 'esptool-
 import { NodeEspSerialTransport } from './nodeEspSerial.js';
 
 export { NodeEspSerialTransport };
+export { ProgrammerProtocolRegistry, programmerProtocols } from './protocolRegistry.js';
 
 export class Esp32C3NodeProgrammer {
   /** @param {{path:string,baudRate?:number,debugLogging?:boolean}} [options] */

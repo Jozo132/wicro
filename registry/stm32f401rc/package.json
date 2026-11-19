@@ -4,11 +4,9 @@
   "kind": "board",
   "description": "STM32F401RC board package with an inverted red LED on PC13",
   "license": "MIT",
-  "sha256": "",
   "dependencies": {
     "llvm-wasm-espressif": "^20.1.1",
-    "cmsis-stm32f4": "^1.0.0",
-    "arm-none-eabi": "^1.0.0"
+    "cmsis-stm32f4": "^1.0.0"
   },
   "metadata": {
     "manufacturer": "STMicroelectronics",
@@ -16,6 +14,15 @@
     "package": "LQFP64",
     "architecture": "armv7e-m",
     "cpu": "cortex-m4",
+    "build": {
+      "kind": "bare-metal",
+      "target": "armv7e-m",
+      "targetOptions": { "mcpu": "cortex-m4" },
+      "source": "main.c",
+      "startupSource": "startup.c",
+      "linkerScript": "stm32f401rc.ld",
+      "output": ".wicro/build"
+    },
     "fpu": "fpv4-sp-d16",
     "flashCapacityBytes": 262144,
     "sramCapacityBytes": 65536,

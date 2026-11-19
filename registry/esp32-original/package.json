@@ -4,7 +4,6 @@
   "kind": "board",
   "description": "Original ESP32 Xtensa board package",
   "license": "MIT",
-  "sha256": "",
   "dependencies": {
     "esp-idf": "^6.1.0",
     "llvm-wasm-espressif": "^20.1.1"
@@ -13,6 +12,13 @@
     "manufacturer": "Espressif",
     "mcu": "ESP32",
     "architecture": "xtensa",
+    "build": {
+      "kind": "object",
+      "target": "xtensa",
+      "targetOptions": { "mcpu": "esp32" },
+      "source": "main/main.c",
+      "output": ".wicro/build"
+    },
     "cpu": "xtensa-lx6",
     "flashCapacityBytes": 4194304,
     "sramCapacityBytes": 520192,

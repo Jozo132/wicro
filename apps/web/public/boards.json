@@ -1,0 +1,11 @@
+{
+  "esp32-c3": { "label": "RISC-V RV32IMC", "build": { "target": "riscv32", "targetOptions": { "march": "rv32imc", "mabi": "ilp32" } } },
+  "esp32-original": { "label": "Xtensa LX6", "build": { "target": "xtensa", "targetOptions": { "mcpu": "esp32" } } },
+  "esp8266": { "label": "Xtensa L106", "build": { "target": "xtensa", "targetOptions": { "mcpu": "esp8266" } } },
+  "stm32f103cb": { "label": "ARM Cortex-M3", "build": { "target": "armv7-m", "targetOptions": { "mcpu": "cortex-m3" } } },
+  "stm32h723vg": { "label": "ARM Cortex-M7", "build": { "target": "armv7e-m", "targetOptions": { "mcpu": "cortex-m7" } } },
+  "stm32f401rc": { "label": "ARM Cortex-M4", "build": { "target": "armv7e-m", "targetOptions": { "mcpu": "cortex-m4" } } },
+  "rp2040": { "label": "ARM Cortex-M0+", "build": { "target": "armv6m", "targetOptions": { "mcpu": "cortex-m0plus" } } },
+  "rp2350": { "label": "ARM Cortex-M33", "build": { "target": "armv8m-mainline", "targetOptions": { "mcpu": "cortex-m33" } } },
+  "arduino-uno": { "label": "AVR ATmega328P", "build": { "target": "avr", "targetOptions": { "mcu": "atmega328p" } } }
+}
