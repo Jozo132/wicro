@@ -10,6 +10,8 @@ The npm package is `@jozo132/wicro`. Its command-line executable is `wicro`.
 - Strict JSDoc source checking
 - Package manifest, semver, archive and virtual filesystem foundations
 - Parallel build task DAG with cycle detection
+- Shared LLVM/LLD WASM compiler covering ARM, AVR, RISC-V 32/64 and Xtensa targets, with WASM ELF/BIN linking for STM32 bare-metal examples
+- STM32F401RC Cortex-M4 bare-metal ELF/BIN reference fixture
 - RISC-V WebAssembly compiler execution for ELF32 object generation
 - ESP32-C3 SuperMini hardware discovery through USB-Serial/JTAG
 - ESP-IDF v6.1.1 blink firmware build and flash
@@ -41,7 +43,19 @@ wicro upload --project=examples/esp32-c3-supermini/blink --port=/dev/ttyACM0
 wicro monitor --port=/dev/ttyACM0 --baud=115200
 ```
 
-The connected test board uses USB-Serial/JTAG VID/PID `303a:1001`, GPIO8 for the active-low onboard blue LED and BOOT on GPIO9.
+The ESP32-C3 test board uses USB-Serial/JTAG VID/PID `303a:1001`, GPIO8 for the active-low onboard blue LED and BOOT on GPIO9. The STM32F401RC second MVP fixture uses Cortex-M4 Thumb, flash origin `0x08000000`, SRAM origin `0x20000000`, and 256 KB flash / 96 KB SRAM.
+
+## Board blink examples
+
+- Arduino UNO original: `examples/arduino-uno-original/blink`
+- Original ESP32: `examples/esp32-original/blink`
+- ESP8266: `examples/esp8266/blink`
+- RP2040: `examples/rp2040/blink`
+- RP2350: `examples/rp2350/blink`
+- ESP32-C3 SuperMini: `examples/esp32-c3-supermini/blink`
+- STM32F401RC: `examples/stm32f401rc/bare-metal-blink`
+- STM32F103CB: `examples/stm32f103cb/bare-metal-blink`
+- STM32H723VG: `examples/stm32h723vg/bare-metal-blink`
 
 ## Browser IDE
 
@@ -49,7 +63,7 @@ The connected test board uses USB-Serial/JTAG VID/PID `303a:1001`, GPIO8 for the
 npm run dev:web
 ```
 
-Open `http://localhost:5173`. The editor supports browser-side RV32IMC compilation with the LLVM WASM toolchain. Web Serial is used for device connection; flashing beyond the browser shell should use the Node CLI until browser flashing is complete.
+Open `http://localhost:5173`. The editor supports browser-side RV32IMC compilation with the shared LLVM WASM toolchain. Web Serial is used for device connection; flashing beyond the browser shell should use the Node CLI until browser flashing is complete.
 
 ## Development
 
@@ -61,13 +75,13 @@ npm run build:web
 npm run pack:check
 ```
 
-For ESP-IDF firmware work, the reference environment is staged under `toolchain/esp32-c3/esp-idf` and ignored by Git.
+For ESP-IDF firmware work, the compiler is staged under `toolchain/llvm-wasm/cache`, while the ESP32-C3 framework and native reference environment are under `toolchain/esp32-c3/esp-idf`. Downloaded compiler, framework and build assets are ignored by Git; their manifests remain versioned in `registry/`.
 
 ## Repository status
 
 In progress:
 
-- Full WASM firmware linking and ESP firmware image generation
+- Full WASM firmware linking and ESP/STM32 firmware image generation
 - Incremental object caching and header dependency tracking
 - PlatformIO, Arduino and CMSIS registry adapters
 - VS Code extension integration

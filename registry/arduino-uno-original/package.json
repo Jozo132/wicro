@@ -1,0 +1,25 @@
+{
+  "name": "arduino-uno-original",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "Original Arduino UNO board package",
+  "license": "MIT",
+  "sha256": "",
+  "dependencies": {
+    "llvm-wasm-espressif": "^20.1.1",
+    "avr-gcc": "^1.0.0"
+  },
+  "metadata": {
+    "manufacturer": "Arduino",
+    "mcu": "ATmega328P",
+    "package": "DIP-28",
+    "architecture": "avr",
+    "cpu": "avr5",
+    "clockHz": 16000000,
+    "flashCapacityBytes": 32256,
+    "sramCapacityBytes": 2048,
+    "eepromCapacityBytes": 1024,
+    "flashAddress": "0x0000",
+    "led": { "port": "B", "pin": 5, "activeLow": false }
+  }
+}

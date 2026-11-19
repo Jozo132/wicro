@@ -1,5 +1,6 @@
 import * as monaco from 'monaco-editor';
 import { WASI, OpenFile, File, PreopenDirectory, ConsoleStdout } from '@bjorn3/browser_wasi_shim';
+import { ESPLoader, Transport } from 'esptool-js';
 import './style.css';
 
 const defaultSource = `int main(void)
@@ -16,11 +17,22 @@ if (!app) throw new Error('Wicro app root not found');
 app.innerHTML = `
   <header class="toolbar">
     <div class="brand"><span class="brand-mark">W</span><strong>Wicro</strong></div>
-    <div class="target">ESP32-C3 SuperMini</div>
+    <select id="target" class="target-select" aria-label="Board target">
+      <option value="esp32-c3">ESP32-C3 SuperMini</option>
+      <option value="esp32-original">Original ESP32</option>
+      <option value="esp8266">ESP8266</option>
+      <option value="stm32f103cb">STM32F103CB</option>
+      <option value="stm32h723vg">STM32H723VG</option>
+      <option value="stm32f401rc">STM32F401RC</option>
+      <option value="rp2040">RP2040</option>
+      <option value="rp2350">RP2350</option>
+      <option value="arduino-uno">Arduino UNO</option>
+    </select>
     <div class="actions">
       <button id="compile" type="button">Compile</button>
       <button id="connect" type="button" class="secondary">Connect</button>
       <button id="upload" type="button" class="primary" disabled>Upload</button>
+      <input id="firmware" type="file" accept=".bin" hidden>
     </div>
   </header>
   <main class="workspace">
@@ -38,7 +50,7 @@ app.innerHTML = `
   </main>
   <footer class="statusbar">
     <span id="status">Toolchain not installed</span>
-    <span>RISC-V RV32IMC</span>
+    <span id="target-status">RISC-V RV32IMC</span>
   </footer>
 `;
 
@@ -65,17 +77,52 @@ const compileButton = document.querySelector('#compile');
 /** @type {HTMLButtonElement|null} */
 const connectButton = document.querySelector('#connect');
 
-let serialPort = null;
+/** @type {any} */ let serialPort = null;
+/** @type {any} */ let serialTransport = null;
+/** @typedef {Blob & {name:string,arrayBuffer():Promise<ArrayBuffer>}} FirmwareFile */
+/** @type {FirmwareFile|null} */ let firmwareFile = null;
+
+const targetSelect = /** @type {HTMLSelectElement|null} */ (document.querySelector('#target'));
+const firmwareInput = /** @type {HTMLInputElement|null} */ (document.querySelector('#firmware'));
+
+/** @type {Record<string,{label:string,args:string[]}>} */
+const targetConfigs = {
+  'esp32-c3': { label: 'RISC-V RV32IMC', args: ['--target=riscv32-esp-elf', '-march=rv32imc', '-mabi=ilp32'] },
+  'esp32-original': { label: 'Xtensa LX6', args: ['--target=xtensa-esp-elf', '-mcpu=esp32'] },
+  'esp8266': { label: 'Xtensa L106', args: ['--target=xtensa-esp-elf', '-mcpu=esp8266'] },
+  'stm32f103cb': { label: 'ARM Cortex-M3', args: ['--target=arm-none-eabi', '-mcpu=cortex-m3', '-mthumb', '-mfloat-abi=soft'] },
+  'stm32h723vg': { label: 'ARM Cortex-M7', args: ['--target=arm-none-eabi', '-mcpu=cortex-m7', '-mthumb', '-mfloat-abi=hard'] },
+  'stm32f401rc': { label: 'ARM Cortex-M4', args: ['--target=arm-none-eabi', '-mcpu=cortex-m4', '-mthumb', '-mfloat-abi=hard'] },
+  'rp2040': { label: 'ARM Cortex-M0+', args: ['--target=arm-none-eabi', '-mcpu=cortex-m0plus', '-mthumb'] },
+  'rp2350': { label: 'ARM Cortex-M33', args: ['--target=arm-none-eabi', '-mcpu=cortex-m33', '-mthumb', '-mfloat-abi=hard'] },
+  'arduino-uno': { label: 'AVR ATmega328P', args: ['--target=avr', '-mmcu=atmega328p'] }
+};
 
 /** @param {string} text */
 const setStatus = (text) => {
   if (status) status.textContent = text;
 };
 
+targetSelect?.addEventListener('change', () => {
+  const targetName = targetSelect.value;
+  const targetStatus = document.querySelector('#target-status');
+  const targetConfig = targetConfigs[targetName];
+  if (targetStatus && targetConfig) targetStatus.textContent = targetConfig.label;
+});
+
 compileButton?.addEventListener('click', async () => {
-  setStatus('Loading ESP32-C3 LLVM WASM…');
+  setStatus('Loading shared LLVM WASM toolchain…');
   try {
-    const response = await fetch('/toolchain/llvm.wasm');
+    const targetName = targetSelect?.value ?? 'esp32-c3';
+    const targetConfig = targetConfigs[targetName];
+    if (!targetConfig) throw new Error(`Unknown board target: ${targetName}`);
+
+    const manifestResponse = await fetch('/toolchain/manifest.json', { cache: 'no-cache' });
+    if (!manifestResponse.ok) throw new Error(`Toolchain manifest failed (${manifestResponse.status})`);
+    const manifest = await manifestResponse.json();
+
+    const compilerUrl = new URL(manifest.tools.clang.url, new URL('/toolchain/', window.location.href));
+    const response = await fetch(compilerUrl);
     if (!response.ok) throw new Error(`Toolchain download failed (${response.status})`);
 
     const source = editor.getValue();
@@ -86,9 +133,7 @@ compileButton?.addEventListener('click', async () => {
     let stderr = '';
     const wasi = new WASI([
       'clang',
-      '--target=riscv32-esp-elf',
-      '-march=rv32imc',
-      '-mabi=ilp32',
+      ...targetConfig.args,
       '-nostdlib',
       '-c',
       'main.c',
@@ -112,7 +157,7 @@ compileButton?.addEventListener('click', async () => {
       throw new Error(stderr || stdout || `Compiler exited with status ${exitCode}`);
     }
 
-    setStatus(`Compiled main.o (${Number(output.size)} bytes) for RISC-V RV32IMC`);
+    setStatus(`Compiled main.o (${Number(output.size)} bytes) for ${targetConfig.label}`);
   } catch (error) {
     setStatus(error instanceof Error ? error.message : 'Compile failed');
   }
@@ -125,30 +170,79 @@ connectButton?.addEventListener('click', async () => {
   }
 
   try {
-    serialPort = await navigator.serial.requestPort({
-      filters: [{ usbVendorId: 0x303a, usbProductId: 0x1001 }]
-    });
-    await serialPort.open({ baudRate: 115200 });
+    if (serialTransport) await serialTransport.disconnect();
+    serialPort = await navigator.serial.requestPort({});
+    serialTransport = new Transport(/** @type {any} */ (serialPort), false);
+    await serialTransport.connect(115200);
     if (uploadButton) uploadButton.disabled = false;
-    setStatus('Connected to ESP32-C3 SuperMini');
+    setStatus('Connected serial port');
 
-    const reader = serialPort.readable.getReader();
     const decoder = new TextDecoder();
-    void (async () => {
-      while (serialPort?.readable) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (value && consoleOutput) consoleOutput.textContent += decoder.decode(value);
-      }
-      reader.releaseLock();
-    })();
+    void serialTransport.rawRead((/** @type {Uint8Array} */ data) => {
+      if (consoleOutput) consoleOutput.textContent += decoder.decode(data);
+    }, () => false);
   } catch (error) {
     setStatus(error instanceof Error ? error.message : 'Serial connection failed');
   }
 });
 
-uploadButton?.addEventListener('click', () => {
-  setStatus('Put the board in download mode, then use Wicro CLI upload for verified physical flashing');
+firmwareInput?.addEventListener('change', () => {
+  firmwareFile = /** @type {FirmwareFile|null} */ (firmwareInput.files?.[0] ?? null);
+  setStatus(firmwareFile ? `Firmware selected: ${firmwareFile.name}` : 'No firmware selected');
+});
+
+uploadButton?.addEventListener('click', async () => {
+  const targetName = targetSelect?.value ?? 'esp32-c3';
+  if (targetName !== 'esp32-c3' && targetName !== 'esp32-original') {
+    setStatus('Browser upload currently supports Espressif ESP32 targets');
+    return;
+  }
+  if (!firmwareFile) {
+    firmwareInput?.click();
+    setStatus('Choose a firmware .bin file');
+    return;
+  }
+  if (!('serial' in navigator)) {
+    setStatus('Web Serial is unavailable; use Chrome or Edge');
+    return;
+  }
+
+  try {
+    if (serialTransport) {
+      await serialTransport.disconnect();
+      serialTransport = null;
+    }
+    serialPort = serialPort ?? await navigator.serial.requestPort({});
+    const transport = new Transport(/** @type {any} */ (serialPort), false);
+    const terminal = {
+      clean: () => {},
+      write: (/** @type {string} */ text) => { if (consoleOutput) consoleOutput.textContent += text; },
+      writeLine: (/** @type {string} */ text) => { if (consoleOutput) consoleOutput.textContent += `${text}\n`; }
+    };
+    const loader = new ESPLoader({
+      transport,
+      baudrate: 115200,
+      romBaudrate: 115200,
+      terminal
+    });
+
+    setStatus('Connecting to Espressif ROM…');
+    await loader.main('default_reset');
+    await loader.writeFlash({
+      fileArray: [{ data: new Uint8Array(await firmwareFile.arrayBuffer()), address: 0x10000 }],
+      flashMode: 'dio',
+      flashFreq: '40m',
+      flashSize: 'detect',
+      eraseAll: false,
+      compress: true,
+      reportProgress: (_fileIndex, written, total) => setStatus(`Flashing: ${Math.round(written / total * 100)}%`)
+    });
+    await transport.disconnect();
+    serialPort = null;
+    setStatus(`Uploaded ${firmwareFile.name}`);
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Upload failed');
+  }
 });
 
 document.querySelector('#clear')?.addEventListener('click', () => {

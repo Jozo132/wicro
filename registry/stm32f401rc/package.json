@@ -1,0 +1,29 @@
+{
+  "name": "stm32f401rc",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "STM32F401RC board package with an inverted red LED on PC13",
+  "license": "MIT",
+  "sha256": "",
+  "dependencies": {
+    "llvm-wasm-espressif": "^20.1.1",
+    "cmsis-stm32f4": "^1.0.0",
+    "arm-none-eabi": "^1.0.0"
+  },
+  "metadata": {
+    "manufacturer": "STMicroelectronics",
+    "mcu": "STM32F401RC",
+    "package": "LQFP64",
+    "architecture": "armv7e-m",
+    "cpu": "cortex-m4",
+    "fpu": "fpv4-sp-d16",
+    "flashCapacityBytes": 262144,
+    "sramCapacityBytes": 65536,
+    "clockHz": 84000000,
+    "flashAddress": "0x08000000",
+    "sramAddress": "0x20000000",
+    "leds": {
+      "red": { "port": "C", "pin": 13, "activeLow": true }
+    }
+  }
+}

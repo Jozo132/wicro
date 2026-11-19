@@ -1,13 +1,26 @@
 {
+  "name": "llvm-wasm-espressif",
   "version": "202611141634-v6.0.3",
+  "kind": "toolchain",
+  "description": "Shared Espressif LLVM/LLD WebAssembly toolchain",
+  "license": "Apache-2.0 WITH LLVM-exception",
+  "runtime": "wasi-preview1",
   "tools": {
     "clang": { "url": "llvm.wasm", "argv0": "clang" },
     "ld": { "url": "ld.wasm", "argv0": "ld" }
   },
-  "sysroot": "sysroot.tar.gz",
-  "variants": { "usb": { "overlay": "sysroot-usb.tar.gz", "description": "USB mode USB-OTG (TinyUSB): for sketches that are a USB device themselves (USB.h)" } },
-  "targets": { "ch32v003": { "sysroot": "sysroot-ch32v003.tar.gz", "examples": "examples-ch32v003.json", "description": "WCH CH32V003 and CH32X035 (RISC-V) with ch32fun and WCH's Arduino core" } },
-  "bootloader": "bootloader.bin",
-  "partitionTable": "partition-table.bin",
-  "image": { "flashMode": "dio", "flashFreq": "80m", "flashSize": "4MB" }
+  "targets": [
+    "armv6m",
+    "armv7-m",
+    "armv7e-m",
+    "armv8m-mainline",
+    "avr",
+    "riscv32",
+    "riscv64",
+    "xtensa"
+  ],
+  "integrity": {
+    "llvm.wasm": "32a1fb128050002a4e2c8797c4730fbd08bdb6c6991c204645d92aec85b212d4",
+    "ld.wasm": "cb8d0a223ca28c5eefc134399d7a54313b95ab5c7f1cbf84edccb23080f58c32"
+  }
 }

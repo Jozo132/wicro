@@ -1,0 +1,15 @@
+{
+  "name": "llvm-wasm-espressif",
+  "version": "20.1.1",
+  "kind": "toolchain",
+  "description": "Shared ARM, AVR, RISC-V and Xtensa LLVM/LD WebAssembly toolchain",
+  "license": "Apache-2.0 WITH LLVM-exception",
+  "repository": "https://github.com/lemio/esp-wasm",
+  "metadata": {
+    "runtime": "wasi-preview1",
+    "compiler": "toolchain/llvm-wasm/cache/llvm.wasm",
+    "linker": "toolchain/llvm-wasm/cache/ld.wasm",
+    "targets": ["armv6m", "armv7-m", "armv7e-m", "armv8m-mainline", "avr", "riscv32", "riscv64", "xtensa"],
+    "offlineCache": "toolchain/llvm-wasm/cache"
+  }
+}

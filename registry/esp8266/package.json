@@ -1,0 +1,25 @@
+{
+  "name": "esp8266",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "ESP8266 Xtensa board package",
+  "license": "MIT",
+  "sha256": "",
+  "dependencies": {
+    "llvm-wasm-espressif": "^20.1.1",
+    "arduino-esp8266": "^3.1.2"
+  },
+  "metadata": {
+    "manufacturer": "Espressif",
+    "mcu": "ESP8266",
+    "architecture": "xtensa",
+    "cpu": "xtensa-l106",
+    "clockHz": 80000000,
+    "flashCapacityBytes": 4194304,
+    "sramCapacityBytes": 81920,
+    "led": { "pin": 2, "activeLow": true },
+    "bootPin": 0,
+    "uploadBaud": 115200,
+    "monitorBaud": 115200
+  }
+}

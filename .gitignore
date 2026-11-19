@@ -31,8 +31,8 @@ sdkconfig.old
 *.a
 
 # Downloaded toolchains and framework sources
-toolchain/esp32-c3/esp-idf/
-toolchain/esp32-c3/cache/
+toolchain/*/cache/
+toolchain/*/esp-idf/
 .wicro/
 
 # Temporary and editor state

@@ -4,7 +4,7 @@ interface WicroSerialPort {
 }
 
 interface WicroSerial {
-  requestPort(options: { filters: Array<{ usbVendorId: number; usbProductId: number }> }): Promise<WicroSerialPort>;
+  requestPort(options?: { filters?: Array<{ usbVendorId: number; usbProductId: number }> }): Promise<WicroSerialPort>;
 }
 
 interface Navigator {

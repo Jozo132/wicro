@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import test from 'node:test';
 
 const cli = new URL('../bin/wicro.js', import.meta.url);
@@ -56,8 +56,27 @@ test('doctor emits machine-readable host information', () => {
   assert.equal(report.wasmAvailable, true);
 });
 
+test('board list returns registered boards', () => {
+  const result = runIn(resolve(process.cwd()), 'board', 'list', '--json');
+
+  assert.equal(result.status, 0);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.implemented, true);
+  assert.ok(report.items.some((/** @type {{name:string}} */ item) => item.name === 'stm32f103cb'));
+  assert.ok(report.items.some((/** @type {{name:string}} */ item) => item.name === 'stm32h723vg'));
+});
+
+test('package list returns registry packages', () => {
+  const result = runIn(resolve(process.cwd()), 'package', 'list', '--json');
+
+  assert.equal(result.status, 0);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.implemented, true);
+  assert.ok(report.items.some((/** @type {{name:string}} */ item) => item.name === 'stm32f103cb'));
+});
+
 test('planned commands return an explicit exit code', () => {
-  const result = run('rebuild', '--json');
+  const result = run('install', '--json');
 
   assert.equal(result.status, 2);
   assert.equal(JSON.parse(result.stdout).implemented, false);

@@ -1,0 +1,27 @@
+{
+  "name": "stm32h723vg",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "STM32H723VG board package",
+  "license": "MIT",
+  "sha256": "",
+  "dependencies": {
+    "llvm-wasm-espressif": "^20.1.1",
+    "cmsis-stm32h7": "^1.0.0",
+    "arm-none-eabi": "^1.0.0"
+  },
+  "metadata": {
+    "manufacturer": "STMicroelectronics",
+    "mcu": "STM32H723VG",
+    "package": "TFBGA100",
+    "architecture": "armv7e-m",
+    "cpu": "cortex-m7",
+    "fpu": "fpv5-d16",
+    "flashCapacityBytes": 1048576,
+    "sramCapacityBytes": 564992,
+    "clockHz": 550000000,
+    "flashAddress": "0x08000000",
+    "sramAddress": "0x24000000",
+    "led": { "port": "E", "pin": 3, "activeLow": true }
+  }
+}

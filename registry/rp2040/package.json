@@ -1,0 +1,24 @@
+{
+  "name": "rp2040",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "Raspberry Pi RP2040 board package",
+  "license": "MIT",
+  "sha256": "",
+  "dependencies": {
+    "llvm-wasm-espressif": "^20.1.1",
+    "pico-sdk": "^2.1.0"
+  },
+  "metadata": {
+    "manufacturer": "Raspberry Pi",
+    "mcu": "RP2040",
+    "architecture": "armv6m",
+    "cpu": "cortex-m0plus",
+    "flashCapacityBytes": 2097152,
+    "sramCapacityBytes": 270336,
+    "clockHz": 125000000,
+    "flashAddress": "0x10000000",
+    "sramAddress": "0x20000000",
+    "led": { "pin": 25, "activeLow": false }
+  }
+}

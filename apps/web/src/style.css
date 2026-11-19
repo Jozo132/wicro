@@ -31,6 +31,16 @@ html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 }
 
 .target { color: #abb3a4; font-size: 13px; }
+.target-select {
+  height: 32px;
+  max-width: 260px;
+  border: 1px solid #3a4234;
+  border-radius: 5px;
+  background: #242a21;
+  color: #edf2e8;
+  padding: 0 8px;
+  font: 600 12px "IBM Plex Sans", "Segoe UI", sans-serif;
+}
 .actions { display: flex; gap: 6px; }
 
 button {

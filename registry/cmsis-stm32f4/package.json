@@ -1,0 +1,12 @@
+{
+  "name": "cmsis-stm32f4",
+  "version": "1.0.0",
+  "kind": "framework",
+  "description": "CMSIS baseline package for STM32F4 targets",
+  "license": "Apache-2.0",
+  "metadata": {
+    "vendor": "STMicroelectronics",
+    "family": "STM32F4",
+    "targets": ["stm32f401rc", "stm32f401re"]
+  }
+}
