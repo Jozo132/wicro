@@ -30,6 +30,24 @@ const findRegistryRoot = async () => {
   throw new Error('Wicro package registry is unavailable');
 };
 
+/** @returns {Promise<string>} */
+const findLlvmWasm = async () => {
+  const { readFile } = await import('node:fs/promises');
+  const candidates = [
+    resolve(new URL('../toolchain/llvm-wasm/cache/llvm.wasm', import.meta.url).pathname),
+    resolve(new URL('../../../toolchain/llvm-wasm/cache/llvm.wasm', import.meta.url).pathname)
+  ];
+  for (const candidate of candidates) {
+    try {
+      await readFile(candidate);
+      return candidate;
+    } catch {
+      // Try the repository or prepared-package location.
+    }
+  }
+  throw new Error('Wicro LLVM WASM toolchain is unavailable');
+};
+
 /** @param {string} source */
 const inferPackageName = (source) => {
   try {
@@ -88,7 +106,10 @@ export const main = async (args = []) => {
         name: name ?? 'wicro-project',
         board: 'arduino-uno-original',
         framework: 'arduino',
-        toolchain: 'llvm-wasm-espressif'
+        toolchain: 'llvm-wasm-espressif',
+        build: {
+          sources: ['src/main.ino']
+        }
       };
       await writeFile(resolve(target, 'wicro.json'), `${JSON.stringify(manifest, null, 2)}\n`, { flag: force ? 'w' : 'wx' });
       await writeFile(resolve(target, 'src', 'main.ino'), 'void setup() {\n  pinMode(LED_BUILTIN, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED_BUILTIN, HIGH);\n  delay(500);\n  digitalWrite(LED_BUILTIN, LOW);\n  delay(500);\n}\n', { flag: 'wx' });
@@ -191,12 +212,77 @@ export const main = async (args = []) => {
       const { createWicroEngine } = coreModule;
       const { readFile, writeFile } = await import('node:fs/promises');
       const { dirname } = await import('node:path');
+      const cacheOverride = flags.find((arg) => arg.startsWith('--cache='))?.slice('--cache='.length);
+      /** @type {any} */
+      let nodeCacheModule;
+      /** @type {any} */
+      let sdkModule;
+      try {
+        nodeCacheModule = await import('../../registry/src/node-cache.js');
+        sdkModule = await import('../../registry/src/sdk.js');
+      } catch {
+        const nodeCacheSpecifier = '../vendor/registry/src/node-cache.js';
+        const sdkSpecifier = '../vendor/registry/src/sdk.js';
+        nodeCacheModule = await import(nodeCacheSpecifier);
+        sdkModule = await import(sdkSpecifier);
+      }
+      const { NodeSdkStorage, defaultWicroCacheDirectory } = nodeCacheModule;
+      const { SdkLifecycleManager } = sdkModule;
+      const cacheDirectory = defaultWicroCacheDirectory(cacheOverride);
+      const sdkStorage = new NodeSdkStorage({ root: cacheDirectory });
+      const sdkLifecycle = new SdkLifecycleManager({ storage: sdkStorage });
+
+      try {
+        const registryRoot = await findRegistryRoot();
+        const manifestValue = await readFile(resolve(target, 'wicro.json'), 'utf8');
+        const projectManifest = JSON.parse(manifestValue);
+        const boardName = board ?? projectManifest.board;
+        if (!boardName) throw new Error('No board target was specified');
+        const boardManifest = JSON.parse(await readFile(resolve(registryRoot, boardName, 'package.json'), 'utf8'));
+        for (const [frameworkName, range] of Object.entries(/** @type {Record<string,string>} */ (boardManifest.dependencies ?? {}))) {
+          if (!frameworkName.startsWith('arduino-') && frameworkName !== 'esp-idf' && frameworkName !== 'pico-sdk' && frameworkName !== 'cmsis') continue;
+          try {
+            const frameworkManifest = JSON.parse(await readFile(resolve(registryRoot, frameworkName, 'package.json'), 'utf8'));
+            if (frameworkManifest.metadata?.distribution?.url) {
+              await sdkLifecycle.ensure(frameworkManifest);
+            }
+          } catch (error) {
+            if (error instanceof Error && error.message.includes('no downloadable distribution')) throw error;
+            throw error;
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        emit({ ok: false, command, error: `SDK resolution failed: ${message}` }, json, `Build failed: SDK resolution failed: ${message}`);
+        return 1;
+      }
+
       /** @type {import('../../core/src/index.js').WicroHostAdapter} */
       const host = {
         host: 'node',
-        readFile: async (/** @type {string} */ path, options) => {
+        cacheDirectory,
+        readFile: async (/** @type {string} */ path, /** @type {{encoding?:'utf8'|'binary'}|undefined} */ options) => {
+          const normalized = path.replace(/\\/g, '/');
+          const sdkMatch = normalized.match(/(?:^|\/)registry\/([^/]+)(?:\/(.*))?$/);
+          if (sdkMatch?.[1]) {
+            const registryRoot = await findRegistryRoot();
+            const registryPath = resolve(registryRoot, sdkMatch[1], sdkMatch[2] ?? 'package.json');
+            if (options?.encoding === 'utf8') return readFile(registryPath, 'utf8');
+            return readFile(registryPath);
+          }
           if (options?.encoding === 'utf8') return readFile(resolve(path), 'utf8');
           return readFile(resolve(path));
+        },
+        readdir: async (/** @type {string} */ path) => {
+          const { readdir: readDirectory } = await import('node:fs/promises');
+          const normalized = path.replace(/\\/g, '/');
+          const registryMatch = normalized.match(/(?:^|\/)registry\/([^/]+)(?:\/([^/].*))?$/);
+          if (registryMatch?.[1]) {
+            const registryRoot = await findRegistryRoot();
+            const absolute = resolve(registryRoot, registryMatch[1], registryMatch[2] ?? '');
+            return readDirectory(absolute);
+          }
+          return readDirectory(resolve(path));
         },
         writeFile: async (/** @type {string} */ path, /** @type {string|Uint8Array} */ data) => {
           const { mkdir } = await import('node:fs/promises');
@@ -205,7 +291,7 @@ export const main = async (args = []) => {
           await writeFile(absolute, data);
         }
       };
-      const llvmPath = resolve('toolchain/llvm-wasm/cache/llvm.wasm');
+      const llvmPath = await findLlvmWasm();
       const engine = createWicroEngine({ host, llvmPath });
       const result = await engine.execute({ command: 'build', project: target, board });
       if (!result.ok) {

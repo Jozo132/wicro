@@ -7,7 +7,9 @@
   "repository": "https://github.com/espressif/esp-idf",
   "metadata": {
     "targets": ["esp32c2", "esp32c3", "esp32c6", "esp32h2"],
-    "source": "toolchain/esp32-c3/esp-idf",
+    "source": "external",
+    "status": "download-on-demand",
+    "distribution": { "url": "https://github.com/espressif/esp-idf/archive/refs/tags/v6.1.1.zip", "archiveType": "zip", "sha256": null },
     "bootloader": true,
     "partitionTables": true
   }

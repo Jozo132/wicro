@@ -43,6 +43,8 @@ export const createManifestValidator = async () => {
 };
 
 export { PlatformIoRegistry } from './platformio.js';
+export { SdkLifecycleManager, safeSdkArchivePath, sha256Bytes } from './sdk.js';
+export { BrowserSdkStorage } from './browser-cache.js';
 
 export class PackageRegistry {
   constructor() {

@@ -78,10 +78,11 @@ export class NodeEspSerialTransport {
 
   async readLoop() {
     if (!this.port) return;
-    this.port.on('data', (/** @type {any} */ data) => {
+    this.onData = (/** @type {any} */ data) => {
       const chunk = new Uint8Array(data);
       this.buffer = this.appendArray(this.buffer, chunk);
-    });
+    };
+    this.port.on('data', this.onData);
   }
 
   flushInput() {
@@ -189,10 +190,46 @@ export class NodeEspSerialTransport {
     return true;
   }
 
+  async resetForDownload() {
+    if (!this.port?.isOpen) await this.connect(this.baudRate);
+    await this.setRTS(false);
+    await this.setDTR(false);
+    await sleep(100);
+    await this.setDTR(true);
+    await this.setRTS(false);
+    await sleep(100);
+    await this.setRTS(true);
+    await this.setDTR(false);
+    await sleep(100);
+    await this.setRTS(false);
+    await this.setDTR(false);
+    await sleep(300);
+  }
+
+  async touchUsbVcp() {
+    await this.connect(1200);
+    await this.setRTS(false);
+    await this.setDTR(false);
+    await sleep(100);
+    await this.setDTR(true);
+    await this.setRTS(false);
+    await sleep(100);
+    await this.setDTR(false);
+    await this.setRTS(true);
+    await sleep(100);
+    await this.disconnect();
+    await sleep(500);
+  }
+
   async disconnect() {
-    if (!this.port?.isOpen) return;
-    await new Promise((resolve, reject) => {
-      this.port.close((/** @type {Error|null} */ error) => error ? reject(error) : resolve(undefined));
-    });
+    if (!this.port) return;
+    if (this.onData) this.port.off('data', this.onData);
+    this.onData = undefined;
+    if (this.port.isOpen) {
+      await new Promise((resolve, reject) => {
+        this.port.close((/** @type {Error|null} */ error) => error ? reject(error) : resolve(undefined));
+      });
+    }
+    this.port = undefined;
   }
 }

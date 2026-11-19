@@ -13,7 +13,8 @@
     "targets": ["esp32-c3-supermini", "esp32-devkit", "esp32-s2", "esp32-s3", "esp32-c6", "esp32-h2"],
     "architectures": ["riscv32", "xtensa"],
     "source": "external",
-    "status": "manifested",
+    "status": "download-on-demand",
+    "distribution": { "url": "https://github.com/espressif/arduino-esp32/archive/bc8ab15634eb0402d39e1e259a5a4a29be3e6e1c.zip", "archiveType": "zip", "sha256": null },
     "firmwareLinking": "pending-sdk-distribution"
   }
 }

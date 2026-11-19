@@ -20,7 +20,7 @@ Status values:
 | Browser host adapter | Implemented | Vite app with Monaco target selection, target-specific WASM compile, Web Serial monitor and Espressif ESPLoader upload |
 | VS Code host adapter | Implemented | `@wicro/vscode` provides board listing, compile, bare-metal link and device command surfaces |
 | WASM runtime | Verified | One shared LLVM/LD WASM package executes ARM, AVR, RISC-V 32/64 and Xtensa targets through Node WASI and links STM32 ELF/BIN images |
-| ESP32-C3 ESP-IDF package | Verified | ESP-IDF v6.1.1 builds and executes on a physical C3 SuperMini |
+| ESP32-C3 ESP-IDF package | Native reference verified | ESP-IDF v6.1.1 native reference blink serial heartbeat observed on a physical C3 SuperMini; Arduino/WASM build and flash are unverified |
 | Original ESP32 native example | Source implemented | ESP-IDF project is present; native build requires `xtensa-esp32-elf-gcc` on PATH |
 | ESP8266 native example | Source implemented | Arduino `.ino` example is present; native build requires `arduino-cli` and the ESP8266 core |
 | STM32 bare-metal fixtures | Verified | STM32F401RC native Cortex-M4 ELF/BIN, STM32F103CB native Cortex-M3 ELF/BIN and STM32H723VG native Cortex-M7 ELF/BIN fixtures build with ARM GCC |
@@ -33,7 +33,7 @@ Status values:
 | Incremental compilation/cache | Implemented (object cache) | Runtime cache keys source, target, options and include files; project-wide header dependency tracking remains |
 | PlatformIO/Arduino/CMSIS registries | Partial | PlatformIO search/lookup adapter implemented; complete Arduino/CMSIS SDK distributions remain separate |
 | Node serial discovery | Implemented | SerialPort detects Espressif VID/PID 303a:1001 |
-| esptool-js Node programmer | Implemented | Targeted write, verification and ROM probe adapter |
+| esptool-js Node programmer | Implemented with physical block | Native USB VCP 1200-baud/DTR/RTS/USB-JTAG reset sequences and no-erase flash adapter are implemented; ROM entry is not yet successful on the connected C3 unit |
 | Brightness/PWM examples | Implemented | ESP-IDF builds produce RISC-V ELF/BIN artifacts; not physically validated yet |
 | Serial hello/command examples | Implemented | ESP-IDF builds produce RISC-V ELF/BIN artifacts; not individually hardware-validated yet |
 | Non-blocking timer example | Implemented | ESP-IDF build produces RISC-V ELF/BIN artifacts |
@@ -47,7 +47,7 @@ Status values:
 | Transitive dependencies | Implemented | SemVer registry resolution returns and detects dependency conflicts in a package tree |
 | PlatformIO registry integration | Implemented | Public PlatformIO search/package lookup adapter uses configurable fetch and HTTP contracts |
 | Programmer extension API | Implemented | `ProgrammerProtocolRegistry` supports custom named protocols; the simulated protocol is automated-tested |
-| Clean npm archive | Verified | The packed CLI installs in a temporary directory and runs `doctor` and `board list` without repository paths |
+| Clean npm archive | Verified | The packed CLI is 33.8 kB, installs in a temporary directory, runs `npx wicro --help`, and contains no `.wasm`, SDK archive or extracted SDK tree |
 | Real Clang WASI diagnostics | Implemented | Existing LLVM WASM binary executes `-fsyntax-only` and returns parsed Clang diagnostics |
 | Clang WASI code completion | Implemented | Existing LLVM WASM binary executes `-code-completion-at` and returns parsed candidates |
 | `@wicro/language-server` LSP/session | Implemented | LSP initialization, document sync, diagnostics, completion, hover, definition, references, rename and formatting protocol are executable in tests |
@@ -73,7 +73,7 @@ Status values:
 
 | Target | Source availability | WASM compile | Firmware link/artifact | Flash protocol | Physical execution |
 |---|---|---|---|---|---|
-| ESP32-C3 | Implemented; ESP-IDF 6.1.1 project | RISC-V object compile verified | ESP-IDF ELF/BIN builds verified in native reference; complete WASM SDK link pending | ESPTool Node/browser implemented; C3 flash verified | GPIO/serial blink verified on C3 SuperMini |
+| ESP32-C3 | Implemented; ESP-IDF 6.1.1 project | RISC-V object compile verified | ESP-IDF native reference ELF/BIN builds verified; complete Arduino/WASM SDK link pending | Native USB VCP reset code implemented; ROM entry and flash not yet verified | Native ESP-IDF GPIO/serial heartbeat observed; Arduino/WASM execution not verified |
 | Original ESP32 | Implemented | Xtensa object compile implemented | Native ESP-IDF source and build setup present; complete WASM link pending | ESPTool implemented | Not physically verified |
 | ESP8266 | Implemented | Xtensa object compile implemented | SDK and startup/link artifacts pending | Protocol surface pending | Not physically verified |
 | Arduino UNO / ATmega328P | Implemented | AVR object compile verified | Link/HEX generation pending | AVR STK500 protocol not yet hardware-verified | Not physically verified |

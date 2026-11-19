@@ -237,12 +237,26 @@ export class WicroLanguageService {
     const document = this.documents.get(uri);
     if (!document) return [];
     const name = wordAt(document, position);
+    if (!name) return [];
+
+    const cursorOffset = positionOffset(document, position);
+    const candidates = this.index.find(name);
+    const symbol = candidates.find((item) => {
+      const itemDocument = this.documents.get(item.uri);
+      if (!itemDocument) return false;
+      const itemOffset = positionOffset(itemDocument, item.range.start);
+      const scope = enclosingScope(itemDocument.text, itemOffset);
+      return item.uri === uri && cursorOffset >= scope.start && cursorOffset <= scope.end;
+    }) ?? candidates.find((item) => item.uri === uri) ?? candidates[0];
     const locations = [];
 
     for (const value of this.documents.values()) {
-      const regex = new RegExp(`\\b${escapeRegex(name)}\\b`, 'g');
-      for (const match of value.text.matchAll(regex)) {
-        const start = offsetPosition(value, match.index ?? 0);
+      const scope = symbol?.uri === value.uri && symbol.kind !== 'Function'
+        ? enclosingScope(value.text, positionOffset(value, symbol.range.start))
+        : { start: 0, end: value.text.length };
+      for (const occurrence of identifierOccurrences(value.text, name)) {
+        if (occurrence < scope.start || occurrence > scope.end) continue;
+        const start = offsetPosition(value, occurrence);
         locations.push({ uri: value.uri, range: { start, end: { line: start.line, character: start.character + name.length } } });
       }
     }
@@ -255,13 +269,26 @@ export class WicroLanguageService {
     const document = this.documents.get(uri);
     if (!document) throw new Error(`Document is not open: ${uri}`);
     const name = wordAt(document, position);
+    if (!name) throw new Error('No renameable symbol at position');
+    const cursorOffset = positionOffset(document, position);
+    const candidates = this.index.find(name);
+    const symbol = candidates.find((item) => {
+      const itemDocument = this.documents.get(item.uri);
+      if (!itemDocument) return false;
+      const itemOffset = positionOffset(itemDocument, item.range.start);
+      const scope = enclosingScope(itemDocument.text, itemOffset);
+      return item.uri === uri && cursorOffset >= scope.start && cursorOffset <= scope.end;
+    }) ?? candidates.find((item) => item.uri === uri) ?? candidates[0];
     const edits = [];
 
     for (const value of this.documents.values()) {
-      const regex = new RegExp(`\\b${escapeRegex(name)}\\b`, 'g');
+      const scope = symbol?.uri === value.uri && symbol.kind !== 'Function'
+        ? enclosingScope(value.text, positionOffset(value, symbol.range.start))
+        : { start: 0, end: value.text.length };
       const textEdits = [];
-      for (const match of value.text.matchAll(regex)) {
-        const start = offsetPosition(value, match.index ?? 0);
+      for (const occurrence of identifierOccurrences(value.text, name)) {
+        if (occurrence < scope.start || occurrence > scope.end) continue;
+        const start = offsetPosition(value, occurrence);
         textEdits.push({ range: { start, end: { line: start.line, character: start.character + name.length } }, newText: newName });
       }
       if (textEdits.length) edits.push({ uri: value.uri, edits: textEdits });
@@ -375,6 +402,60 @@ const wordBefore = (document, position) => {
   return line.slice(0, position.character).match(/[A-Za-z_]\w*$/)?.[0] ?? '';
 };
 
+/** @param {string} text @param {string} name */
+const identifierOccurrences = (text, name) => {
+  const occurrences = [];
+  let state = 'code';
+  let quote = '';
+  for (let index = 0; index < text.length;) {
+    const char = text[index] ?? '';
+    const next = text[index + 1] ?? '';
+    if (state === 'lineComment') {
+      if (char === '\n') state = 'code';
+      index++;
+      continue;
+    }
+    if (state === 'blockComment') {
+      if (char === '*' && next === '/') { state = 'code'; index += 2; } else index++;
+      continue;
+    }
+    if (state === 'string') {
+      if (char === '\\' && next) { index += 2; continue; }
+      if (char === quote) state = 'code';
+      index++;
+      continue;
+    }
+    if (char === '/' && next === '/') { state = 'lineComment'; index += 2; continue; }
+    if (char === '/' && next === '*') { state = 'blockComment'; index += 2; continue; }
+    if (char === '"' || char === "'") { state = 'string'; quote = char; index++; continue; }
+    if (/[_A-Za-z]/.test(char)) {
+      let end = index + 1;
+      while (end < text.length && /[_A-Za-z0-9]/.test(text[end] ?? '')) end++;
+      const identifier = text.slice(index, end);
+      if (identifier === name) occurrences.push(index);
+      index = end;
+      continue;
+    }
+    index++;
+  }
+  return occurrences;
+};
+
+/** @param {string} text @param {number} offset */
+const enclosingScope = (text, offset) => {
+  let depth = 0;
+  let scopeStart = 0;
+  let scopeEnd = text.length;
+  for (let index = 0; index < text.length; index++) {
+    if (text[index] === '{') { if (index < offset) scopeStart = index; depth++; }
+    if (text[index] === '}') {
+      depth--;
+      if (depth >= 0 && index >= offset) { scopeEnd = index + 1; break; }
+    }
+  }
+  return { start: scopeStart, end: scopeEnd };
+};
+
 /** @param {string} value */
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -386,6 +467,27 @@ const uniqueCompletions = (items) => {
 };
 
 export { WicroLanguageWorkerProtocol } from './worker.js';
+
+const lspDiagnostics = (/** @type {WicroLanguageDiagnostic[]} */ diagnostics) => diagnostics.map((diagnostic) => ({
+  ...diagnostic,
+  severity: diagnostic.severity === 'error' ? 1 : diagnostic.severity === 'warning' ? 2 : 3
+}));
+
+/** @param {string} text @param {Array<{range?:{start:{line:number,character:number},end:{line:number,character:number}},text:string}>} changes */
+const applyTextChanges = (text, changes) => {
+  let updated = text;
+  for (const change of changes) {
+    if (!change.range) { updated = change.text; continue; }
+    const lines = updated.split(/\r?\n/);
+    const offset = (/** @type {{line:number,character:number}} */ position) => {
+      const line = Math.max(0, Math.min(lines.length - 1, position.line));
+      const prefix = lines.slice(0, line).join('\n').length + (line > 0 ? 1 : 0);
+      return prefix + Math.max(0, Math.min(lines[line]?.length ?? 0, position.character));
+    };
+    updated = `${updated.slice(0, offset(change.range.start))}${change.text}${updated.slice(offset(change.range.end))}`;
+  }
+  return updated;
+};
 
 export class WicroLspSession {
   /** @param {WicroLanguageService} service */
@@ -400,7 +502,7 @@ export class WicroLspSession {
 
     if (message.method === 'initialize') {
       return { jsonrpc: '2.0', id, result: { capabilities: {
-        textDocumentSync: 1,
+        textDocumentSync: { openClose: true, change: 2 },
         completionProvider: { resolveProvider: false, triggerCharacters: ['.', '>'] },
         hoverProvider: true,
         definitionProvider: true,
@@ -416,15 +518,22 @@ export class WicroLspSession {
       const textDocument = /** @type {{uri:string,languageId:string,version:number,text:string}} */ (params.textDocument);
       this.service.openDocument({ uri: textDocument.uri, languageId: textDocument.languageId, version: textDocument.version, text: textDocument.text });
       const diagnostics = await this.service.diagnostics(textDocument.uri);
-      return { method: 'textDocument/publishDiagnostics', params: { uri: textDocument.uri, diagnostics } };
+      if (this.service.documents.get(textDocument.uri)?.version !== textDocument.version) return null;
+      return { method: 'textDocument/publishDiagnostics', params: { uri: textDocument.uri, diagnostics: lspDiagnostics(diagnostics) } };
     }
 
     if (message.method === 'textDocument/didChange') {
       const textDocument = /** @type {{uri:string,version:number}} */ (params.textDocument);
-      const change = /** @type {{text:string}} */ ((params.contentChanges?.[0]));
-      this.service.updateDocument(textDocument.uri, change.text, textDocument.version);
+      const previous = this.service.documents.get(textDocument.uri);
+      if (!previous || textDocument.version < previous.version) return null;
+      const changes = /** @type {Array<{range?:{start:{line:number,character:number},end:{line:number,character:number}},text:string}>} */ (params.contentChanges ?? []);
+      const text = applyTextChanges(previous.text, changes);
+      this.service.updateDocument(textDocument.uri, text, textDocument.version);
+      const current = this.service.documents.get(textDocument.uri);
+      if (!current || current.version !== textDocument.version) return null;
       const diagnostics = await this.service.diagnostics(textDocument.uri);
-      return { method: 'textDocument/publishDiagnostics', params: { uri: textDocument.uri, diagnostics } };
+      if (this.service.documents.get(textDocument.uri)?.version !== textDocument.version) return null;
+      return { method: 'textDocument/publishDiagnostics', params: { uri: textDocument.uri, diagnostics: lspDiagnostics(diagnostics) } };
     }
 
     if (message.method === 'textDocument/didClose') {

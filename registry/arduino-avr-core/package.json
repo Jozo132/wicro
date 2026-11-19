@@ -10,10 +10,12 @@
   },
   "metadata": {
     "upstreamCommit": "11b9130371e8447920edb65a75706a6c951e51fc",
+    "upstreamVersion": "1.8.8",
     "targets": ["arduino-uno-original", "arduino-nano", "arduino-mega", "arduino-leonardo"],
     "architectures": ["avr"],
     "source": "external",
-    "status": "manifested",
+    "status": "download-on-demand",
+    "distribution": { "url": "https://github.com/arduino/ArduinoCore-avr/archive/11b9130371e8447920edb65a75706a6c951e51fc.zip", "archiveType": "zip", "sha256": null },
     "firmwareLinking": "pending-sdk-distribution"
   }
 }

@@ -19,6 +19,10 @@ Wicro uses Arduino as the default framework for new projects. The implementation
 
 The registry contains AVR, ESP32, ESP8266, STM32 and Pico preset metadata for UNO, Nano, Mega, Leonardo, ESP32-C3/DevKit/S2/S3/C6/H2, ESP8266 NodeMCU/D1 Mini, Blue/Black Pill, Nucleo-F401RE, Pico W, Pico 2 and Pico 2 W.
 
+## On-demand SDK policy
+
+Framework distributions are declared in immutable package manifests with pinned upstream commits or tags. SDK ZIP archives are downloaded only on first use, extracted into the OS/user cache or browser OPFS/IndexedDB cache, locked with SHA-256 and file hashes, and reused offline. SDK sources, extracted vendor trees, core archives and toolchain binaries are not committed to Git or included in npm archives.
+
 ## Pinned upstream sources
 
 | Core | Repository | Resolved head |

@@ -7,6 +7,8 @@
   "repository": "https://github.com/raspberrypi/pico-sdk",
   "metadata": {
     "targets": ["rp2040", "rp2350"],
-    "source": "external"
+    "source": "external",
+    "status": "download-on-demand",
+    "distribution": { "url": "https://github.com/raspberrypi/pico-sdk/archive/refs/tags/2.1.0.zip", "archiveType": "zip", "sha256": null }
   }
 }

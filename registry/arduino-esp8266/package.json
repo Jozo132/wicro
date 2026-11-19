@@ -8,6 +8,9 @@
   "metadata": {
     "upstreamCommit": "7d5a4cec8f4639177995bd15f583a922ecd2f793",
     "targets": ["esp8266"],
-    "source": "external"
+    "source": "external",
+    "status": "download-on-demand",
+    "distribution": { "url": "https://github.com/esp8266/Arduino/archive/7d5a4cec8f4639177995bd15f583a922ecd2f793.zip", "archiveType": "zip", "sha256": null },
+    "firmwareLinking": "pending-sdk-distribution"
   }
 }

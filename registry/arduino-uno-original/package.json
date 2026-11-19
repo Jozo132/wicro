@@ -19,7 +19,7 @@
       "kind": "object",
       "target": "avr",
       "targetOptions": { "mcu": "atmega328p" },
-      "source": "main.c",
+      "source": "src/main.ino",
       "output": ".wicro/build"
     },
     "clockHz": 16000000,

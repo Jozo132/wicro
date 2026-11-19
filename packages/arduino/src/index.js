@@ -190,19 +190,28 @@ const normalizePrototype = (declaration) => {
 
 /** @param {Record<string,string>} tabs */
 export const preprocessIno = (tabs) => {
-  const entries = Object.entries(tabs);
+  const entries = Object.entries(tabs).sort(([left], [right]) => {
+    const leftMain = /(?:^|\/)(?:main|sketch)\.(?:ino|pde)$/i.test(left);
+    const rightMain = /(?:^|\/)(?:main|sketch)\.(?:ino|pde)$/i.test(right);
+    if (leftMain !== rightMain) return leftMain ? -1 : 1;
+    const leftBase = left.split('/').pop() ?? left;
+    const rightBase = right.split('/').pop() ?? right;
+    if (leftBase.length !== rightBase.length) return leftBase.length - rightBase.length;
+    return leftBase.localeCompare(rightBase);
+  });
   if (entries.length === 0) throw new Error('At least one Arduino sketch tab is required');
 
   /** @type {string[]} */
   const prototypes = [];
   const discovered = new Set();
+  const excludedNames = new Set(['setup', 'loop', 'if', 'for', 'while', 'switch', 'catch']);
 
   for (const [source, text] of entries) {
     const cleaned = stripCComments(text);
-    for (const match of cleaned.matchAll(/(?:^|[;{}])\s*([A-Za-z_]\w*(?:\s+[*&])?[A-Za-z_<>,:\s*&]+)\s+([A-Za-z_]\w*)\s*\(([^{};]*)\)\s*(?:\{|;)/gm)) {
+    for (const match of cleaned.matchAll(/(?:^|[;\n{}])\s*(?!#)(?:(?:template\s*<[^;{}]+>\s*)?)([A-Za-z_]\w*(?:\s+[*&])?(?:[A-Za-z_<>,:\[\]\s*&]*))\s+([A-Za-z_]\w*)\s*\(([^{};]*)\)\s*(?:const\s*)?(?:noexcept(?:\([^{};]*\))?\s*)?(?:->\s*[^{};]+?)?\s*(?:\{|;)/gm)) {
       const declaration = `${match[1]?.trim() ?? ''} ${match[2]?.trim() ?? ''}(${match[3]?.trim() ?? ''})`.trim();
       const name = match[2]?.trim() ?? '';
-      if (!name || name === 'setup' || name === 'loop' || discovered.has(declaration)) continue;
+      if (!name || excludedNames.has(name) || discovered.has(declaration)) continue;
       discovered.add(declaration);
       prototypes.push(normalizePrototype(declaration) + ';');
     }
@@ -216,13 +225,17 @@ export const preprocessIno = (tabs) => {
   const sourceMap = [];
 
   for (const [source, text] of entries) {
+    const safeSource = source.replace(/\\/g, '/').replace(/"/g, '\\"');
+    cppLines.push(`#line 1 "${safeSource}"`);
     const lines = text.split(/\r?\n/);
-    sourceMap.push(...lines.map((_, index) => ({
-      generatedLine: cppLines.length + index,
-      source,
-      sourceLine: index + 1
-    })));
-    cppLines.push(...lines);
+    for (let index = 0; index < lines.length; index++) {
+      sourceMap.push({
+        generatedLine: cppLines.length,
+        source,
+        sourceLine: index + 1
+      });
+      cppLines.push(lines[index] ?? '');
+    }
   }
 
   return /** @type {ArduinoInoResult} */ ({ cpp: cppLines.join('\n') + '\n', prototypes, sourceMap });

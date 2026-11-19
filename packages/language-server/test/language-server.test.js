@@ -17,14 +17,14 @@ const fakeToolchain = {
 test('LSP didOpen publishes real clang diagnostics', async () => {
   const service = new WicroLanguageService({ host: 'node', toolchain: /** @type {any} */ (fakeToolchain) });
   const session = new WicroLspSession(service);
-  const response = await session.handle({
+  const response = /** @type {any} */ (await session.handle({
     jsonrpc: '2.0',
     method: 'textDocument/didOpen',
     params: { textDocument: { uri: 'file:///main.c', languageId: 'c', version: 1, text: 'int main(void) { bad(); }\n' } }
-  });
+  }));
 
   assert.equal(response.method, 'textDocument/publishDiagnostics');
-  assert.equal(response.params.diagnostics[0].severity, 'error');
+  assert.equal(response.params.diagnostics[0].severity, 1);
   assert.equal(response.params.diagnostics[0].range.start.line, 0);
 });
 
@@ -41,6 +41,32 @@ test('completion and cross-document symbol references work', async () => {
 
   const hover = service.hover('file:///main.c', { line: 0, character: 3 });
   assert.match(hover?.contents.value ?? '', /blink/);
+});
+
+test('rename ignores comments and strings and didChange applies incremental text', async () => {
+  const service = new WicroLanguageService({ host: 'node', toolchain: /** @type {any} */ (fakeToolchain) });
+  const session = new WicroLspSession(service);
+  service.openDocument({ uri: 'file:///main.c', languageId: 'c', version: 1, text: 'int blink(void) { return 0; }\n// blink\nconst char *text = "blink";\n' });
+
+  const rename = await service.rename('file:///main.c', { line: 0, character: 5 }, 'flash');
+  const ranges = rename.changes?.['file:///main.c']?.map((edit) => edit.range) ?? [];
+  assert.equal(ranges.length, 1);
+
+  await session.handle({
+    jsonrpc: '2.0',
+    method: 'textDocument/didOpen',
+    params: { textDocument: { uri: 'file:///main.c', languageId: 'c', version: 1, text: 'int blink(void) { return 0; }\n' } }
+  });
+  const changed = /** @type {any} */ (await session.handle({
+    jsonrpc: '2.0',
+    method: 'textDocument/didChange',
+    params: {
+      textDocument: { uri: 'file:///main.c', version: 2 },
+      contentChanges: [{ range: { start: { line: 0, character: 4 }, end: { line: 0, character: 9 } }, text: 'flash' }]
+    }
+  }));
+  assert.equal(changed.params.uri, 'file:///main.c');
+  assert.equal(service.documents.get('file:///main.c')?.text, 'int flash(void) { return 0; }\n');
 });
 
 test('compile_commands include target, defines and include directories', () => {

@@ -24,6 +24,8 @@ import { preprocessIno } from '../../arduino/src/index.js';
  * @typedef {object} WicroHostAdapter
  * @property {WicroHost} host
  * @property {(path: string, options?: {encoding?: 'utf8'|'binary'}) => Promise<string|Uint8Array>} readFile
+ * @property {(path: string) => Promise<string[]>} [readdir]
+ * @property {string} [cacheDirectory]
  * @property {(path: string, data: string|Uint8Array) => Promise<void>} writeFile
  */
 
@@ -137,6 +139,64 @@ const loadBoardManifest = async (host, boardName) => {
 };
 
 /**
+ * @param {WicroHostAdapter} host
+ * @param {import('../../registry/src/index.js').WicroPackageManifest} boardManifest
+ */
+const loadSdkFiles = async (host, boardManifest) => {
+  /** @type {Record<string,string|Uint8Array>} */
+  const files = {};
+  /** @type {string[]} */
+  const includeDirs = [];
+
+  for (const frameworkName of Object.keys(boardManifest.dependencies ?? {})) {
+    let frameworkManifest;
+    try {
+      frameworkManifest = await loadBoardManifest(host, frameworkName);
+    } catch {
+      continue;
+    }
+    if (!host.cacheDirectory || !host.readdir) continue;
+    const readdir = host.readdir;
+
+    const cacheRoot = `${host.cacheDirectory}/${frameworkName}-${frameworkManifest.version}`;
+    /** @param {string} directory @param {string} relative */
+    const walk = async (directory, relative) => {
+      let names;
+      try {
+        names = await readdir(directory);
+      } catch {
+        return;
+      }
+      for (const name of names.sort()) {
+        const absolute = `${directory}/${name}`.replace(/\/+/g, '/');
+        const relativePath = `${relative}/${name}`.replace(/^\//, '').replace(/\/+/g, '/');
+        try {
+          const value = await host.readFile(absolute, { encoding: 'utf8' });
+          if (typeof value === 'string') {
+            const segments = relativePath.split('/');
+            const normalized = segments.length > 1 ? segments.slice(1).join('/') : relativePath;
+            const virtualPath = `sdk/${normalized}`.replace(/\/+/g, '/');
+            files[virtualPath] = value;
+            if (/\/Arduino\.h$|^sdk\/Arduino\.h$/i.test(virtualPath)) {
+              includeDirs.push(virtualPath.slice(0, virtualPath.lastIndexOf('/')));
+            }
+            if (/\/pins_arduino\.h$/i.test(virtualPath)) {
+              includeDirs.push(virtualPath.slice(0, virtualPath.lastIndexOf('/')));
+            }
+          }
+        } catch {
+          await walk(absolute, relativePath);
+        }
+      }
+    };
+
+    await walk(cacheRoot, '');
+  }
+
+  return { files, includeDirs: [...new Set(includeDirs)] };
+};
+
+/**
  * @typedef {object} BuildManifest
  * @property {'object'|'bare-metal'} kind
  * @property {string} target
@@ -176,36 +236,128 @@ const asBuildManifest = (value) => {
  * @param {string} project
  * @param {string} [boardName]
  */
-const buildProject = async (host, toolchain, project, boardName) => {
-  let board = boardName;
-  if (!board) {
+const sourceExtension = /\.(ino|pde|cpp|cxx|cc|c|s|S|asm)$/;
+
+/** @param {WicroHostAdapter} host @param {string} directory @param {Set<string>} [visited] */
+const discoverSourceFiles = async (host, directory, visited = new Set()) => {
+  if (!host.readdir) return [];
+  if (visited.has(directory)) return [];
+  visited.add(directory);
+
+  /** @type {string[]} */
+  const sources = [];
+  let names;
+  try {
+    names = await host.readdir(directory);
+  } catch {
+    return [];
+  }
+
+  for (const name of names.sort()) {
+    const path = `${directory}/${name}`.replace(/\/+/g, '/');
     try {
-      const manifestValue = await host.readFile(`${project}/wicro.json`, { encoding: 'utf8' });
-      if (typeof manifestValue === 'string') {
-        const manifest = /** @type {{board?:string}} */ (JSON.parse(manifestValue));
-        board = manifest.board;
-      }
+      const value = await host.readFile(path, { encoding: 'utf8' });
+      if (typeof value === 'string' && sourceExtension.test(name)) sources.push(path);
     } catch {
-      // Board must be supplied explicitly or resolved from the project manifest.
+      sources.push(...await discoverSourceFiles(host, path, visited));
     }
   }
+  return sources;
+};
+
+/** @param {string} path */
+const normalizeProjectSourcePath = (path) => {
+  const normalized = path.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+/g, '/');
+  if (normalized.startsWith('/') || normalized.split('/').includes('..')) {
+    throw new Error(`Unsafe project source path: ${path}`);
+  }
+  return normalized;
+};
+
+/** @param {WicroHostAdapter} host @param {LlvmWasmToolchain} toolchain @param {string} project @param {string} [boardName] */
+const buildProject = async (host, toolchain, project, boardName) => {
+  let board = boardName;
+  /** @type {{board?:string,build?:{sources?:string[],sourceDir?:string,flags?:string[],defines?:string[]},sources?:string[],sourceDir?:string}}} */
+  let projectManifest = {};
+  try {
+    const manifestValue = await host.readFile(`${project}/wicro.json`, { encoding: 'utf8' });
+    if (typeof manifestValue === 'string') projectManifest = JSON.parse(manifestValue);
+  } catch {
+    // Board must be supplied explicitly or resolved from the project manifest.
+  }
+  if (!board) board = projectManifest.board;
   if (!board) throw new Error('No board target was specified');
 
   const boardManifest = await loadBoardManifest(host, board);
   const build = asBuildManifest(boardManifest.metadata?.build);
   if (!build) throw new Error(`Board '${board}' has no compilation recipe`);
 
-  const sourcePath = build.source ?? 'src/main.c';
-  const sourceValue = await host.readFile(`${project}/${sourcePath}`, { encoding: 'utf8' });
-  if (typeof sourceValue !== 'string') throw new Error(`Source file is not text: ${sourcePath}`);
+  const sdk = await loadSdkFiles(host, boardManifest);
+  const boardMetadata = /** @type {{clockHz?:number}} */ (boardManifest.metadata ?? {});
+  const boardDefine = board.replace(/[^A-Za-z0-9]/g, '_').toUpperCase();
+  const defines = [
+    `F_CPU=${typeof boardMetadata.clockHz === 'number' ? boardMetadata.clockHz : 16000000}L`,
+    'ARDUINO=10808',
+    `ARDUINO_${boardDefine}`,
+    `ARDUINO_ARCH_${String(boardManifest.metadata?.architecture ?? '').replace(/[^A-Za-z0-9]/g, '_').toUpperCase()}`
+  ].filter((value) => !value.endsWith('_'));
+
+  const explicitSources = projectManifest.build?.sources ?? projectManifest.sources;
+  /** @type {string[]} */
+  let sourcePaths;
+  if (explicitSources?.length) {
+    sourcePaths = explicitSources.map(normalizeProjectSourcePath);
+  } else {
+    const sourceDir = projectManifest.build?.sourceDir ?? projectManifest.sourceDir;
+    if (sourceDir) {
+      sourcePaths = await discoverSourceFiles(host, `${project}/${normalizeProjectSourcePath(sourceDir)}`);
+      sourcePaths = sourcePaths.map((path) => normalizeProjectSourcePath(path.slice(project.length + 1)));
+    } else {
+      sourcePaths = await discoverSourceFiles(host, `${project}/src`);
+      sourcePaths = sourcePaths.map((path) => normalizeProjectSourcePath(path.slice(project.length + 1)));
+      if (sourcePaths.length === 0) {
+        const fallback = await discoverSourceFiles(host, project);
+        sourcePaths = fallback
+          .map((path) => normalizeProjectSourcePath(path.slice(project.length + 1)))
+          .filter((path) => !path.startsWith('.wicro/'));
+      }
+    }
+  }
+
+  if (sourcePaths.length === 0 && build.source) {
+    sourcePaths = [normalizeProjectSourcePath(build.source)];
+  }
+  if (sourcePaths.length === 0) throw new Error(`No source files found for project '${project}'`);
+
+  /** @type {Record<string,string>} */
+  const sourceFiles = {};
+  for (const sourcePath of sourcePaths) {
+    const sourceValue = await host.readFile(`${project}/${sourcePath}`, { encoding: 'utf8' });
+    if (typeof sourceValue !== 'string') throw new Error(`Source file is not text: ${sourcePath}`);
+    sourceFiles[sourcePath] = sourceValue;
+  }
+
+  const inoPaths = sourcePaths
+    .filter((path) => /\.(ino|pde)$/i.test(path))
+    .sort((left, right) => {
+      const leftMain = /(?:^|\/)(?:main|sketch)\.(?:ino|pde)$/i.test(left);
+      const rightMain = /(?:^|\/)(?:main|sketch)\.(?:ino|pde)$/i.test(right);
+      if (leftMain !== rightMain) return leftMain ? -1 : 1;
+      const leftBase = left.split('/').pop() ?? left;
+      const rightBase = right.split('/').pop() ?? right;
+      if (leftBase.length !== rightBase.length) return leftBase.length - rightBase.length;
+      return leftBase.localeCompare(rightBase);
+    });
 
   let result;
   let generatedCpp;
   let sourceMap;
-  if (/\.(ino|pde)$/i.test(sourcePath)) {
-    const sketch = preprocessIno({ [sourcePath.split('/').pop() ?? 'sketch.ino']: sourceValue });
+  if (inoPaths.length > 0) {
+    const tabs = Object.fromEntries(inoPaths.map((path) => [path, sourceFiles[path] ?? '']));
+    const sketch = preprocessIno(tabs);
     generatedCpp = sketch.cpp;
     sourceMap = sketch.sourceMap;
+
     if (build.kind === 'bare-metal') {
       if (!build.startupSource || !build.linkerScript) {
         throw new Error(`Board '${board}' has an incomplete bare-metal build recipe`);
@@ -216,9 +368,8 @@ const buildProject = async (host, toolchain, project, boardName) => {
         throw new Error(`Firmware sources for '${board}' must be text files`);
       }
       generatedCpp = `${generatedCpp}\nextern "C" int main(void) { setup(); for (;;) { loop(); } return 0; }\n`;
-      const bareMetalCpp = generatedCpp;
       result = await toolchain.compileAndLinkBareMetal({
-        source: bareMetalCpp,
+        source: generatedCpp,
         startupSource: startupValue,
         linkerScript: linkerValue,
         target: build.target,
@@ -228,6 +379,9 @@ const buildProject = async (host, toolchain, project, boardName) => {
     } else {
       result = await toolchain.compileSource(generatedCpp, build.target, build.targetOptions, {
         language: 'c++',
+        includeDirs: sdk.includeDirs,
+        files: sdk.files,
+        defines,
         cacheDirectory: `${project}/.wicro/cache`
       });
     }
@@ -237,7 +391,9 @@ const buildProject = async (host, toolchain, project, boardName) => {
     }
     const startupValue = await host.readFile(`${project}/${build.startupSource}`, { encoding: 'utf8' });
     const linkerValue = await host.readFile(`${project}/${build.linkerScript}`, { encoding: 'utf8' });
-    if (typeof startupValue !== 'string' || typeof linkerValue !== 'string') {
+    const primarySource = sourcePaths.find((path) => /\.(cpp|cxx|cc|c)$/i.test(path));
+    const sourceValue = primarySource ? sourceFiles[primarySource] : undefined;
+    if (typeof sourceValue !== 'string' || typeof startupValue !== 'string' || typeof linkerValue !== 'string') {
       throw new Error(`Firmware sources for '${board}' must be text files`);
     }
     result = await toolchain.compileAndLinkBareMetal({
@@ -245,16 +401,34 @@ const buildProject = async (host, toolchain, project, boardName) => {
       startupSource: startupValue,
       linkerScript: linkerValue,
       target: build.target,
-      targetOptions: build.targetOptions
+      targetOptions: build.targetOptions,
+      language: /\.(cpp|cxx|cc)$/i.test(primarySource ?? '') ? 'c++' : 'c'
     });
   } else {
-    result = await toolchain.compileC(sourceValue, build.target, build.targetOptions);
+    const cppPaths = sourcePaths.filter((path) => /\.(cpp|cxx|cc)$/i.test(path));
+    const cPaths = sourcePaths.filter((path) => /\.c$/i.test(path));
+    const primaryPath = cppPaths[0] ?? cPaths[0];
+    if (!primaryPath) throw new Error(`No C or C++ source found for project '${project}'`);
+    const primarySource = sourceFiles[primaryPath];
+    result = /\.(cpp|cxx|cc)$/i.test(primaryPath)
+      ? await toolchain.compileSource(primarySource, build.target, build.targetOptions, {
+          language: 'c++',
+          includeDirs: sdk.includeDirs,
+          files: sdk.files,
+          defines,
+          cacheDirectory: `${project}/.wicro/cache`
+        })
+      : await toolchain.compileSource(primarySource, build.target, build.targetOptions, {
+          language: 'c',
+          includeDirs: sdk.includeDirs,
+          files: sdk.files,
+          defines,
+          cacheDirectory: `${project}/.wicro/cache`
+        });
   }
 
   const output = build.output ?? '.wicro/build';
-  if (generatedCpp) {
-    await host.writeFile(`${project}/${output}/sketch.cpp`, generatedCpp);
-  }
+  if (generatedCpp) await host.writeFile(`${project}/${output}/sketch.cpp`, generatedCpp);
   if ('elf' in result && 'bin' in result) {
     await host.writeFile(`${project}/${output}/firmware.elf`, result.elf);
     await host.writeFile(`${project}/${output}/firmware.bin`, result.bin);
@@ -272,6 +446,7 @@ const buildProject = async (host, toolchain, project, boardName) => {
     object: 'object' in result ? `${project}/${output}/main.o` : undefined,
     diagnostics: result.diagnostics,
     generatedCpp: generatedCpp ? `${project}/${output}/sketch.cpp` : undefined,
-    sourceMap
+    sourceMap,
+    sources: sourcePaths
   };
 };

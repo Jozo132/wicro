@@ -153,7 +153,7 @@ export class LlvmWasmToolchain {
  * @param {string} source
  * @param {string} target
  * @param {{march?:string,mabi?:string,mcpu?:string,mcu?:string}} [targetOptions]
- * @param {{language?:'c'|'c++'|'assembly',includeDirs?:string[],cacheDirectory?:string,files?:Record<string,string|Uint8Array>,diagnostics?:string[]}} [options]
+ * @param {{language?:'c'|'c++'|'assembly',includeDirs?:string[],compilerFlags?:string[],defines?:string[],compilerHash?:string,compilerVersion?:string,cacheDirectory?:string,files?:Record<string,string|Uint8Array>,diagnostics?:string[]}} [options]
  */
   async compileSource(source, target = 'riscv32', targetOptions = {}, options = {}) {
     const language = options.language ?? 'c';
@@ -175,6 +175,10 @@ export class LlvmWasmToolchain {
         targetOptions,
         language,
         includeDirs: options.includeDirs ?? [],
+        compilerFlags: options.compilerFlags ?? [],
+        defines: options.defines ?? [],
+        compilerHash: options.compilerHash ?? '32a1fb128050002a4e2c8797c4730fbd08bdb6c6991c204645d92aec85b212d4',
+        compilerVersion: options.compilerVersion ?? '202611141634-v6.0.3',
         files: Object.fromEntries(Object.entries(options.files ?? {}).map(([name, data]) => [name, typeof data === 'string' ? data : createHash('sha256').update(data).digest('hex')]))
       })).digest('hex');
       const cacheDirectory = options.cacheDirectory;
@@ -194,6 +198,8 @@ export class LlvmWasmToolchain {
         ...this.targetArgs(target, targetOptions),
         ...(language === 'c++' ? ['-x', 'c++'] : language === 'assembly' ? ['-x', 'assembler'] : []),
         ...((options.includeDirs ?? []).flatMap((directoryName) => ['-I', `/tmp/${directoryName}`])),
+        ...(options.compilerFlags ?? []),
+        ...(options.defines ?? []).flatMap((define) => ['-D', define]),
         '-nostdlib',
         '-c',
         `/tmp/main.${extension}`,

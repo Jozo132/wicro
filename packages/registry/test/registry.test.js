@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { zipSync } from 'fflate';
 import { createManifestValidator, PackageRegistry, PlatformIoRegistry } from '../src/index.js';
+import { SdkLifecycleManager } from '../src/sdk.js';
+import { NodeSdkStorage } from '../src/node-cache.js';
 
 /** @type {import('../src/index.js').WicroPackageManifest} */
 const validManifest = {
@@ -55,6 +61,54 @@ test('PlatformIO adapter normalizes registry search and package lookup', async (
   assert.equal(search[0].owner, 'acme');
   const packageInfo = await registry.get('acme', 'library', 'Demo');
   assert.equal(packageInfo.version, '1.0.0');
+});
+
+test('SDK lifecycle downloads once, persists locks and rejects corruption', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wicro-sdk-cache-'));
+  try {
+    const storage = new NodeSdkStorage({ root });
+    let downloads = 0;
+    const archive = zipSync({ 'Vendor/Core/Arduino.h': new TextEncoder().encode('#pragma once\n') });
+    /** @type {import('../src/index.js').WicroPackageManifest} */
+    const manifest = {
+      name: 'vendor-core', version: '1.0.0', kind: 'framework', description: 'Vendor SDK', license: 'MIT',
+      metadata: { distribution: { url: 'https://example.invalid/vendor.zip', archiveType: 'zip', sha256: null } }
+    };
+
+    const manager = new SdkLifecycleManager({
+      storage,
+      fetch: async () => {
+        downloads++;
+        return /** @type {any} */ ({
+          ok: true,
+          status: 200,
+          arrayBuffer: async () => archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength)
+        });
+      }
+    });
+
+    const [first, second] = await Promise.all([manager.ensure(manifest), manager.ensure(manifest)]);
+    assert.equal(downloads, 1);
+    assert.equal(first.cache, 'downloaded');
+    assert.equal(second.cache, 'downloaded');
+
+    const cacheHitManager = new SdkLifecycleManager({
+      storage,
+      fetch: async () => { throw new Error('network must not be used'); }
+    });
+    const hit = await cacheHitManager.ensure(manifest);
+    assert.equal(hit.cache, 'cache-hit');
+    assert.equal(await storage.exists('wicro-sdk-lock.json'), true);
+
+    await storage.writeBytes('vendor-core-1.0.0/Vendor/Core/Arduino.h', new TextEncoder().encode('corrupted'));
+    const recovered = new SdkLifecycleManager({
+      storage,
+      fetch: async () => { throw new Error('corruption should trigger cache removal and fail closed'); }
+    });
+    await assert.rejects(() => recovered.ensure(manifest), /network|download|corruption/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('resolves transitive dependencies once', async () => {

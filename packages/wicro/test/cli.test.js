@@ -49,6 +49,21 @@ test('init creates a project manifest and source entry', async () => {
   }
 });
 
+test('init followed by build reports unavailable WASM/SDK execution explicitly', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'wicro-init-build-'));
+
+  try {
+    const init = runIn(directory, 'init', '--json');
+    assert.equal(init.status, 0);
+
+    const build = runIn(directory, 'build', '--json');
+    assert.notEqual(build.status, 0);
+    assert.ok(build.stderr || build.stdout);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test('import creates an Arduino-first project from a directory', async () => {
   const source = await mkdtemp(join(tmpdir(), 'wicro-import-source-'));
   const destinationRoot = await mkdtemp(join(tmpdir(), 'wicro-import-root-'));

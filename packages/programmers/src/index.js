@@ -28,6 +28,12 @@ export class Esp32C3NodeProgrammer {
       pid: 0x1001
     });
     transport.tracing = this.options?.debugLogging ?? false;
+    await transport.touchUsbVcp();
+    await transport.resetForDownload();
+    await transport.disconnect();
+    await transport.touchUsbVcp();
+    await transport.resetForDownload();
+    await transport.disconnect();
 
     const terminal = {
       clean: () => {},
@@ -49,7 +55,11 @@ export class Esp32C3NodeProgrammer {
     });
 
     try {
-      await loader.detectChip('no_reset', 7);
+      try {
+        await loader.detectChip('default_reset', 7);
+      } catch (error) {
+        throw new Error(`ESP32-C3 native USB VCP did not enter ROM download mode. Use BOOT/RESET for the first flash or use a USB-UART adapter: ${error instanceof Error ? error.message : String(error)}`);
+      }
       await loader.writeFlash({
         fileArray: files,
         flashMode: 'dio',
@@ -58,7 +68,7 @@ export class Esp32C3NodeProgrammer {
         eraseAll: false,
         compress: true
       });
-      await loader.flashFinish(false);
+      await loader.flashFinish(true);
       return {
         ok: true,
         chip: loader.chip.CHIP_NAME,

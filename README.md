@@ -24,8 +24,9 @@ The npm package is `@jozo132/wicro`. Its command-line executable is `wicro`.
 - STM32F401RC Cortex-M4 bare-metal ELF/BIN reference fixture
 - RISC-V WebAssembly compiler execution for ELF32 object generation
 - ESP32-C3 SuperMini hardware discovery through USB-Serial/JTAG
-- ESP-IDF v6.1.1 blink firmware build and flash
-- GPIO8 active-low LED, serial heartbeat and 4 MB flash detection on hardware
+- Native ESP-IDF v6.1.1 reference blink build and serial heartbeat observation on hardware
+- Native USB VCP 1200-baud/DTR/RTS reset sequences in the programmer transport
+- GPIO8 active-low LED, serial heartbeat and 4 MB flash detection on the native reference firmware
 - Monaco browser IDE shell and Web Serial controls
 
 ## Quick start
@@ -106,6 +107,7 @@ For ESP-IDF firmware work, the compiler is staged under `toolchain/llvm-wasm/cac
 Remaining integration work:
 
 - ESP-IDF/Pico SDK/CMSIS/Arduino SDK distributions must provide their complete headers and startup artifacts before full SDK firmware linking can be claimed
+- ESP32-C3 native USB VCP ROM entry is implemented but is not yet successful on the connected unit; physical flash/execution remains unverified
 - Header dependency tracking and incremental relinking need project-wide cache integration
 - ST-LINK, USB DFU/DfuSe, STM32 UART, AVR STK500 and PICOBOOT protocol implementations are public extension surfaces but are not yet hardware-verified
 - Physical firmware verification is target-specific and must be reported separately from source and build success

@@ -33,7 +33,18 @@ sdkconfig.old
 # Downloaded toolchains and framework sources
 toolchain/*/cache/
 toolchain/*/esp-idf/
+registry/**/sdk/
+registry/**/vendor/
+packages/wicro/vendor/
+packages/wicro/registry/
+packages/wicro/toolchain/
 .wicro/
+**/.wicro/packages/
+**/.wicro/cache/
+*.zip
+*.tar.gz
+*.tar.bz2
+*.tgz
 
 # Temporary and editor state
 *.tmp

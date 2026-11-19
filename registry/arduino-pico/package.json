@@ -13,7 +13,8 @@
     "targets": ["rp2040", "rp2350", "raspberry-pi-pico-w", "raspberry-pi-pico-2", "raspberry-pi-pico-2-w"],
     "architectures": ["armv6m", "armv8m-mainline"],
     "source": "external",
-    "status": "manifested",
+    "status": "download-on-demand",
+    "distribution": { "url": "https://github.com/earlephilhower/arduino-pico/archive/83f7b6e5ab9988164f4a291ee6d5c3bcd0e03cdf.zip", "archiveType": "zip", "sha256": null },
     "firmwareLinking": "pending-sdk-distribution"
   }
 }
