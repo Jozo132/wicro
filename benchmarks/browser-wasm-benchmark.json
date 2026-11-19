@@ -1,0 +1,11 @@
+{
+  "runtime": "Chromium local IDE",
+  "page": "http://127.0.0.1:5173/",
+  "rawBytes": 59663950,
+  "fetchMs": 44.4,
+  "runs": 5,
+  "medianCompileMs": 56.2,
+  "p95CompileMs": 58.7,
+  "maxCompileMs": 58.7,
+  "samplesMs": [51.1, 55.399999998509884, 56.19999999552965, 57.100000001490116, 58.70000000298023]
+}

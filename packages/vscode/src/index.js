@@ -2,6 +2,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { LlvmWasmToolchain } from '../../runtime/src/index.js';
 import { NodeSerialHost } from '../../hardware/src/index.js';
+import { WicroLanguageService } from '../../language-server/src/index.js';
 
 export class VSCodeHostAdapter {
   /** @param {{workspaceRoot?:string,llvmPath?:string}} [options] */
@@ -9,6 +10,10 @@ export class VSCodeHostAdapter {
     this.workspaceRoot = resolve(options.workspaceRoot ?? process.cwd());
     this.toolchain = new LlvmWasmToolchain({
       llvmPath: options.llvmPath ?? resolve(this.workspaceRoot, 'toolchain/llvm-wasm/cache/llvm.wasm')
+    });
+    this.languageService = new WicroLanguageService({
+      host: 'vscode',
+      toolchain: this.toolchain
     });
   }
 
@@ -51,6 +56,63 @@ export class VSCodeHostAdapter {
     return this.toolchain.compileAndLinkBareMetal(options);
   }
 
+  /** @param {{uri:string,languageId:string,text:string,version:number}} document */
+  openDocument(document) {
+    this.languageService.openDocument(document);
+  }
+
+  /** @param {string} uri @param {string} text @param {number} [version] */
+  updateDocument(uri, text, version) {
+    return this.languageService.updateDocument(uri, text, version);
+  }
+
+  /** @param {string} uri */
+  async documentDiagnostics(uri) {
+    return this.languageService.diagnostics(uri);
+  }
+
+  /** @param {string} uri @param {{line:number,character:number}} position */
+  async documentCompletion(uri, position) {
+    return this.languageService.completion(uri, position);
+  }
+
+  /** @param {string} uri @param {{line:number,character:number}} position */
+  documentHover(uri, position) {
+    return this.languageService.hover(uri, position);
+  }
+
+  /** @param {string} uri @param {{line:number,character:number}} position */
+  documentDefinition(uri, position) {
+    return this.languageService.definition(uri, position);
+  }
+
+  /** @param {string} uri @param {{line:number,character:number}} position */
+  documentReferences(uri, position) {
+    return this.languageService.references(uri, position);
+  }
+
+  /** @param {string} uri @param {{line:number,character:number}} position @param {string} newName */
+  async renameDocumentSymbol(uri, position, newName) {
+    return this.languageService.rename(uri, position, newName);
+  }
+
+  /** @param {string[]} files @param {{directory?:string,target?:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},includeDirs?:string[],defines?:string[]}} [options] */
+  compileCommands(files, options = {}) {
+    if (options.target || options.targetOptions || options.includeDirs || options.defines) {
+      this.languageService.configuration = {
+        target: options.target ?? 'riscv32',
+        targetOptions: options.targetOptions,
+        includeDirs: options.includeDirs,
+        defines: options.defines
+      };
+    }
+    return this.languageService.createCompileCommands({
+      root: this.workspaceRoot,
+      files,
+      directory: options.directory ?? this.workspaceRoot
+    });
+  }
+
   async devices() {
     return new NodeSerialHost().discover();
   }
@@ -60,7 +122,14 @@ export class VSCodeHostAdapter {
       'wicro.boardList',
       'wicro.compileSource',
       'wicro.compileBareMetal',
-      'wicro.deviceList'
+      'wicro.deviceList',
+      'wicro.documentDiagnostics',
+      'wicro.documentCompletion',
+      'wicro.documentHover',
+      'wicro.documentDefinition',
+      'wicro.documentReferences',
+      'wicro.renameDocumentSymbol',
+      'wicro.compileCommands'
     ];
   }
 }

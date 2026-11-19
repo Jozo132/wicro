@@ -109,17 +109,18 @@ export const main = async (args = []) => {
     const target = resolve(project);
 
     try {
-      /** @type {typeof import('../../core/src/index.js')} */
+      /** @type {any} */
       let coreModule;
       try {
         coreModule = await import('../../core/src/index.js');
       } catch {
-        coreModule = await import('../vendor/core/src/index.js');
+        const vendorSpecifier = '../vendor/core/src/index.js';
+        coreModule = await import(vendorSpecifier);
       }
       const { createWicroEngine } = coreModule;
       const { readFile, writeFile } = await import('node:fs/promises');
       const { dirname } = await import('node:path');
-      /** @type {import('../vendor/core/src/index.js').WicroHostAdapter} */
+      /** @type {import('../../core/src/index.js').WicroHostAdapter} */
       const host = {
         host: 'node',
         readFile: async (/** @type {string} */ path, options) => {
@@ -137,7 +138,7 @@ export const main = async (args = []) => {
       const engine = createWicroEngine({ host, llvmPath });
       const result = await engine.execute({ command: 'build', project: target, board });
       if (!result.ok) {
-        const message = result.diagnostics?.map((diagnostic) => diagnostic.message).join('; ') ?? 'Build failed';
+        const message = result.diagnostics?.map((/** @type {{message:string}} */ diagnostic) => diagnostic.message).join('; ') ?? 'Build failed';
         emit({ ok: false, command, error: message }, json, `Build failed: ${message}`);
         return 1;
       }
@@ -203,17 +204,18 @@ export const main = async (args = []) => {
 
   if (command === 'device' && flags[1] === 'list') {
     try {
-      /** @type {typeof import('../../hardware/src/index.js')} */
+      /** @type {any} */
       let hardwareModule;
       try {
         hardwareModule = await import('../../hardware/src/index.js');
       } catch {
-        hardwareModule = await import('../vendor/hardware/src/index.js');
+        const vendorSpecifier = '../vendor/hardware/src/index.js';
+        hardwareModule = await import(vendorSpecifier);
       }
       const { NodeSerialHost } = hardwareModule;
       const items = await new NodeSerialHost().discover();
       emit({ ok: true, command: 'device list', implemented: true, items }, json,
-        items.map((item) => `${item.path}${item.manufacturer ? ` (${item.manufacturer})` : ''}`).join('\n') || 'No serial devices found');
+        items.map((/** @type {{path:string,manufacturer?:string}} */ item) => `${item.path}${item.manufacturer ? ` (${item.manufacturer})` : ''}`).join('\n') || 'No serial devices found');
       return 0;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -250,12 +252,13 @@ export const main = async (args = []) => {
 
   if (command === 'monitor') {
     try {
-      /** @type {typeof import('../../programmers/src/index.js')} */
+      /** @type {any} */
       let programmerModule;
       try {
         programmerModule = await import('../../programmers/src/index.js');
       } catch {
-        programmerModule = await import('../vendor/programmers/src/index.js');
+        const vendorSpecifier = '../vendor/programmers/src/index.js';
+        programmerModule = await import(vendorSpecifier);
       }
       const { Esp32C3NodeProgrammer } = programmerModule;
       const port = flags.find((arg) => arg.startsWith('--port='))?.slice('--port='.length);
@@ -263,7 +266,7 @@ export const main = async (args = []) => {
       const monitor = await new Esp32C3NodeProgrammer().monitor({
         path: port,
         baudRate: baudText ? Number(baudText) : 115200,
-        onLine: (line) => process.stdout.write(`${line}\n`)
+        onLine: (/** @type {string} */ line) => process.stdout.write(`${line}\n`)
       });
 
       process.once('SIGINT', () => {
@@ -279,12 +282,13 @@ export const main = async (args = []) => {
 
   if (command === 'upload') {
     try {
-      /** @type {typeof import('../../programmers/src/index.js')} */
+      /** @type {any} */
       let programmerModule;
       try {
         programmerModule = await import('../../programmers/src/index.js');
       } catch {
-        programmerModule = await import('../vendor/programmers/src/index.js');
+        const vendorSpecifier = '../vendor/programmers/src/index.js';
+        programmerModule = await import(vendorSpecifier);
       }
       const { Esp32C3NodeProgrammer } = programmerModule;
       const { readFile } = await import('node:fs/promises');
@@ -331,16 +335,18 @@ export const main = async (args = []) => {
   if (command === 'install' || command === 'uninstall' || command === 'update') {
     try {
       const { readdir, readFile, writeFile, mkdir } = await import('node:fs/promises');
-      /** @type {typeof import('../../registry/src/index.js')} */
+      /** @type {any} */
       let registryModule;
-      /** @type {typeof import('../../registry/src/installer.js')} */
+      /** @type {any} */
       let installerModule;
       try {
         registryModule = await import('../../registry/src/index.js');
         installerModule = await import('../../registry/src/installer.js');
       } catch {
-        registryModule = await import('../vendor/registry/src/index.js');
-        installerModule = await import('../vendor/registry/src/installer.js');
+        const registrySpecifier = '../vendor/registry/src/index.js';
+        const installerSpecifier = '../vendor/registry/src/installer.js';
+        registryModule = await import(registrySpecifier);
+        installerModule = await import(installerSpecifier);
       }
       const { PackageRegistry } = registryModule;
       const { PackageInstaller } = installerModule;

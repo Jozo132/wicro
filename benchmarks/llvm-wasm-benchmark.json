@@ -1,0 +1,78 @@
+{
+  "generatedAt": "2026-11-19T22:54:53.800Z",
+  "environment": {
+    "node": "v22.22.3",
+    "platform": "linux",
+    "osRelease": "6.14.0-37-generic",
+    "architecture": "x64",
+    "cpu": "AMD Ryzen 9 7900X 12-Core Processor",
+    "logicalCpuCount": 24
+  },
+  "llvm": {
+    "revision": {
+      "esp-wasm": "dceb9e3126898359bff8ab9e44bec5b65d87b5d3",
+      "llvm-project": "esp-20.1.1_20250829",
+      "llvm-project-commit": "50f388758bdf0b0d99018a6f2b1d3402bdb51002",
+      "wasi-sdk": "34.0"
+    },
+    "rawBytes": 59663950,
+    "gzipBytes": 19565712,
+    "brotliBytes": 13593233,
+    "sha256": "32a1fb128050002a4e2c8797c4730fbd08bdb6c6991c204645d92aec85b212d4"
+  },
+  "linker": {
+    "rawBytes": 1657054,
+    "gzipBytes": 488377,
+    "brotliBytes": 399468,
+    "sha256": "cb8d0a223ca28c5eefc134399d7a54313b95ab5c7f1cbf84edccb23080f58c32"
+  },
+  "browser": {
+    "runtime": "Chromium local IDE",
+    "page": "http://127.0.0.1:5173/",
+    "rawBytes": 59663950,
+    "fetchMs": 44.4,
+    "runs": 5,
+    "medianCompileMs": 56.2,
+    "p95CompileMs": 58.7,
+    "maxCompileMs": 58.7,
+    "samplesMs": [
+      51.1,
+      55.399999998509884,
+      56.19999999552965,
+      57.100000001490116,
+      58.70000000298023
+    ]
+  },
+  "timings": {
+    "coldInitialization": {
+      "medianMs": 163.17210400000005,
+      "p95Ms": 166.40371500000003,
+      "maxMs": 166.40371500000003,
+      "runs": 5
+    },
+    "warmInitialization": {
+      "medianMs": 159.89827300000002,
+      "p95Ms": 165.8228680000002,
+      "maxMs": 165.8228680000002,
+      "runs": 10
+    },
+    "riscvCompile": {
+      "medianMs": 628.7295029999996,
+      "p95Ms": 657.8242340000002,
+      "maxMs": 657.8242340000002,
+      "runs": 10
+    },
+    "diagnostics": {
+      "medianMs": 192.53914499999973,
+      "p95Ms": 196.767871,
+      "maxMs": 196.767871,
+      "runs": 10
+    }
+  },
+  "skipped": {
+    "clangd": "clangd.wasm is not present in the toolchain cache",
+    "clangTidy": "clang-tidy.wasm is not present in the toolchain cache",
+    "clangFormat": "clang-format.wasm is not present in the toolchain cache",
+    "llvmUtilities": "Separate llvm-ar/objcopy/objdump/size/nm/readelf WASM binaries are not present"
+  }
+}

@@ -1,6 +1,7 @@
 import * as monaco from 'monaco-editor';
 import { WASI, OpenFile, File, PreopenDirectory, ConsoleStdout } from '@bjorn3/browser_wasi_shim';
 import { ESPLoader, Transport } from 'esptool-js';
+import { WicroLanguageService } from '../../../packages/language-server/src/index.js';
 import './style.css';
 
 const defaultSource = `int main(void)
@@ -66,6 +67,188 @@ const editor = monaco.editor.create(editorRoot, {
   padding: { top: 18 }
 });
 
+/** @type {WebAssembly.Module|null} */
+let browserWasmModule = null;
+
+/** @returns {Promise<WebAssembly.Module>} */
+const loadBrowserWasm = async () => {
+  if (browserWasmModule) return browserWasmModule;
+  const manifestResponse = await fetch('/toolchain/manifest.json', { cache: 'no-cache' });
+  if (!manifestResponse.ok) throw new Error(`Toolchain manifest failed (${manifestResponse.status})`);
+  const manifest = await manifestResponse.json();
+  const compilerUrl = new URL(manifest.tools.clang.url, new URL('/toolchain/', window.location.href));
+  const response = await fetch(compilerUrl);
+  if (!response.ok) throw new Error(`Toolchain download failed (${response.status})`);
+  browserWasmModule = await WebAssembly.compile(await response.arrayBuffer());
+  return browserWasmModule;
+};
+
+/**
+ * @param {string[]} args
+ * @param {string} source
+ * @param {string} [language]
+ */
+const runBrowserClang = async (args, source, language = 'c') => {
+  const module = await loadBrowserWasm();
+  const extension = language === 'c++' ? 'cpp' : 'c';
+  const root = new PreopenDirectory('.', new Map([
+    [`main.${extension}`, new File(new TextEncoder().encode(source))]
+  ]));
+  let stdout = '';
+  let stderr = '';
+  const wasi = new WASI([
+    'clang',
+    ...args,
+    '-fsyntax-only',
+    `main.${extension}`
+  ], [], [
+    new OpenFile(new File([])),
+    ConsoleStdout.lineBuffered((line) => { stdout += `${line}\n`; }),
+    ConsoleStdout.lineBuffered((line) => { stderr += `${line}\n`; }),
+    root
+  ]);
+  const instance = await WebAssembly.instantiate(module, { wasi_snapshot_preview1: wasi.wasiImport });
+  const exitCode = wasi.start(/** @type {any} */ (instance));
+  return { exitCode, stdout, stderr };
+};
+
+const browserLanguageToolchain = {
+  /** @param {{source:string,target?:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},language?:'c'|'c++',includeDirs?:string[],files?:Record<string,string|Uint8Array>,defines?:string[],line?:number,column?:number}} options */
+  async diagnoseSource(options) {
+    const targetName = options.target ?? 'riscv32';
+    const configs = await loadTargetConfigs();
+    const config = Object.values(configs).find((item) => item.build.target === targetName);
+    const args = config ? buildArgs(config.build) : buildArgs({ target: 'riscv32', targetOptions: {} });
+    const result = await runBrowserClang(args, options.source, options.language);
+    const diagnostics = [];
+    for (const line of result.stderr.split(/\r?\n/)) {
+      const match = line.match(/^(.*?):(\d+):(\d+):\s+(fatal error|error|warning|note):\s*(.*)$/);
+      if (!match) continue;
+      diagnostics.push({ severity: match[4] === 'warning' ? 'warning' : match[4] === 'note' ? 'info' : 'error', file: match[1], line: Number(match[2]), column: Number(match[3]), message: match[5] });
+    }
+    return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, diagnostics };
+  },
+  /** @param {{source:string,target?:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},language?:'c'|'c++',line:number,column:number}} options */
+  async completeSource(options) {
+    const targetName = options.target ?? 'riscv32';
+    const configs = await loadTargetConfigs();
+    const config = Object.values(configs).find((item) => item.build.target === targetName);
+    const args = config ? buildArgs(config.build) : buildArgs({ target: 'riscv32', targetOptions: {} });
+    const result = await runBrowserClang([...args, `-Xclang`, `-code-completion-at=main.c:${options.line}:${options.column}`], options.source, options.language);
+    const candidates = [];
+    for (const line of (result.stderr || result.stdout).split(/\r?\n/)) {
+      const match = line.match(/^COMPLETION:\s*([^\s]+)(?:\s+:\s*(.*))?$/);
+      if (match) candidates.push({ label: match[1], detail: match[2] ?? '' });
+    }
+    return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, candidates };
+  },
+  /** @returns {Promise<never>} */
+  async runLanguageTool() {
+    throw new Error('Clang-Tidy/Clang-Format WASM entry points are unavailable');
+  }
+};
+
+const languageService = new WicroLanguageService({ host: 'browser', toolchain: /** @type {any} */ (browserLanguageToolchain), configuration: { target: 'riscv32' } });
+const documentUri = 'file:///main.c';
+languageService.openDocument({ uri: documentUri, languageId: 'c', text: editor.getValue(), version: 1 });
+
+monaco.languages.registerCompletionItemProvider('c', {
+  /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position */
+  async provideCompletionItems(model, position) {
+    languageService.updateDocument(documentUri, model.getValue(), 1);
+    try {
+      const items = await languageService.completion(documentUri, { line: position.lineNumber - 1, character: position.column - 1 });
+      const word = model.getWordUntilPosition(position);
+      const range = {
+        startLineNumber: position.lineNumber,
+        endLineNumber: position.lineNumber,
+        startColumn: word.startColumn,
+        endColumn: word.endColumn
+      };
+      return { suggestions: items.map((item) => ({ label: item.label, insertText: item.label, detail: item.detail, kind: monaco.languages.CompletionItemKind.Text, range })) };
+    } catch {
+      return { suggestions: [] };
+    }
+  }
+});
+
+monaco.languages.registerHoverProvider('c', {
+  /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position */
+  provideHover(model, position) {
+    languageService.updateDocument(documentUri, model.getValue(), 1);
+    const hover = languageService.hover(documentUri, { line: position.lineNumber - 1, character: position.column - 1 });
+    if (!hover) return null;
+    return { range: undefined, contents: [{ value: hover.contents.value }] };
+  }
+});
+
+monaco.languages.registerDefinitionProvider('c', {
+  /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position */
+  provideDefinition(model, position) {
+    languageService.updateDocument(documentUri, model.getValue(), 1);
+    return languageService.definition(documentUri, { line: position.lineNumber - 1, character: position.column - 1 }).map((location) => ({ uri: monaco.Uri.parse(location.uri), range: {
+      startLineNumber: location.range.start.line + 1,
+      startColumn: location.range.start.character + 1,
+      endLineNumber: location.range.end.line + 1,
+      endColumn: location.range.end.character + 1
+    } }));
+  }
+});
+
+monaco.languages.registerReferenceProvider('c', {
+  /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position */
+  provideReferences(model, position) {
+    languageService.updateDocument(documentUri, model.getValue(), 1);
+    return languageService.references(documentUri, { line: position.lineNumber - 1, character: position.column - 1 }).map((location) => ({ uri: monaco.Uri.parse(location.uri), range: {
+      startLineNumber: location.range.start.line + 1,
+      startColumn: location.range.start.character + 1,
+      endLineNumber: location.range.end.line + 1,
+      endColumn: location.range.end.character + 1
+    } }));
+  }
+});
+
+monaco.languages.registerRenameProvider('c', {
+  /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position @param {string} newName */
+  async provideRenameEdits(model, position, newName) {
+    languageService.updateDocument(documentUri, model.getValue(), 1);
+    const result = await languageService.rename(documentUri, { line: position.lineNumber - 1, character: position.column - 1 }, newName);
+    const edits = Object.entries(result.changes).flatMap(([uri, changeEdits]) => changeEdits.map((edit) => ({ resource: monaco.Uri.parse(uri), textEdit: {
+      range: {
+        startLineNumber: edit.range.start.line + 1,
+        startColumn: edit.range.start.character + 1,
+        endLineNumber: edit.range.end.line + 1,
+        endColumn: edit.range.end.character + 1
+      }, text: edit.newText
+    }, versionId: undefined })));
+    return { edits };
+  }
+});
+
+/** @param {string} text */
+const updateBrowserDiagnostics = async (text) => {
+  languageService.updateDocument(documentUri, text, 1);
+  try {
+    const diagnostics = await languageService.diagnostics(documentUri);
+    const model = editor.getModel();
+    if (!model) return;
+    monaco.editor.setModelMarkers(model, 'wicro', diagnostics.map((diagnostic) => ({
+      severity: diagnostic.severity === 'error' ? monaco.MarkerSeverity.Error : diagnostic.severity === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Info,
+      message: diagnostic.message,
+      startLineNumber: diagnostic.range.start.line + 1,
+      startColumn: diagnostic.range.start.character + 1,
+      endLineNumber: diagnostic.range.end.line + 1,
+      endColumn: diagnostic.range.end.character + 1
+    })));
+  } catch (error) {
+    setStatus(error instanceof Error ? error.message : 'Language diagnostics failed');
+  }
+};
+
+editor.onDidChangeModelContent(() => {
+  void updateBrowserDiagnostics(editor.getValue());
+});
+
 /** @type {HTMLElement|null} */
 const status = document.querySelector('#status');
 /** @type {HTMLElement|null} */
@@ -121,6 +304,13 @@ targetSelect?.addEventListener('change', async () => {
     const configs = await loadTargetConfigs();
     const targetConfig = configs[targetName];
     if (targetStatus && targetConfig) targetStatus.textContent = targetConfig.label;
+    if (targetConfig) {
+      languageService.configuration = {
+        target: targetConfig.build.target,
+        targetOptions: targetConfig.build.targetOptions
+      };
+      void updateBrowserDiagnostics(editor.getValue());
+    }
   } catch (error) {
     setStatus(error instanceof Error ? error.message : 'Board manifest failed');
   }

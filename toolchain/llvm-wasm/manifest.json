@@ -5,9 +5,24 @@
   "description": "Shared Espressif LLVM/LLD WebAssembly toolchain",
   "license": "Apache-2.0 WITH LLVM-exception",
   "runtime": "wasi-preview1",
+  "revisions": {
+    "esp-wasm": "dceb9e3126898359bff8ab9e44bec5b65d87b5d3",
+    "llvm-project": "esp-20.1.1_20250829",
+    "llvm-project-commit": "50f388758bdf0b0d99018a6f2b1d3402bdb51002",
+    "wasi-sdk": "34.0"
+  },
   "tools": {
     "clang": { "url": "llvm.wasm", "argv0": "clang" },
     "ld": { "url": "ld.wasm", "argv0": "ld" }
+  },
+  "entryPoints": {
+    "combined": ["clang", "clang++", "ld.lld", "ld", "lld"],
+    "available": ["clang", "ld"],
+    "separateRequired": ["clangd", "clang-tidy", "clang-format", "llvm-ar", "llvm-objcopy", "llvm-objdump", "llvm-size", "llvm-nm", "llvm-readelf"]
+  },
+  "targetConfiguration": {
+    "threads": false,
+    "reason": "The pinned upstream WASI recipe disables LLVM threads for WASM/WASI preview1 compatibility."
   },
   "targets": [
     "armv6m",

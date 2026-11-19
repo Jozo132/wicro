@@ -48,6 +48,17 @@ Status values:
 | PlatformIO registry integration | Implemented | Public PlatformIO search/package lookup adapter uses configurable fetch and HTTP contracts |
 | Programmer extension API | Implemented | `ProgrammerProtocolRegistry` supports custom named protocols; the simulated protocol is automated-tested |
 | Clean npm archive | Verified | The packed CLI installs in a temporary directory and runs `doctor` and `board list` without repository paths |
+| Real Clang WASI diagnostics | Implemented | Existing LLVM WASM binary executes `-fsyntax-only` and returns parsed Clang diagnostics |
+| Clang WASI code completion | Implemented | Existing LLVM WASM binary executes `-code-completion-at` and returns parsed candidates |
+| `@wicro/language-server` LSP/session | Implemented | LSP initialization, document sync, diagnostics, completion, hover, definition, references, rename and formatting protocol are executable in tests |
+| VS Code language operations | Implemented | Board host adapter exposes diagnostics, completion, hover, definition, references, rename and compile-commands surfaces |
+| Browser/Node worker isolation | Implemented | Host-independent worker protocol and Monaco browser WASI adapter exist; background worker threads remain separate implementation work |
+| Clangd WASM | Planned/blocked | No clangd.wasm artifact exists in the cache; upstream threads are disabled for WASI preview1 compatibility |
+| Clang-Tidy/Format WASM | Planned/blocked | Entry points are defined but no executable WASM artifacts exist in the cache |
+| LLVM utility WASM entry points | Planned/blocked | llvm-ar, objcopy, objdump, size, nm and readelf artifacts are not present |
+| Unified WASM build recipe | Implemented | Pinned esp-wasm and Espressif LLVM revisions enable clang-tools-extra and utility targets; combined-result runtime parity is not yet benchmarked |
+| Node LLVM benchmark | Verified | Repeated real WASI measurements are written to `benchmarks/llvm-wasm-benchmark.json`; missing tool categories are explicitly skipped |
+| Browser LLVM compile benchmark | Verified | Chromium fetched and compiled the 57 MB LLVM WASM in repeated in-page measurements; data is recorded in the benchmark JSON |
 
 ## Target verification matrix
 

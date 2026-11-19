@@ -17,6 +17,13 @@ test('VS Code host exposes compile and device commands', () => {
     'wicro.boardList',
     'wicro.compileSource',
     'wicro.compileBareMetal',
-    'wicro.deviceList'
+    'wicro.deviceList',
+    'wicro.documentDiagnostics',
+    'wicro.documentCompletion',
+    'wicro.documentHover',
+    'wicro.documentDefinition',
+    'wicro.documentReferences',
+    'wicro.renameDocumentSymbol',
+    'wicro.compileCommands'
   ]);
 });

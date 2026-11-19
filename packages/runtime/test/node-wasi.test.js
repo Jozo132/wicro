@@ -67,6 +67,32 @@ test('shared LLVM toolchain exposes ARM and AVR target arguments', () => {
   ]);
 });
 
+test('shared LLVM toolchain returns real syntax diagnostics', async () => {
+  const toolchain = new LlvmWasmToolchain({ llvmPath: llvmUrl.pathname });
+  const result = await toolchain.diagnoseSource({
+    source: 'int main(void) { return missing_name; }\n',
+    target: 'riscv32',
+    language: 'c'
+  });
+
+  assert.equal(result.exitCode !== 0, true);
+  assert.ok(result.diagnostics.some((diagnostic) => /missing_name|undeclared|unknown/.test(diagnostic.message)));
+});
+
+test('shared LLVM toolchain reports completion entry execution', async () => {
+  const toolchain = new LlvmWasmToolchain({ llvmPath: llvmUrl.pathname });
+  const result = await toolchain.completeSource({
+    source: 'int main(void) { re\n}',
+    target: 'riscv32',
+    language: 'c',
+    line: 1,
+    column: 4
+  });
+
+  assert.equal(typeof result.exitCode, 'number');
+  assert.equal(Array.isArray(result.candidates), true);
+});
+
 test('shared LLVM toolchain compiles a RISC-V object', async () => {
   const toolchain = new LlvmWasmToolchain({ llvmPath: llvmUrl.pathname });
   const result = await toolchain.compileC('int main(void) { return 7; }\n', 'riscv32');

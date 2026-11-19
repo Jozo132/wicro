@@ -16,7 +16,8 @@
     "pack:check": "npm pack --dry-run --workspace @jozo132/wicro",
     "publish:dry-run": "npm publish --dry-run --workspace @jozo132/wicro --access public",
     "dev:web": "npm run dev --workspace @wicro/web",
-    "build:web": "npm run build --workspace @wicro/web"
+    "build:web": "npm run build --workspace @wicro/web",
+    "benchmark:llvm": "node scripts/benchmark-llvm-wasm.js"
   },
   "engines": {
     "node": ">=18"

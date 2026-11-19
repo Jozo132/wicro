@@ -226,6 +226,127 @@ export class LlvmWasmToolchain {
   }
 
   /**
+   * Run real clang syntax/semantic diagnostics through WASI.
+   * @param {{source:string,target?:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},language?:'c'|'c++',includeDirs?:string[],files?:Record<string,string|Uint8Array>,defines?:string[],unsaved?:Record<string,string>}} options
+   */
+  async diagnoseSource(options) {
+    const directory = await mkdtemp(join(tmpdir(), 'wicro-diagnostics-'));
+    const language = options.language ?? 'c';
+    const extension = language === 'c++' ? 'cpp' : 'c';
+
+    try {
+      await writeFile(join(directory, `main.${extension}`), options.unsaved?.['main.' + extension] ?? options.source);
+      for (const [name, data] of Object.entries(options.files ?? {})) {
+        if (name.includes('..') || name.startsWith('/')) throw new Error(`Unsafe source file path: ${name}`);
+        const path = join(directory, name);
+        await mkdir(join(directory, name).slice(0, join(directory, name).lastIndexOf('/')), { recursive: true });
+        await writeFile(path, data);
+      }
+      for (const [name, data] of Object.entries(options.unsaved ?? {})) {
+        if (name.includes('..') || name.startsWith('/')) throw new Error(`Unsafe unsaved file path: ${name}`);
+        const path = join(directory, name);
+        await mkdir(join(directory, name).slice(0, join(directory, name).lastIndexOf('/')), { recursive: true });
+        await writeFile(path, data);
+      }
+
+      const result = await this.runner.run(this.llvmPath, {
+        args: [
+          'clang',
+          ...this.targetArgs(options.target ?? 'riscv32', options.targetOptions),
+          ...(language === 'c++' ? ['-x', 'c++'] : []),
+          ...((options.includeDirs ?? []).flatMap((directoryName) => ['-I', `/tmp/${directoryName}`])),
+          ...(options.defines ?? []).flatMap((define) => ['-D', define]),
+          '-nostdlib',
+          '-fsyntax-only',
+          `/tmp/main.${extension}`
+        ],
+        preopens: { '/tmp': directory }
+      });
+
+      return {
+        exitCode: result.exitCode,
+        stdout: result.stdout,
+        stderr: result.stderr,
+        diagnostics: parseClangDiagnostics(result.stderr)
+      };
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+
+  /**
+   * Ask clang for code-completion candidates at a source position.
+   * @param {{source:string,target?:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},language?:'c'|'c++',line:number,column:number,includeDirs?:string[],files?:Record<string,string|Uint8Array>,defines?:string[]}} options
+   */
+  async completeSource(options) {
+    const directory = await mkdtemp(join(tmpdir(), 'wicro-completion-'));
+    const language = options.language ?? 'c';
+    const extension = language === 'c++' ? 'cpp' : 'c';
+
+    try {
+      await writeFile(join(directory, `main.${extension}`), options.source);
+      for (const [name, data] of Object.entries(options.files ?? {})) {
+        if (name.includes('..') || name.startsWith('/')) throw new Error(`Unsafe include file path: ${name}`);
+        const path = join(directory, name);
+        await mkdir(join(directory, name).slice(0, join(directory, name).lastIndexOf('/')), { recursive: true });
+        await writeFile(path, data);
+      }
+
+      const result = await this.runner.run(this.llvmPath, {
+        args: [
+          'clang',
+          ...this.targetArgs(options.target ?? 'riscv32', options.targetOptions),
+          ...(language === 'c++' ? ['-x', 'c++'] : []),
+          ...((options.includeDirs ?? []).flatMap((directoryName) => ['-I', `/tmp/${directoryName}`])),
+          ...(options.defines ?? []).flatMap((define) => ['-D', define]),
+          '-nostdlib',
+          '-fsyntax-only',
+          `-Xclang`,
+          `-code-completion-at=/tmp/main.${extension}:${options.line}:${options.column}`,
+          `/tmp/main.${extension}`
+        ],
+        preopens: { '/tmp': directory }
+      });
+
+      return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, candidates: parseCodeCompletion(result.stderr || result.stdout) };
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+
+  /**
+   * Dispatch a tool entry point in the unified or separate WASM distribution.
+   * @param {{tool:'clang-format'|'clang-tidy',toolPath:string,source:string,language?:'c'|'c++',arguments?:string[],files?:Record<string,string|Uint8Array>,target?:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string}}} options
+   */
+  async runLanguageTool(options) {
+    const directory = await mkdtemp(join(tmpdir(), 'wicro-language-tool-'));
+    const language = options.language ?? 'c';
+    const extension = language === 'c++' ? 'cpp' : 'c';
+
+    try {
+      await writeFile(join(directory, `main.${extension}`), options.source);
+      for (const [name, data] of Object.entries(options.files ?? {})) {
+        if (name.includes('..') || name.startsWith('/')) throw new Error(`Unsafe source file path: ${name}`);
+        const path = join(directory, name);
+        await mkdir(join(directory, name).slice(0, join(directory, name).lastIndexOf('/')), { recursive: true });
+        await writeFile(path, data);
+      }
+
+      const result = await this.runner.run(options.toolPath, {
+        args: [
+          options.tool,
+          ...options.arguments ?? [],
+          `/tmp/main.${extension}`
+        ],
+        preopens: { '/tmp': directory }
+      });
+      return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr };
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+
+  /**
    * Compile a bare-metal main and C startup source, then link a complete ELF.
    * @param {{source:string,startupSource:string,linkerScript:string,target:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string}}} options
    */
@@ -363,6 +484,34 @@ export class LlvmWasmToolchain {
     return targets;
   }
 }
+
+/** @param {string} text */
+const parseClangDiagnostics = (text) => {
+  const diagnostics = [];
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/^(.*?):(\d+):(\d+):\s+(fatal error|error|warning|note):\s*(.*)$/);
+    if (!match) continue;
+    const severity = match[4] === 'warning' ? 'warning' : match[4] === 'note' ? 'info' : 'error';
+    diagnostics.push({
+      severity,
+      file: match[1],
+      line: Number(match[2]),
+      column: Number(match[3]),
+      message: match[5]
+    });
+  }
+  return diagnostics;
+};
+
+/** @param {string} text */
+const parseCodeCompletion = (text) => {
+  const candidates = [];
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/^COMPLETION:\s*([^\s]+)(?:\s+:\s*(.*))?$/);
+    if (match) candidates.push({ label: match[1], detail: match[2] ?? '' });
+  }
+  return candidates;
+};
 
 export class BrowserWasiAdapter {
   /** @param {BrowserWasi} wasi */

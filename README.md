@@ -15,6 +15,9 @@ The npm package is `@jozo132/wicro`. Its command-line executable is `wicro`.
 - Registry installation, removal, updates, transitive resolution and lockfiles for local, URL and ZIP sources
 - Persistent object cache and C/C++/assembly WASM compilation coverage
 - A public custom-programmer protocol registry with simulated hardware tests
+- Host-independent `@wicro/language-server` LSP/session primitives with clang WASI diagnostics and completion
+- VS Code and Monaco language operations and generated `compile_commands.json` data
+- Worker protocol support for browser/Node language isolation
 - STM32F401RC Cortex-M4 bare-metal ELF/BIN reference fixture
 - RISC-V WebAssembly compiler execution for ELF32 object generation
 - ESP32-C3 SuperMini hardware discovery through USB-Serial/JTAG
@@ -91,5 +94,17 @@ Remaining integration work:
 - Physical firmware verification is target-specific and must be reported separately from source and build success
 
 See [docs/compatibility.md](docs/compatibility.md) for the current implemented, planned and hardware-verified matrix.
+
+## Unified LLVM / language tooling
+
+The current cache contains a 57 MB Clang/LLD WASI multicall binary. It provides real Clang diagnostics, code-completion entry execution and ARM/AVR/RISC-V/Xtensa compilation; the pinned build recipe can include Clang-tools-extra and utility targets, but missing Clangd, Clang-Tidy, Clang-Format and LLVM utility `.wasm` artifacts are reported as unavailable and are never presented as implemented.
+
+Run the Node benchmark with:
+
+```sh
+npm run benchmark:llvm
+```
+
+The generated report is [benchmarks/llvm-wasm-benchmark.json](benchmarks/llvm-wasm-benchmark.json). Browser and separate-Clangd benchmarks remain explicitly skipped until corresponding WASM artifacts exist and execute.
 
 No package is published by repository scripts or tests. Public publishing requires separate explicit approval.
