@@ -7,5 +7,21 @@
   "stm32f401rc": { "label": "ARM Cortex-M4", "build": { "target": "armv7e-m", "targetOptions": { "mcpu": "cortex-m4" } } },
   "rp2040": { "label": "ARM Cortex-M0+", "build": { "target": "armv6m", "targetOptions": { "mcpu": "cortex-m0plus" } } },
   "rp2350": { "label": "ARM Cortex-M33", "build": { "target": "armv8m-mainline", "targetOptions": { "mcpu": "cortex-m33" } } },
-  "arduino-uno": { "label": "AVR ATmega328P", "build": { "target": "avr", "targetOptions": { "mcu": "atmega328p" } } }
+  "arduino-uno": { "label": "AVR ATmega328P", "build": { "target": "avr", "targetOptions": { "mcu": "atmega328p" } } },
+  "arduino-nano": { "label": "Arduino Nano ATmega328P", "build": { "target": "avr", "targetOptions": { "mcu": "atmega328p" } } },
+  "arduino-mega": { "label": "Arduino Mega ATmega2560", "build": { "target": "avr", "targetOptions": { "mcu": "atmega2560" } } },
+  "arduino-leonardo": { "label": "Arduino Leonardo ATmega32U4", "build": { "target": "avr", "targetOptions": { "mcu": "atmega32u4" } } },
+  "esp32-devkit": { "label": "ESP32 DevKit Xtensa LX6", "build": { "target": "xtensa", "targetOptions": { "mcpu": "esp32" } } },
+  "esp32-s2": { "label": "ESP32-S2 Xtensa LX7", "build": { "target": "xtensa", "targetOptions": { "mcpu": "esp32s2" } } },
+  "esp32-s3": { "label": "ESP32-S3 Xtensa LX7", "build": { "target": "xtensa", "targetOptions": { "mcpu": "esp32s3" } } },
+  "esp32-c6": { "label": "ESP32-C6 RISC-V", "build": { "target": "riscv32", "targetOptions": { "march": "rv32imac", "mabi": "ilp32" } } },
+  "esp32-h2": { "label": "ESP32-H2 RISC-V", "build": { "target": "riscv32", "targetOptions": { "march": "rv32imac", "mabi": "ilp32" } } },
+  "esp8266-nodemcu": { "label": "ESP8266 NodeMCU", "build": { "target": "xtensa", "targetOptions": { "mcpu": "esp8266" } } },
+  "esp8266-d1-mini": { "label": "ESP8266 D1 Mini", "build": { "target": "xtensa", "targetOptions": { "mcpu": "esp8266" } } },
+  "stm32-blue-pill": { "label": "STM32 Blue Pill Cortex-M3", "build": { "target": "armv7-m", "targetOptions": { "mcpu": "cortex-m3" } } },
+  "stm32-black-pill": { "label": "STM32 Black Pill Cortex-M4", "build": { "target": "armv7e-m", "targetOptions": { "mcpu": "cortex-m4" } } },
+  "stm32-nucleo-f401re": { "label": "STM32 Nucleo-F401RE Cortex-M4", "build": { "target": "armv7e-m", "targetOptions": { "mcpu": "cortex-m4" } } },
+  "raspberry-pi-pico-w": { "label": "Raspberry Pi Pico W Cortex-M0+", "build": { "target": "armv6m", "targetOptions": { "mcpu": "cortex-m0plus" } } },
+  "raspberry-pi-pico-2": { "label": "Raspberry Pi Pico 2 Cortex-M33", "build": { "target": "armv8m-mainline", "targetOptions": { "mcpu": "cortex-m33" } } },
+  "raspberry-pi-pico-2-w": { "label": "Raspberry Pi Pico 2 W Cortex-M33", "build": { "target": "armv8m-mainline", "targetOptions": { "mcpu": "cortex-m33" } } }
 }

@@ -348,18 +348,20 @@ export class LlvmWasmToolchain {
 
   /**
    * Compile a bare-metal main and C startup source, then link a complete ELF.
-   * @param {{source:string,startupSource:string,linkerScript:string,target:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string}}} options
+   * @param {{source:string,startupSource:string,linkerScript:string,target:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},language?:'c'|'c++'}} options
    */
   async compileAndLinkBareMetal(options) {
     const directory = await mkdtemp(join(tmpdir(), 'wicro-bare-metal-'));
 
     try {
-      await writeFile(join(directory, 'main.c'), options.source);
+      const language = options.language ?? 'c';
+      const sourceName = language === 'c++' ? 'main.cpp' : 'main.c';
+      await writeFile(join(directory, sourceName), options.source);
       await writeFile(join(directory, 'startup.c'), options.startupSource);
       await writeFile(join(directory, 'firmware.ld'), options.linkerScript);
 
       const files = [
-        ['main.c', 'main.o'],
+        [sourceName, 'main.o'],
         ['startup.c', 'startup.o']
       ];
       const diagnostics = [];
@@ -371,6 +373,7 @@ export class LlvmWasmToolchain {
             ...this.targetArgs(options.target, options.targetOptions),
             '-nostdlib',
             '-ffreestanding',
+            ...(language === 'c++' && sourceName.endsWith('.cpp') ? ['-x', 'c++'] : []),
             '-c',
             `/tmp/${sourceName}`,
             '-o',

@@ -86,12 +86,12 @@ export const main = async (args = []) => {
       const manifest = {
         $schema: 'https://wicro.dev/schemas/project.schema.json',
         name: name ?? 'wicro-project',
-        board: '',
-        framework: '',
-        toolchain: ''
+        board: 'arduino-uno-original',
+        framework: 'arduino',
+        toolchain: 'llvm-wasm-espressif'
       };
       await writeFile(resolve(target, 'wicro.json'), `${JSON.stringify(manifest, null, 2)}\n`, { flag: force ? 'w' : 'wx' });
-      await writeFile(resolve(target, 'src', 'main.c'), '#include <stdint.h>\n\nint main(void) {\n  return 0;\n}\n', { flag: 'wx' });
+      await writeFile(resolve(target, 'src', 'main.ino'), 'void setup() {\n  pinMode(LED_BUILTIN, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED_BUILTIN, HIGH);\n  delay(500);\n  digitalWrite(LED_BUILTIN, LOW);\n  delay(500);\n}\n', { flag: 'wx' });
 
       emit({ ok: true, command: 'init', path: target, manifest: 'wicro.json' }, json, `Initialized Wicro project at ${target}`);
       return 0;
@@ -99,6 +99,77 @@ export const main = async (args = []) => {
       const message = error instanceof Error ? error.message : String(error);
       if (!json) process.stderr.write(`Wicro init failed: ${message}\n`);
       else process.stderr.write(`${JSON.stringify({ ok: false, command: 'init', error: message })}\n`);
+      return 1;
+    }
+  }
+
+  if (command === 'import') {
+    try {
+      const source = flags.find((arg) => arg.startsWith('--source='))?.slice('--source='.length)
+        ?? flags.slice(1).find((arg) => !arg.startsWith('--'));
+      if (!source) throw new Error('A project directory or ZIP source is required');
+      const destinationName = flags.find((arg) => arg.startsWith('--dest='))?.slice('--dest='.length)
+        ?? inferPackageName(source);
+      const target = resolve(destinationName);
+      const fs = await import('node:fs/promises');
+
+      if (/^https?:\/\//.test(source)) {
+        const response = await fetch(source);
+        if (!response.ok) throw new Error(`Project download failed (${response.status}): ${source}`);
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const { unzipSync } = await import('fflate');
+        const entries = unzipSync(bytes);
+        await fs.mkdir(target, { recursive: true });
+        for (const [rawName, data] of Object.entries(entries)) {
+          if (rawName.endsWith('/') || rawName.endsWith('\\')) continue;
+          const name = rawName.replace(/\\/g, '/').replace(/^\/+/, '');
+          if (!name || name.startsWith('/') || name.split('/').includes('..')) throw new Error(`Unsafe project archive path: ${rawName}`);
+          const output = resolve(target, name);
+          await fs.mkdir(output.slice(0, output.lastIndexOf('/')), { recursive: true });
+          await fs.writeFile(output, data);
+        }
+      } else {
+        const details = await fs.stat(resolve(source));
+        if (details.isDirectory()) {
+          await fs.cp(resolve(source), target, { recursive: true, dereference: true });
+        } else {
+          const bytes = await fs.readFile(resolve(source));
+          const { unzipSync } = await import('fflate');
+          const entries = unzipSync(bytes);
+          await fs.mkdir(target, { recursive: true });
+          for (const [rawName, data] of Object.entries(entries)) {
+            if (rawName.endsWith('/') || rawName.endsWith('\\')) continue;
+            const name = rawName.replace(/\\/g, '/').replace(/^\/+/, '');
+            if (!name || name.startsWith('/') || name.split('/').includes('..')) throw new Error(`Unsafe project archive path: ${rawName}`);
+            const output = resolve(target, name);
+            await fs.mkdir(output.slice(0, output.lastIndexOf('/')), { recursive: true });
+            await fs.writeFile(output, data);
+          }
+        }
+      }
+
+      let framework = 'arduino';
+      try {
+        await fs.readFile(resolve(target, 'platformio.ini'), 'utf8');
+        framework = 'platformio';
+      } catch {
+        // No platformio.ini means the imported project uses the Arduino workflow.
+      }
+
+      const manifest = {
+        $schema: 'https://wicro.dev/schemas/project.schema.json',
+        name: destinationName,
+        board: 'arduino-uno-original',
+        framework,
+        toolchain: 'llvm-wasm-espressif'
+      };
+      await fs.writeFile(resolve(target, 'wicro.json'), `${JSON.stringify(manifest, null, 2)}\n`, { flag: flags.includes('--force') ? 'w' : 'wx' });
+      emit({ ok: true, command: 'import', implemented: true, path: target, framework, manifest: 'wicro.json' }, json,
+        `Imported ${source} to ${target} (${framework})`);
+      return 0;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emit({ ok: false, command: 'import', implemented: false, error: message }, json, `Import failed: ${message}`);
       return 1;
     }
   }
@@ -246,6 +317,82 @@ export const main = async (args = []) => {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       emit({ ok: false, command: 'package list', implemented: false, error: message }, json, `Package registry unavailable: ${message}`);
+      return 1;
+    }
+  }
+
+  if (command === 'platformio') {
+    try {
+      const action = flags[1] ?? 'search';
+      if (action === 'import') {
+        const source = flags.find((arg) => arg.startsWith('--source='))?.slice('--source='.length) ?? 'platformio.ini';
+        const { readFile } = await import('node:fs/promises');
+        let arduinoModule;
+        try {
+          arduinoModule = await import('../../arduino/src/index.js');
+        } catch {
+          const arduinoSpecifier = '../vendor/arduino/src/index.js';
+          arduinoModule = await import(arduinoSpecifier);
+        }
+        const text = await readFile(resolve(source), 'utf8');
+        const sections = arduinoModule.parsePlatformIoIni(text);
+        emit({ ok: true, command: 'platformio import', implemented: true, sections }, json, `Imported ${Object.keys(sections).length} PlatformIO section(s)`);
+        return 0;
+      }
+
+      const query = flags.slice(2).find((arg) => !arg.startsWith('--')) ?? '';
+      if (!query) throw new Error('A PlatformIO search query is required');
+      let registryModule;
+      try {
+        registryModule = await import('../../registry/src/index.js');
+      } catch {
+        const registrySpecifier = '../vendor/registry/src/index.js';
+        registryModule = await import(registrySpecifier);
+      }
+      const registry = new registryModule.PlatformIoRegistry();
+      const items = await registry.search(query);
+      emit({ ok: true, command: 'platformio search', implemented: true, items }, json,
+        items.map((/** @type {{name:string,owner:string,version:string}} */ item) => `${item.owner}/${item.name}@${item.version}`).join('\n'));
+      return 0;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emit({ ok: false, command: 'platformio', implemented: false, error: message }, json, `PlatformIO command failed: ${message}`);
+      return 1;
+    }
+  }
+
+  if (command === 'arduino') {
+    try {
+      const action = flags[1];
+      let arduinoModule;
+      try {
+        arduinoModule = await import('../../arduino/src/index.js');
+      } catch {
+        const arduinoSpecifier = '../vendor/arduino/src/index.js';
+        arduinoModule = await import(arduinoSpecifier);
+      }
+      const registry = new arduinoModule.ArduinoRegistry({ host: 'node' });
+
+      if (action === 'library' && flags[2] === 'search') {
+        const query = flags.slice(3).find((arg) => !arg.startsWith('--')) ?? '';
+        const items = await registry.searchLibraries(query);
+        emit({ ok: true, command: 'arduino library search', implemented: true, items }, json,
+          items.map((/** @type {{name:string,version:string}} */ item) => `${item.name}@${item.version}`).join('\n'));
+        return 0;
+      }
+
+      if (action === 'boards') {
+        const index = await registry.boardIndex();
+        const packages = Array.isArray(index?.packages) ? index.packages : [];
+        emit({ ok: true, command: 'arduino boards', implemented: true, count: packages.length }, json,
+          `Loaded ${packages.length} Arduino Board Manager package(s)`);
+        return 0;
+      }
+
+      throw new Error(`Unknown Arduino command: ${action ?? 'missing'}`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emit({ ok: false, command: 'arduino', implemented: false, error: message }, json, `Arduino command failed: ${message}`);
       return 1;
     }
   }

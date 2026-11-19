@@ -12,6 +12,7 @@
     "manufacturer": "Espressif",
     "mcu": "ESP8266",
     "architecture": "xtensa",
+    "framework": "arduino",
     "build": {
       "kind": "object",
       "target": "xtensa",

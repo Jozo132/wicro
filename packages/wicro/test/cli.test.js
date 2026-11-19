@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -41,9 +41,33 @@ test('init creates a project manifest and source entry', async () => {
 
     const manifest = JSON.parse(await readFile(join(directory, 'wicro.json'), 'utf8'));
     assert.equal(manifest.name, 'wicro-project');
-    assert.match(await readFile(join(directory, 'src', 'main.c'), 'utf8'), /int main/);
+    assert.equal(manifest.board, 'arduino-uno-original');
+    assert.equal(manifest.framework, 'arduino');
+    assert.match(await readFile(join(directory, 'src', 'main.ino'), 'utf8'), /void setup|void loop/);
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('import creates an Arduino-first project from a directory', async () => {
+  const source = await mkdtemp(join(tmpdir(), 'wicro-import-source-'));
+  const destinationRoot = await mkdtemp(join(tmpdir(), 'wicro-import-root-'));
+
+  try {
+    await mkdir(join(source, 'src'), { recursive: true });
+    await writeFile(join(source, 'src', 'main.ino'), 'void setup() {}\nvoid loop() {}\n');
+    const dest = join(destinationRoot, 'demo');
+    const result = runIn(destinationRoot, 'import', source, '--dest=demo', '--json');
+    assert.equal(result.status, 0);
+
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.ok, true);
+    assert.equal(report.framework, 'arduino');
+    const manifest = JSON.parse(await readFile(join(dest, 'wicro.json'), 'utf8'));
+    assert.equal(manifest.framework, 'arduino');
+  } finally {
+    await rm(source, { recursive: true, force: true });
+    await rm(destinationRoot, { recursive: true, force: true });
   }
 });
 

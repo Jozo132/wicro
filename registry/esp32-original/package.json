@@ -5,6 +5,7 @@
   "description": "Original ESP32 Xtensa board package",
   "license": "MIT",
   "dependencies": {
+    "arduino-esp32": "^1.0.0",
     "esp-idf": "^6.1.0",
     "llvm-wasm-espressif": "^20.1.1"
   },
@@ -12,6 +13,7 @@
     "manufacturer": "Espressif",
     "mcu": "ESP32",
     "architecture": "xtensa",
+    "framework": "arduino",
     "build": {
       "kind": "object",
       "target": "xtensa",

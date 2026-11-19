@@ -59,6 +59,15 @@ Status values:
 | Unified WASM build recipe | Implemented | Pinned esp-wasm and Espressif LLVM revisions enable clang-tools-extra and utility targets; combined-result runtime parity is not yet benchmarked |
 | Node LLVM benchmark | Verified | Repeated real WASI measurements are written to `benchmarks/llvm-wasm-benchmark.json`; missing tool categories are explicitly skipped |
 | Browser LLVM compile benchmark | Verified | Chromium fetched and compiled the 57 MB LLVM WASM in repeated in-page measurements; data is recorded in the benchmark JSON |
+| Arduino `.ino` preprocessing | Implemented | Shared parser adds Arduino.h, setup/loop prototypes and function prototypes for one or multiple tabs with generated-line source mapping |
+| Arduino bare-metal C++ ELF/BIN | Implemented | Shared LLVM WASM runtime links C++ setup/loop code with startup and linker script using C-linkage `main` |
+| Arduino SDK manifests | Implemented | AVR, ESP32, ESP8266, STM32 and Pico upstream revisions are recorded in versioned framework packages |
+| Official Arduino board presets | Implemented | UNO, Nano, Mega, Leonardo, ESP32 families, ESP8266 NodeMCU/D1 Mini, STM32 boards and Pico variants are registered; SDK artifacts remain separate |
+| Complete Arduino SDK firmware linking | Planned | Arduino core archives, board variants, full headers, startup and linker distributions are not yet shipped in the package cache |
+| boards.txt/platform.txt parsing | Implemented | Property-file parsing, board names, menu options and platform INI parsing are executable and tested |
+| library.properties/library.json parsing | Implemented | Arduino and PlatformIO library metadata parsing is executable and tested |
+| PlatformIO import/search | Implemented | PlatformIO INI parsing and registry lookup are available; script execution is prohibited |
+| Arduino Board/Library Manager | Implemented | Official index URLs and browser CORS diagnostics are implemented; cached/offline distribution remains separate |
 
 ## Target verification matrix
 

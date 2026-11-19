@@ -1,0 +1,14 @@
+{
+  "name": "@wicro/arduino",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/index.js",
+  "scripts": {
+    "test": "node --test",
+    "check:types": "tsc --noEmit -p ../../jsconfig.json"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

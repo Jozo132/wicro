@@ -1,0 +1,5 @@
+{
+  "name": "stm32-blue-pill", "version": "1.0.0", "kind": "board", "description": "STM32 Blue Pill STM32F103CB Arduino preset", "license": "MIT",
+  "dependencies": { "arduino-stm32-core": "^1.0.0", "llvm-wasm-espressif": "^20.1.1" },
+  "metadata": { "manufacturer": "STMicroelectronics", "mcu": "STM32F103CB", "architecture": "armv7-m", "cpu": "cortex-m3", "framework": "arduino", "clockHz": 72000000, "flashCapacityBytes": 131072, "sramCapacityBytes": 20480, "flashAddress": "0x08000000", "sramAddress": "0x20000000", "build": { "kind": "bare-metal", "target": "armv7-m", "targetOptions": { "mcpu": "cortex-m3" }, "source": "main.ino", "startupSource": "startup.c", "linkerScript": "stm32f103cb.ld", "output": ".wicro/build" }, "status": "preset", "firmwareLinking": "pending-sdk-distribution" }
+}

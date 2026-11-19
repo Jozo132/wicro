@@ -1,0 +1,5 @@
+{
+  "name": "esp8266-d1-mini", "version": "1.0.0", "kind": "board", "description": "ESP8266 D1 Mini Arduino preset", "license": "MIT",
+  "dependencies": { "arduino-esp8266": "^3.1.2", "llvm-wasm-espressif": "^20.1.1" },
+  "metadata": { "manufacturer": "Wemos", "mcu": "ESP8266", "architecture": "xtensa", "cpu": "xtensa-l106", "framework": "arduino", "clockHz": 80000000, "flashCapacityBytes": 4194304, "sramCapacityBytes": 81920, "uploadBaud": 115200, "monitorBaud": 115200, "build": { "kind": "object", "target": "xtensa", "targetOptions": { "mcpu": "esp8266" }, "source": "main.ino", "output": ".wicro/build" }, "status": "preset", "firmwareLinking": "pending-sdk-distribution" }
+}

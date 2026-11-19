@@ -5,6 +5,7 @@
   "description": "Original Arduino UNO board package",
   "license": "MIT",
   "dependencies": {
+    "arduino-avr-core": "^1.0.0",
     "llvm-wasm-espressif": "^20.1.1"
   },
   "metadata": {
@@ -12,6 +13,7 @@
     "mcu": "ATmega328P",
     "package": "DIP-28",
     "architecture": "avr",
+    "framework": "arduino",
     "cpu": "avr5",
     "build": {
       "kind": "object",

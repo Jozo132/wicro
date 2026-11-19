@@ -1,0 +1,19 @@
+{
+  "name": "arduino-avr-core",
+  "version": "1.0.0",
+  "kind": "framework",
+  "description": "Arduino AVR core package manifest based on ArduinoCore-avr",
+  "license": "LGPL-2.1",
+  "repository": "https://github.com/arduino/ArduinoCore-avr",
+  "dependencies": {
+    "llvm-wasm-espressif": "^20.1.1"
+  },
+  "metadata": {
+    "upstreamCommit": "11b9130371e8447920edb65a75706a6c951e51fc",
+    "targets": ["arduino-uno-original", "arduino-nano", "arduino-mega", "arduino-leonardo"],
+    "architectures": ["avr"],
+    "source": "external",
+    "status": "manifested",
+    "firmwareLinking": "pending-sdk-distribution"
+  }
+}

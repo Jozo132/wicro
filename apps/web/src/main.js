@@ -2,12 +2,20 @@ import * as monaco from 'monaco-editor';
 import { WASI, OpenFile, File, PreopenDirectory, ConsoleStdout } from '@bjorn3/browser_wasi_shim';
 import { ESPLoader, Transport } from 'esptool-js';
 import { WicroLanguageService } from '../../../packages/language-server/src/index.js';
+import { preprocessIno } from '../../../packages/arduino/src/index.js';
 import './style.css';
 
-const defaultSource = `int main(void)
+const defaultSource = `void setup()
 {
-    volatile int blink = 0;
-    return blink;
+    pinMode(LED_BUILTIN, OUTPUT);
+}
+
+void loop()
+{
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(500);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(500);
 }
 `;
 
@@ -19,15 +27,31 @@ app.innerHTML = `
   <header class="toolbar">
     <div class="brand"><span class="brand-mark">W</span><strong>Wicro</strong></div>
     <select id="target" class="target-select" aria-label="Board target">
+      <option value="arduino-uno" selected>Arduino UNO</option>
+      <option value="arduino-nano">Arduino Nano</option>
+      <option value="arduino-mega">Arduino Mega 2560</option>
+      <option value="arduino-leonardo">Arduino Leonardo</option>
       <option value="esp32-c3">ESP32-C3 SuperMini</option>
+      <option value="esp32-devkit">ESP32 DevKit</option>
+      <option value="esp32-s2">ESP32-S2</option>
+      <option value="esp32-s3">ESP32-S3</option>
+      <option value="esp32-c6">ESP32-C6</option>
+      <option value="esp32-h2">ESP32-H2</option>
       <option value="esp32-original">Original ESP32</option>
       <option value="esp8266">ESP8266</option>
+      <option value="esp8266-nodemcu">ESP8266 NodeMCU</option>
+      <option value="esp8266-d1-mini">ESP8266 D1 Mini</option>
       <option value="stm32f103cb">STM32F103CB</option>
       <option value="stm32h723vg">STM32H723VG</option>
       <option value="stm32f401rc">STM32F401RC</option>
+      <option value="stm32-blue-pill">STM32 Blue Pill</option>
+      <option value="stm32-black-pill">STM32 Black Pill</option>
+      <option value="stm32-nucleo-f401re">STM32 Nucleo-F401RE</option>
       <option value="rp2040">RP2040</option>
       <option value="rp2350">RP2350</option>
-      <option value="arduino-uno">Arduino UNO</option>
+      <option value="raspberry-pi-pico-w">Raspberry Pi Pico W</option>
+      <option value="raspberry-pi-pico-2">Raspberry Pi Pico 2</option>
+      <option value="raspberry-pi-pico-2-w">Raspberry Pi Pico 2 W</option>
     </select>
     <div class="actions">
       <button id="compile" type="button">Compile</button>
@@ -38,7 +62,7 @@ app.innerHTML = `
   </header>
   <main class="workspace">
     <section class="editor-panel">
-      <div class="panel-label">main.c</div>
+      <div class="panel-label">main.ino</div>
       <div id="editor"></div>
     </section>
     <aside class="console-panel">
@@ -51,14 +75,14 @@ app.innerHTML = `
   </main>
   <footer class="statusbar">
     <span id="status">Toolchain not installed</span>
-    <span id="target-status">RISC-V RV32IMC</span>
+    <span id="target-status">AVR ATmega328P</span>
   </footer>
 `;
 
 const editorRoot = /** @type {HTMLElement} */ (document.querySelector('#editor'));
 const editor = monaco.editor.create(editorRoot, {
   value: defaultSource,
-  language: 'c',
+  language: 'cpp',
   theme: 'vs-dark',
   automaticLayout: true,
   minimap: { enabled: false },
@@ -149,10 +173,10 @@ const browserLanguageToolchain = {
 };
 
 const languageService = new WicroLanguageService({ host: 'browser', toolchain: /** @type {any} */ (browserLanguageToolchain), configuration: { target: 'riscv32' } });
-const documentUri = 'file:///main.c';
-languageService.openDocument({ uri: documentUri, languageId: 'c', text: editor.getValue(), version: 1 });
+const documentUri = 'file:///main.ino';
+languageService.openDocument({ uri: documentUri, languageId: 'cpp', text: editor.getValue(), version: 1 });
 
-monaco.languages.registerCompletionItemProvider('c', {
+monaco.languages.registerCompletionItemProvider('cpp', {
   /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position */
   async provideCompletionItems(model, position) {
     languageService.updateDocument(documentUri, model.getValue(), 1);
@@ -172,7 +196,7 @@ monaco.languages.registerCompletionItemProvider('c', {
   }
 });
 
-monaco.languages.registerHoverProvider('c', {
+monaco.languages.registerHoverProvider('cpp', {
   /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position */
   provideHover(model, position) {
     languageService.updateDocument(documentUri, model.getValue(), 1);
@@ -182,7 +206,7 @@ monaco.languages.registerHoverProvider('c', {
   }
 });
 
-monaco.languages.registerDefinitionProvider('c', {
+monaco.languages.registerDefinitionProvider('cpp', {
   /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position */
   provideDefinition(model, position) {
     languageService.updateDocument(documentUri, model.getValue(), 1);
@@ -195,7 +219,7 @@ monaco.languages.registerDefinitionProvider('c', {
   }
 });
 
-monaco.languages.registerReferenceProvider('c', {
+monaco.languages.registerReferenceProvider('cpp', {
   /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position */
   provideReferences(model, position) {
     languageService.updateDocument(documentUri, model.getValue(), 1);
@@ -208,7 +232,7 @@ monaco.languages.registerReferenceProvider('c', {
   }
 });
 
-monaco.languages.registerRenameProvider('c', {
+monaco.languages.registerRenameProvider('cpp', {
   /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position @param {string} newName */
   async provideRenameEdits(model, position, newName) {
     languageService.updateDocument(documentUri, model.getValue(), 1);
@@ -332,9 +356,20 @@ compileButton?.addEventListener('click', async () => {
     const response = await fetch(compilerUrl);
     if (!response.ok) throw new Error(`Toolchain download failed (${response.status})`);
 
-    const source = editor.getValue();
+    const sketchSource = editor.getValue();
+    const useArduino = targetName === 'arduino-uno'
+      || targetName === 'arduino-nano'
+      || targetName === 'arduino-mega'
+      || targetName === 'arduino-leonardo'
+      || targetName === 'esp8266'
+      || targetName === 'esp8266-nodemcu'
+      || targetName === 'esp8266-d1-mini';
+    const compiledSource = useArduino
+      ? preprocessIno({ 'main.ino': sketchSource }).cpp
+      : sketchSource;
+    const extension = useArduino ? 'cpp' : 'c';
     const root = new PreopenDirectory('.', new Map([
-      ['main.c', new File(new TextEncoder().encode(source))]
+      [`main.${extension}`, new File(new TextEncoder().encode(compiledSource))]
     ]));
     let stdout = '';
     let stderr = '';
@@ -342,8 +377,9 @@ compileButton?.addEventListener('click', async () => {
       'clang',
       ...buildArgs(targetConfig.build),
       '-nostdlib',
+      ...(useArduino ? ['-x', 'c++'] : []),
       '-c',
-      'main.c',
+      `main.${extension}`,
       '-o',
       'main.o'
     ], [], [

@@ -179,6 +179,25 @@ test('shared LLVM toolchain compiles an AVR object', async () => {
   assert.equal(result.object.length > 100, true);
 });
 
+test('shared LLVM toolchain links generated Arduino C++ for a bare-metal target', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const toolchain = new LlvmWasmToolchain({ llvmPath: llvmUrl.pathname });
+  const startupSource = await readFile(new URL('../../../examples/stm32f103cb/bare-metal-blink/startup.c', import.meta.url), 'utf8');
+  const linkerScript = await readFile(new URL('../../../examples/stm32f103cb/bare-metal-blink/stm32f103cb.ld', import.meta.url), 'utf8');
+
+  const result = await toolchain.compileAndLinkBareMetal({
+    source: 'void setup() {}\nvoid loop() {}\nextern "C" int main(void) { setup(); for (;;) { loop(); } return 0; }\n',
+    startupSource,
+    linkerScript,
+    target: 'armv7-m',
+    targetOptions: { mcpu: 'cortex-m3' },
+    language: 'c++'
+  });
+
+  assert.equal(result.elf.subarray(0, 4).toString('hex'), '7f454c46');
+  assert.equal(result.bin.length > 0, true);
+});
+
 test('shared LLVM toolchain links STM32F103CB ELF and BIN', async () => {
   const { readFile } = await import('node:fs/promises');
   const toolchain = new LlvmWasmToolchain({ llvmPath: llvmUrl.pathname });

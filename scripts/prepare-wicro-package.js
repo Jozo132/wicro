@@ -11,6 +11,7 @@ const copyTargets = [
   ['packages/filesystem/src', 'packages/wicro/vendor/filesystem/src'],
   ['packages/hardware/src', 'packages/wicro/vendor/hardware/src'],
   ['packages/programmers/src', 'packages/wicro/vendor/programmers/src'],
+  ['packages/arduino/src', 'packages/wicro/vendor/arduino/src'],
   ['registry', 'packages/wicro/registry'],
   ['toolchain/llvm-wasm/manifest.json', 'packages/wicro/toolchain/llvm-wasm/manifest.json']
 ];

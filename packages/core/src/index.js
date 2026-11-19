@@ -1,4 +1,5 @@
 import { LlvmWasmToolchain } from '../../runtime/src/index.js';
+import { preprocessIno } from '../../arduino/src/index.js';
 
 /** @typedef {'browser'|'node'|'vscode'} WicroHost */
 
@@ -199,7 +200,38 @@ const buildProject = async (host, toolchain, project, boardName) => {
   if (typeof sourceValue !== 'string') throw new Error(`Source file is not text: ${sourcePath}`);
 
   let result;
-  if (build.kind === 'bare-metal') {
+  let generatedCpp;
+  let sourceMap;
+  if (/\.(ino|pde)$/i.test(sourcePath)) {
+    const sketch = preprocessIno({ [sourcePath.split('/').pop() ?? 'sketch.ino']: sourceValue });
+    generatedCpp = sketch.cpp;
+    sourceMap = sketch.sourceMap;
+    if (build.kind === 'bare-metal') {
+      if (!build.startupSource || !build.linkerScript) {
+        throw new Error(`Board '${board}' has an incomplete bare-metal build recipe`);
+      }
+      const startupValue = await host.readFile(`${project}/${build.startupSource}`, { encoding: 'utf8' });
+      const linkerValue = await host.readFile(`${project}/${build.linkerScript}`, { encoding: 'utf8' });
+      if (typeof startupValue !== 'string' || typeof linkerValue !== 'string') {
+        throw new Error(`Firmware sources for '${board}' must be text files`);
+      }
+      generatedCpp = `${generatedCpp}\nextern "C" int main(void) { setup(); for (;;) { loop(); } return 0; }\n`;
+      const bareMetalCpp = generatedCpp;
+      result = await toolchain.compileAndLinkBareMetal({
+        source: bareMetalCpp,
+        startupSource: startupValue,
+        linkerScript: linkerValue,
+        target: build.target,
+        targetOptions: build.targetOptions,
+        language: 'c++'
+      });
+    } else {
+      result = await toolchain.compileSource(generatedCpp, build.target, build.targetOptions, {
+        language: 'c++',
+        cacheDirectory: `${project}/.wicro/cache`
+      });
+    }
+  } else if (build.kind === 'bare-metal') {
     if (!build.startupSource || !build.linkerScript) {
       throw new Error(`Board '${board}' has an incomplete bare-metal build recipe`);
     }
@@ -220,6 +252,9 @@ const buildProject = async (host, toolchain, project, boardName) => {
   }
 
   const output = build.output ?? '.wicro/build';
+  if (generatedCpp) {
+    await host.writeFile(`${project}/${output}/sketch.cpp`, generatedCpp);
+  }
   if ('elf' in result && 'bin' in result) {
     await host.writeFile(`${project}/${output}/firmware.elf`, result.elf);
     await host.writeFile(`${project}/${output}/firmware.bin`, result.bin);
@@ -235,6 +270,8 @@ const buildProject = async (host, toolchain, project, boardName) => {
     elf: 'elf' in result ? `${project}/${output}/firmware.elf` : undefined,
     bin: 'bin' in result ? `${project}/${output}/firmware.bin` : undefined,
     object: 'object' in result ? `${project}/${output}/main.o` : undefined,
-    diagnostics: result.diagnostics
+    diagnostics: result.diagnostics,
+    generatedCpp: generatedCpp ? `${project}/${output}/sketch.cpp` : undefined,
+    sourceMap
   };
 };

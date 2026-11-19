@@ -5,6 +5,7 @@
   "description": "Raspberry Pi RP2350 board package",
   "license": "MIT",
   "dependencies": {
+    "arduino-pico": "^1.0.0",
     "llvm-wasm-espressif": "^20.1.1",
     "pico-sdk": "^2.1.0"
   },
@@ -12,6 +13,7 @@
     "manufacturer": "Raspberry Pi",
     "mcu": "RP2350",
     "architecture": "armv8m-mainline",
+    "framework": "arduino",
     "build": {
       "kind": "object",
       "target": "armv8m-mainline",

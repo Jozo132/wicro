@@ -1,0 +1,19 @@
+{
+  "name": "arduino-esp32",
+  "version": "1.0.0",
+  "kind": "framework",
+  "description": "Arduino ESP32 core package manifest based on arduino-esp32",
+  "license": "LGPL-2.1",
+  "repository": "https://github.com/espressif/arduino-esp32",
+  "dependencies": {
+    "llvm-wasm-espressif": "^20.1.1"
+  },
+  "metadata": {
+    "upstreamCommit": "bc8ab15634eb0402d39e1e259a5a4a29be3e6e1c",
+    "targets": ["esp32-c3-supermini", "esp32-devkit", "esp32-s2", "esp32-s3", "esp32-c6", "esp32-h2"],
+    "architectures": ["riscv32", "xtensa"],
+    "source": "external",
+    "status": "manifested",
+    "firmwareLinking": "pending-sdk-distribution"
+  }
+}

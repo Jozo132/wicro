@@ -15,6 +15,9 @@ The npm package is `@jozo132/wicro`. Its command-line executable is `wicro`.
 - Registry installation, removal, updates, transitive resolution and lockfiles for local, URL and ZIP sources
 - Persistent object cache and C/C++/assembly WASM compilation coverage
 - A public custom-programmer protocol registry with simulated hardware tests
+- Arduino-first project init and `.ino` sketch preprocessing with setup/loop and function prototypes
+- Arduino, boards.txt, platform.txt, library.properties/library.json and PlatformIO INI parsers
+- Versioned upstream Arduino core manifests and official board preset metadata
 - Host-independent `@wicro/language-server` LSP/session primitives with clang WASI diagnostics and completion
 - VS Code and Monaco language operations and generated `compile_commands.json` data
 - Worker protocol support for browser/Node language isolation
@@ -51,6 +54,20 @@ wicro monitor --port=/dev/ttyACM0 --baud=115200
 ```
 
 The ESP32-C3 test board uses USB-Serial/JTAG VID/PID `303a:1001`, GPIO8 for the active-low onboard blue LED and BOOT on GPIO9. The STM32F401RC second MVP fixture uses Cortex-M4 Thumb, flash origin `0x08000000`, SRAM origin `0x20000000`, and 256 KB flash / 96 KB SRAM.
+
+## Arduino-first workflow
+
+New projects default to the Arduino framework and an Arduino UNO preset:
+
+```sh
+wicro init my-sketch
+wicro import --source=existing-project --dest=my-import --json
+wicro platformio search fastled
+wicro arduino library search fastled
+wicro build --project=my-sketch --board=arduino-uno-original
+```
+
+Directory and ZIP project imports use data-only parsing and copy operations. No Arduino or PlatformIO installation script is executed.
 
 ## Board blink examples
 

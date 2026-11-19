@@ -5,6 +5,7 @@
   "description": "ESP32-C3 SuperMini board package",
   "license": "MIT",
   "dependencies": {
+    "arduino-esp32": "^1.0.0",
     "esp-idf": "^6.1.0",
     "llvm-wasm-espressif": "^20.1.1"
   },
@@ -12,6 +13,7 @@
     "manufacturer": "Espressif",
     "mcu": "ESP32-C3",
     "architecture": "riscv32",
+    "framework": "arduino",
     "build": {
       "kind": "object",
       "target": "riscv32",

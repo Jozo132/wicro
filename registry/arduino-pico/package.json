@@ -1,0 +1,19 @@
+{
+  "name": "arduino-pico",
+  "version": "1.0.0",
+  "kind": "framework",
+  "description": "Arduino Pico core package manifest based on earlephilhower/arduino-pico",
+  "license": "LGPL-2.1",
+  "repository": "https://github.com/earlephilhower/arduino-pico",
+  "dependencies": {
+    "llvm-wasm-espressif": "^20.1.1"
+  },
+  "metadata": {
+    "upstreamCommit": "83f7b6e5ab9988164f4a291ee6d5c3bcd0e03cdf",
+    "targets": ["rp2040", "rp2350", "raspberry-pi-pico-w", "raspberry-pi-pico-2", "raspberry-pi-pico-2-w"],
+    "architectures": ["armv6m", "armv8m-mainline"],
+    "source": "external",
+    "status": "manifested",
+    "firmwareLinking": "pending-sdk-distribution"
+  }
+}

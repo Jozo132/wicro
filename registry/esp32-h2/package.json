@@ -1,0 +1,5 @@
+{
+  "name": "esp32-h2", "version": "1.0.0", "kind": "board", "description": "ESP32-H2 Arduino preset", "license": "MIT",
+  "dependencies": { "arduino-esp32": "^1.0.0", "llvm-wasm-espressif": "^20.1.1" },
+  "metadata": { "manufacturer": "Espressif", "mcu": "ESP32-H2", "architecture": "riscv32", "cpu": "rv32imac", "framework": "arduino", "clockHz": 96000000, "flashCapacityBytes": 4194304, "sramCapacityBytes": 327680, "uploadBaud": 460800, "monitorBaud": 115200, "build": { "kind": "object", "target": "riscv32", "targetOptions": { "march": "rv32imac", "mabi": "ilp32" }, "source": "main.ino", "output": ".wicro/build" }, "status": "preset", "firmwareLinking": "pending-sdk-distribution" }
+}
