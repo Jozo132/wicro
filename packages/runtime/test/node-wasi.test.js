@@ -238,6 +238,39 @@ test('shared LLVM toolchain links STM32H723VG ELF and BIN', async () => {
   assert.equal(result.bin.length > 0, true);
 });
 
+test('WASM ESP32 encoder converts native ESP32-C3 ELF to a parseable application image', async () => {
+  const elfUrl = new URL('../../../../registry-cache/esp32-c3-sdk-4.20017.260907/reference-firmware.elf', import.meta.url);
+  let elf;
+  try {
+    elf = await readFile(elfUrl);
+  } catch {
+    return;
+  }
+  const toolchain = new LlvmWasmToolchain({ llvmPath: llvmUrl.pathname });
+  const bin = toolchain.elfToEsp32Bin(elf);
+  assert.equal(bin[0], 0xe9);
+  assert.equal(bin[1] >= 1, true);
+  assert.equal(bin[2], 2);
+  assert.equal(new DataView(bin.buffer, bin.byteOffset, bin.byteLength).getUint32(4, true), 0x40381f4c);
+  assert.equal(bin.length > 200000, true);
+});
+
+test('ESP32-C3 reference application image has a valid Espressif header', async () => {
+  const referenceUrl = new URL('../../../../registry-cache/esp32-c3-sdk-4.20017.260907/reference-firmware.bin', import.meta.url);
+  let reference;
+  try {
+    reference = await readFile(referenceUrl);
+  } catch {
+    return;
+  }
+  assert.equal(reference[0], 0xe9);
+  assert.equal(reference[1] >= 1, true);
+  assert.equal(reference[2], 2);
+  assert.equal(reference[3], 0x2f);
+  const entry = reference.readUInt32LE(4);
+  assert.equal(entry, 0x40381f4c);
+});
+
 test('WASM ESP32 linker emits a real ELF for staged object/script inputs', async () => {
   const toolchain = new LlvmWasmToolchain({ llvmPath: llvmUrl.pathname });
   const compiled = await toolchain.compileC('int firmware_entry(void) { return 7; }\n', 'riscv32', { march: 'rv32imc', mabi: 'ilp32' });

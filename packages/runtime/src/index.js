@@ -153,7 +153,7 @@ export class LlvmWasmToolchain {
  * @param {string} source
  * @param {string} target
  * @param {{march?:string,mabi?:string,mcpu?:string,mcu?:string}} [targetOptions]
- * @param {{language?:'c'|'c++'|'assembly',includeDirs?:string[],compilerFlags?:string[],defines?:string[],compilerHash?:string,compilerVersion?:string,cacheDirectory?:string,files?:Record<string,string|Uint8Array>,diagnostics?:string[]}} [options]
+ * @param {{language?:'c'|'c++'|'assembly',includeDirs?:string[],compilerFlags?:string[],defines?:string[],compilerHash?:string,compilerVersion?:string,cacheDirectory?:string,files?:Record<string,string|Uint8Array>,preopens?:Record<string,string>,diagnostics?:string[]}} [options]
  */
   async compileSource(source, target = 'riscv32', targetOptions = {}, options = {}) {
     const language = options.language ?? 'c';
@@ -197,7 +197,7 @@ export class LlvmWasmToolchain {
         'clang',
         ...this.targetArgs(target, targetOptions),
         ...(language === 'c++' ? ['-x', 'c++'] : language === 'assembly' ? ['-x', 'assembler'] : []),
-        ...((options.includeDirs ?? []).flatMap((directoryName) => ['-I', `/tmp/${directoryName}`])),
+        ...(options.includeDirs ?? []).flatMap((directoryName) => ['-I', /^\//.test(directoryName) ? directoryName : /^sdk\//.test(directoryName) ? (options.preopens?.['/sdk'] ? `/${directoryName}` : `/tmp/${directoryName}`) : `/tmp/${directoryName}`]),
         ...(options.compilerFlags ?? []),
         ...(options.defines ?? []).flatMap((define) => ['-D', define]),
         '-nostdlib',
@@ -206,9 +206,10 @@ export class LlvmWasmToolchain {
         '-o',
         '/tmp/main.o'
       ];
+      const preopens = { '/tmp': directory, ...(options.preopens ?? {}) };
       const result = await this.runner.run(this.llvmPath, {
         args,
-        preopens: { '/tmp': directory }
+        preopens
       });
 
       if (result.exitCode !== 0) {
@@ -426,7 +427,7 @@ export class LlvmWasmToolchain {
 
   /**
    * Link explicit object/archive inputs with LLD entirely through the WASM toolchain.
-   * @param {{objects:Record<string,Uint8Array>|Uint8Array[],archives?:Record<string,Uint8Array>,linkerScripts?:Record<string,string|string|Uint8Array>,libraryPaths?:string[],libraries?:string[],undefinedSymbols?:string[],target:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},entry?:string}} options
+   * @param {{objects:Record<string,Uint8Array>|Uint8Array[],archives?:Record<string,Uint8Array>,linkerScripts?:Record<string,string|string|Uint8Array>,libraryPaths?:string[],libraries?:string[],undefinedSymbols?:string[],target:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},entry?:string,preopens?:Record<string,string>}} options
    */
   async linkEsp32Elf(options) {
     const directory = await mkdtemp(join(tmpdir(), 'wicro-esp32-link-'));
@@ -473,7 +474,7 @@ export class LlvmWasmToolchain {
         '/tmp/firmware.elf'
       ];
 
-      const linked = await this.runner.run(this.llvmPath, { args, preopens: { '/tmp': directory } });
+      const linked = await this.runner.run(this.llvmPath, { args, preopens: { '/tmp': directory, ...(options.preopens ?? {}) } });
       if (linked.exitCode !== 0) throw new Error(linked.stderr || linked.stdout || `Linker exited with status ${linked.exitCode}`);
 
       const elf = await readFile(join(directory, 'firmware.elf'));
@@ -485,50 +486,153 @@ export class LlvmWasmToolchain {
   }
 
   /** @param {Uint8Array} elf @returns {Uint8Array} */
-  elfToBin(elf) {
+  elfToEsp32Bin(elf) {
     const view = new DataView(elf.buffer, elf.byteOffset, elf.byteLength);
     if (elf.length < 52 || view.getUint32(0, true) !== 0x464c457f) {
       throw new Error('Invalid ELF32 image');
     }
+    if (view.getUint32(20, true) !== 1) {
+      throw new Error('ESP32 ELF is not a supported ELF version');
+    }
+
+    const machine = view.getUint16(18, true);
+    if (machine !== 243) throw new Error(`Expected RISC-V ELF, got e_machine=${machine}`);
+
+    const programOffset = view.getUint32(28, true);
+    const programEntrySize = view.getUint16(42, true);
+    const programCount = view.getUint16(44, true);
+    if (programOffset === 0 || programEntrySize < 32 || programCount === 0) {
+      throw new Error('ELF image has no loadable program headers');
+    }
+
+    /** @type {Array<{address:number,offset:number,size:number,flags:number}>} */
+    const segments = [];
+    for (let index = 0; index < programCount; index++) {
+      const offset = programOffset + index * programEntrySize;
+      if (offset + 32 > elf.length) break;
+      const type = view.getUint32(offset, true);
+      const fileOffset = view.getUint32(offset + 4, true);
+      const address = view.getUint32(offset + 12, true);
+      const fileSize = view.getUint32(offset + 16, true);
+      const flags = view.getUint32(offset + 24, true);
+      if (type !== 1 || fileSize === 0) continue;
+      if (fileOffset + fileSize > elf.length) throw new Error(`ELF segment ${index} extends beyond the file`);
+      if (address === 0) continue;
+      segments.push({ address, offset: fileOffset, size: fileSize, flags });
+    }
+
+    if (segments.length === 0) throw new Error('ELF image has no loadable ESP32 segments');
+
+    const entry = view.getUint32(24, true);
+    const ramSegments = segments.filter((segment) =>
+      (segment.address >= 0x3fc00000 && segment.address < 0x40000000) ||
+      (segment.address >= 0x40300000 && segment.address < 0x42000000));
+    const flashSegments = segments.filter((segment) => segment.address >= 0x42000000 && segment.address < 0x44000000);
+    const dromSegments = segments.filter((segment) => segment.address >= 0x3c000000 && segment.address < 0x40000000);
+    const iromSegments = flashSegments.filter((segment) => segment.address >= 0x42000000 && segment.address < 0x44000000);
+    const outputSegments = [...dromSegments.sort((left, right) => left.address - right.address), ...ramSegments.sort((left, right) => left.address - right.address), ...iromSegments.sort((left, right) => left.address - right.address)]
+      .filter((segment, index, all) => all.findIndex((candidate) => candidate.address === segment.address) === index);
+
+    if (outputSegments.length > 16) throw new Error(`ELF image has too many segments (${outputSegments.length})`);
+
+    const header = new Uint8Array(24);
+    const headerView = new DataView(header.buffer);
+    header[0] = 0xe9;
+    header[1] = outputSegments.length;
+    header[2] = 2;
+    header[3] = 0x2f;
+    headerView.setUint32(4, entry, true);
+
+    headerView.setUint8(8, 0xee);
+    headerView.setUint8(9, 0x00);
+    headerView.setUint8(10, 0x00);
+    headerView.setUint8(11, 0x00);
+    headerView.setUint16(12, 5, true);
+    headerView.setUint16(14, 0, true);
+    headerView.setUint16(16, 0, true);
+    headerView.setUint16(18, 0, true);
+    headerView.setUint8(20, 0);
+    headerView.setUint8(21, 0);
+    headerView.setUint8(22, 0);
+    headerView.setUint8(23, 1);
+
+    const chunks = [header];
+    let checksum = 0xef;
+    for (const segment of outputSegments) {
+      const data = elf.subarray(segment.offset, segment.offset + segment.size);
+      const paddedSize = (data.length + 3) & ~3;
+      const padded = new Uint8Array(paddedSize);
+      padded.set(data);
+
+      const segmentHeader = new Uint8Array(8);
+      const segmentView = new DataView(segmentHeader.buffer);
+      segmentView.setUint32(0, segment.address, true);
+      segmentView.setUint32(4, paddedSize, true);
+      chunks.push(segmentHeader, padded);
+      for (const byte of data) checksum = (checksum ^ byte) & 0xff;
+    }
+
+    const unalignedLength = chunks.reduce((total, chunk) => total + chunk.length, 0);
+    const checksumOffset = unalignedLength + (15 - (unalignedLength % 16));
+    const digestOffset = checksumOffset + 1;
+
+    const combinedLength = digestOffset + 32;
+    const output = new Uint8Array(combinedLength);
+    let writeOffset = 0;
+    for (const chunk of chunks) {
+      output.set(chunk, writeOffset);
+      writeOffset += chunk.length;
+    }
+    output[checksumOffset] = checksum;
+
+    const digest = createHash('sha256').update(output.subarray(0, digestOffset)).digest('hex');
+    for (let index = 0; index < 32; index++) {
+      output[digestOffset + index] = Number.parseInt(digest.slice(index * 2, index * 2 + 2), 16);
+    }
+
+    return output;
+  }
+
+  /** @param {Uint8Array} elf @returns {Uint8Array} */
+  elfToBin(elf) {
+    const view = new DataView(elf.buffer, elf.byteOffset, elf.byteLength);
+    if (elf.length < 52 || view.getUint32(0, true) !== 0x464c457f) throw new Error('Invalid ELF image');
+    const machine = view.getUint16(18, true);
+    if (machine === 243) return this.elfToEsp32Bin(elf);
 
     const sectionOffset = view.getUint32(32, true);
     const sectionEntrySize = view.getUint16(46, true);
     const sectionCount = view.getUint16(48, true);
-
-    if (sectionOffset === 0 || sectionEntrySize < 40 || sectionCount === 0) {
-      throw new Error('ELF image has no section table');
-    }
+    if (sectionOffset === 0 || sectionEntrySize < 40 || sectionCount === 0) throw new Error('ELF image has no section table');
 
     let start = Number.MAX_SAFE_INTEGER;
     let end = 0;
-    /** @type {Array<{address:number,offset:number,size:number}>} */
-    const sections = [];
-
     for (let index = 0; index < sectionCount; index++) {
       const offset = sectionOffset + index * sectionEntrySize;
       if (offset + 40 > elf.length) break;
-
       const address = view.getUint32(offset + 12, true);
       const fileOffset = view.getUint32(offset + 16, true);
       const size = view.getUint32(offset + 20, true);
       const type = view.getUint32(offset + 4, true);
       const flags = view.getUint32(offset + 8, true);
-
       if (type === 8 || (flags & 2) === 0 || address < 0x08000000) continue;
       if (fileOffset + size > elf.length) continue;
-
       start = Math.min(start, address);
       end = Math.max(end, address + size);
-      sections.push({ address, offset: fileOffset, size });
     }
-
-    if (!sections.length || start === Number.MAX_SAFE_INTEGER || end <= start) {
-      throw new Error('ELF image has no flash sections');
-    }
-
+    if (start === Number.MAX_SAFE_INTEGER || end <= start) throw new Error('ELF image has no flash sections');
     const bin = new Uint8Array(end - start);
-    for (const section of sections) {
-      bin.set(elf.subarray(section.offset, section.offset + section.size), section.address - start);
+    for (let index = 0; index < sectionCount; index++) {
+      const offset = sectionOffset + index * sectionEntrySize;
+      if (offset + 40 > elf.length) break;
+      const address = view.getUint32(offset + 12, true);
+      const fileOffset = view.getUint32(offset + 16, true);
+      const size = view.getUint32(offset + 20, true);
+      const type = view.getUint32(offset + 4, true);
+      const flags = view.getUint32(offset + 8, true);
+      if (type === 8 || (flags & 2) === 0 || address < 0x08000000) continue;
+      if (fileOffset + size > elf.length) continue;
+      bin.set(elf.subarray(fileOffset, fileOffset + size), address - start);
     }
     return bin;
   }

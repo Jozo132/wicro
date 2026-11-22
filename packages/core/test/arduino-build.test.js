@@ -129,3 +129,55 @@ test('firmware build fails closed when staged Arduino ESP32 archives are missing
   assert.equal(result.ok, false);
   assert.ok(result.diagnostics?.some((/** @type {{message:string}} */ diagnostic) => /libFrameworkArduino\.a|staged target SDK/i.test(diagnostic.message)));
 });
+
+test('ESP32 firmware build passes Clang C++ compatibility flags', async () => {
+  /** @type {Map<string, string|Uint8Array>} */
+  const files = new Map();
+  files.set('registry/firmware-board/package.json', JSON.stringify({
+    name: 'firmware-board', version: '1.0.0', kind: 'board', description: 'Firmware board', license: 'MIT',
+    metadata: { build: { kind: 'firmware', target: 'riscv32', targetOptions: { march: 'rv32imc', mabi: 'ilp32' }, output: '.wicro/build' } }
+  }));
+  files.set('project/wicro.json', JSON.stringify({ board: 'firmware-board', build: { sourceDir: 'src' } }));
+  files.set('project/src/main.ino', 'void setup() {}\nvoid loop() {}\n');
+  files.set('/sdk/lib/libFrameworkArduino.a', new Uint8Array([1]));
+  files.set('/sdk/memory.ld', 'MEMORY {}');
+  files.set('/sdk/sections.ld', 'SECTIONS {}');
+  files.set('/sdk/include/Arduino.h', '#pragma once');
+  /** @type {Record<string, unknown>|undefined} */
+  let compileOptions;
+  const host = {
+    host: /** @type {const} */ ('node'),
+    sdkCacheDirectory: '/sdk',
+    async readFile(/** @type {string} */ path, /** @type {{encoding?:'utf8'|'binary'}|undefined} */ options) {
+      const value = files.get(path);
+      if (value === undefined) throw new Error(`File not found: ${path}`);
+      if (options?.encoding === 'binary' && typeof value === 'string') return new TextEncoder().encode(value);
+      return value;
+    },
+    async readdir(/** @type {string} */ path) {
+      if (path === 'project/src') return ['main.ino'];
+      if (path === '/sdk') return ['lib', 'include', 'memory.ld', 'sections.ld'];
+      if (path === '/sdk/lib') return ['libFrameworkArduino.a'];
+      if (path === '/sdk/include') return ['Arduino.h'];
+      throw new Error(`Directory not found: ${path}`);
+    },
+    async writeFile(/** @type {string} */ path, /** @type {string|Uint8Array} */ data) {
+      files.set(path, typeof data === 'string' ? data : new TextDecoder().decode(data));
+    }
+  };
+  const toolchain = {
+    async compileSource(/** @type {string} */ _source, /** @type {string} */ _target, /** @type {Record<string, unknown>|undefined} */ _targetOptions, /** @type {Record<string, unknown>} */ options) {
+      compileOptions = options;
+      return { object: new Uint8Array([0x7f, 0x45, 0x4c, 0x46]), target: 'riscv32', cache: 'miss', diagnostics: [] };
+    },
+    async linkEsp32Elf() { return { elf: new Uint8Array([0x7f, 0x45, 0x4c, 0x46]), bin: new Uint8Array([1]), target: 'riscv32', diagnostics: [] }; },
+    async targets() { return ['riscv32']; }
+  };
+  const engine = createWicroEngine({ host, toolchain: /** @type {any} */ (toolchain) });
+  const result = await engine.execute({ command: 'build', project: 'project', board: 'firmware-board' });
+  assert.equal(result.ok, true);
+  assert.ok(compileOptions);
+  assert.deepEqual(compileOptions.compilerFlags, ['-fno-builtin', '-Wno-invalid-constexpr', '-std=gnu++11']);
+  const commands = JSON.parse(/** @type {string} */ (files.get('project/.wicro/build/compile_commands.json')));
+  assert.ok(commands[0].arguments.includes('-Wno-invalid-constexpr'));
+});

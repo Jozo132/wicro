@@ -30,6 +30,27 @@ const findRegistryRoot = async () => {
   throw new Error('Wicro package registry is unavailable');
 };
 
+/** @param {string} packageName */
+const findRegistryManifest = async (packageName) => {
+  const { readdir, readFile } = await import('node:fs/promises');
+  const registryRoot = await findRegistryRoot();
+  const exactPath = resolve(registryRoot, packageName, 'package.json');
+  try {
+    return { directory: resolve(registryRoot, packageName), manifest: JSON.parse(await readFile(exactPath, 'utf8')) };
+  } catch {
+    for (const name of await readdir(registryRoot)) {
+      const directory = resolve(registryRoot, name);
+      try {
+        const manifest = JSON.parse(await readFile(resolve(directory, 'package.json'), 'utf8'));
+        if (manifest.name === packageName) return { directory, manifest };
+      } catch {
+        // Continue searching for a matching manifest name.
+      }
+    }
+  }
+  throw new Error(`Package manifest not found: ${packageName}`);
+};
+
 /** @returns {Promise<{manifest:string,manifestValue:any}>} */
 const findToolchainManifest = async () => {
   const { readFile } = await import('node:fs/promises');
@@ -102,7 +123,6 @@ export const main = async (args = []) => {
     try {
       await mkdir(resolve(target, 'src'), { recursive: true });
       const manifest = {
-        $schema: 'https://wicro.dev/schemas/project.schema.json',
         name: name ?? 'wicro-project',
         board: 'arduino-uno-original',
         framework: 'arduino',
@@ -178,7 +198,6 @@ export const main = async (args = []) => {
       }
 
       const manifest = {
-        $schema: 'https://wicro.dev/schemas/project.schema.json',
         name: destinationName,
         board: 'arduino-uno-original',
         framework,
@@ -238,11 +257,11 @@ export const main = async (args = []) => {
         const projectManifest = JSON.parse(manifestValue);
         const boardName = board ?? projectManifest.board;
         if (!boardName) throw new Error('No board target was specified');
-        const boardManifest = JSON.parse(await readFile(resolve(registryRoot, boardName, 'package.json'), 'utf8'));
+        const boardManifest = (await findRegistryManifest(boardName)).manifest;
         for (const [frameworkName, range] of Object.entries(/** @type {Record<string,string>} */ (boardManifest.dependencies ?? {}))) {
           if (!frameworkName.startsWith('arduino-') && frameworkName !== 'esp-idf' && frameworkName !== 'pico-sdk' && frameworkName !== 'cmsis') continue;
           try {
-            const frameworkManifest = JSON.parse(await readFile(resolve(registryRoot, frameworkName, 'package.json'), 'utf8'));
+            const frameworkManifest = (await findRegistryManifest(frameworkName)).manifest;
             if (frameworkManifest.metadata?.distribution?.url) {
               /** @type {Record<string,string>} */
               const localSources = {};
@@ -285,8 +304,8 @@ export const main = async (args = []) => {
           const normalized = path.replace(/\\/g, '/');
           const sdkMatch = normalized.match(/(?:^|\/)registry\/([^/]+)(?:\/(.*))?$/);
           if (sdkMatch?.[1]) {
-            const registryRoot = await findRegistryRoot();
-            const registryPath = resolve(registryRoot, sdkMatch[1], sdkMatch[2] ?? 'package.json');
+            const registryPackage = await findRegistryManifest(sdkMatch[1]);
+            const registryPath = resolve(registryPackage.directory, sdkMatch[2] ?? 'package.json');
             if (options?.encoding === 'utf8') return readFile(registryPath, 'utf8');
             return readFile(registryPath);
           }
@@ -298,8 +317,8 @@ export const main = async (args = []) => {
           const normalized = path.replace(/\\/g, '/');
           const registryMatch = normalized.match(/(?:^|\/)registry\/([^/]+)(?:\/([^/].*))?$/);
           if (registryMatch?.[1]) {
-            const registryRoot = await findRegistryRoot();
-            const absolute = resolve(registryRoot, registryMatch[1], registryMatch[2] ?? '');
+            const registryPackage = await findRegistryManifest(registryMatch[1]);
+            const absolute = resolve(registryPackage.directory, registryMatch[2] ?? '');
             return readDirectory(absolute);
           }
           return readDirectory(resolve(path));
