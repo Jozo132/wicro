@@ -192,18 +192,27 @@ export class NodeEspSerialTransport {
 
   async resetForDownload() {
     if (!this.port?.isOpen) await this.connect(this.baudRate);
-    await this.setRTS(false);
-    await this.setDTR(false);
+    await this.setSignals(false, false);
     await sleep(100);
     await this.setDTR(true);
     await this.setRTS(false);
     await sleep(100);
     await this.setRTS(true);
     await this.setDTR(false);
+    await this.setRTS(true);
     await sleep(100);
     await this.setRTS(false);
     await this.setDTR(false);
     await sleep(300);
+  }
+
+  async resetIntoApplication() {
+    if (!this.port?.isOpen) await this.connect(this.baudRate);
+    await this.setSignals(false, false);
+    await sleep(100);
+    await this.setRTS(true);
+    await sleep(100);
+    await this.setRTS(false);
   }
 
   async touchUsbVcp() {

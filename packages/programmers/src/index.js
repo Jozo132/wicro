@@ -3,10 +3,27 @@ import { ESPLoader, ClassicReset, UsbJtagSerialReset, HardReset } from 'esptool-
 import { NodeEspSerialTransport } from './nodeEspSerial.js';
 
 export { NodeEspSerialTransport };
+
+/** @param {{address:number,data:Uint8Array}[]} files */
+export const validateEsp32FlashImages = (files) => {
+  const required = new Map([[0x0, 'bootloader'], [0x8000, 'partition'], [0x10000, 'application']]);
+  for (const [address, role] of required) {
+    const file = files.find((item) => item.address === address);
+    if (!file) throw new Error(`Missing ESP32 ${role} image at 0x${address.toString(16)}`);
+    if (!(file.data instanceof Uint8Array) || file.data.length === 0) throw new Error(`ESP32 ${role} image is empty`);
+  }
+  const bootloader = files.find((item) => item.address === 0x0)?.data;
+  const partition = files.find((item) => item.address === 0x8000)?.data;
+  const application = files.find((item) => item.address === 0x10000)?.data;
+  if (bootloader && bootloader[0] !== 0xe9) throw new Error('ESP32 bootloader image magic is invalid');
+  if (partition && partition[0] !== 0xaa) throw new Error('ESP32 partition table magic is invalid');
+  if (application && application[0] !== 0xe9) throw new Error('ESP32 application image magic is invalid');
+  return { ok: true, addresses: [...required.keys()], bootloaderBytes: bootloader?.length ?? 0, partitionBytes: partition?.length ?? 0, applicationBytes: application?.length ?? 0 };
+};
 export { ProgrammerProtocolRegistry, programmerProtocols } from './protocolRegistry.js';
 
 export class Esp32C3NodeProgrammer {
-  /** @param {{path:string,baudRate?:number,debugLogging?:boolean}} [options] */
+  /** @param {{path:string,baudRate?:number,debugLogging?:boolean,rediscoveryTimeoutMs?:number}} [options] */
   constructor(options) {
     this.options = options;
   }
@@ -20,6 +37,7 @@ export class Esp32C3NodeProgrammer {
 
   /** @param {{address:number,data:Uint8Array}[]} files @param {{baudRate?:number,path?:string}} [options] */
   async writeFlash(files, options = {}) {
+    validateEsp32FlashImages(files);
     const port = options.path ? { path: options.path } : await this.findPort();
     const transport = new NodeEspSerialTransport({
       path: port.path,
@@ -28,12 +46,17 @@ export class Esp32C3NodeProgrammer {
       pid: 0x1001
     });
     transport.tracing = this.options?.debugLogging ?? false;
-    await transport.touchUsbVcp();
+    const stage = (/** @type {string} */ message) => {
+      if (this.options?.debugLogging) console.error(`[ESP32-C3] ${message}`);
+    };
+
+    stage(`Opening USB JTAG/serial port ${port.path}`);
+    await transport.connect(options.baudRate ?? 115200);
+    await transport.readLoop();
+    stage('Applying one bounded USB-JTAG DTR/RTS download reset');
     await transport.resetForDownload();
-    await transport.disconnect();
-    await transport.touchUsbVcp();
-    await transport.resetForDownload();
-    await transport.disconnect();
+    await transport.flushOutput();
+    await transport.drainInput(100, 400);
 
     const terminal = {
       clean: () => {},
@@ -56,9 +79,10 @@ export class Esp32C3NodeProgrammer {
 
     try {
       try {
-        await loader.detectChip('default_reset', 7);
+        await loader.detectChip('usb_reset', 1);
       } catch (error) {
-        throw new Error(`ESP32-C3 native USB VCP did not enter ROM download mode. Use BOOT/RESET for the first flash or use a USB-UART adapter: ${error instanceof Error ? error.message : String(error)}`);
+        await transport.resetIntoApplication();
+        throw new Error(`ESP32-C3 native USB JTAG/serial did not enter ROM download mode after one bounded reset. Hold BOOT, press and release RESET, then release BOOT, or use a USB-UART adapter. Automatic reset was stopped; normal application reset was requested. ${error instanceof Error ? error.message : String(error)}`);
       }
       await loader.writeFlash({
         fileArray: files,
@@ -107,6 +131,17 @@ export class Esp32C3NodeProgrammer {
     };
   }
 }
+
+/** @param {number} timeoutMs */
+const waitForEspPort = async (timeoutMs) => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const ports = await SerialPort.list();
+    if (ports.some((item) => item.vendorId?.toLowerCase() === '303a' && item.productId?.toLowerCase() === '1001')) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error('ESP32-C3 USB JTAG/serial device disappeared and was not rediscovered');
+};
 
 /** @param {{path:string,vendorId?:string,productId?:string}[]} ports */
 export const findEsp32C3Ports = (ports) => ports.filter((port) =>

@@ -5,15 +5,16 @@ import { NodeSerialHost } from '../../hardware/src/index.js';
 import { WicroLanguageService } from '../../language-server/src/index.js';
 
 export class VSCodeHostAdapter {
-  /** @param {{workspaceRoot?:string,llvmPath?:string}} [options] */
+  /** @param {{workspaceRoot?:string,llvmPath?:string,toolchain?:LlvmWasmToolchain,resolveToolchain?:()=>Promise<{llvmPath:string,linkerPath?:string}>}} [options] */
   constructor(options = {}) {
     this.workspaceRoot = resolve(options.workspaceRoot ?? process.cwd());
-    this.toolchain = new LlvmWasmToolchain({
-      llvmPath: options.llvmPath ?? resolve(this.workspaceRoot, 'toolchain/llvm-wasm/cache/llvm.wasm')
-    });
+    this.resolveToolchain = options.resolveToolchain;
+    this.toolchain = options.toolchain ?? (options.llvmPath
+      ? new LlvmWasmToolchain({ llvmPath: options.llvmPath })
+      : undefined);
     this.languageService = new WicroLanguageService({
       host: 'vscode',
-      toolchain: this.toolchain
+      toolchain: this.toolchain ?? /** @type {any} */ ({})
     });
   }
 
@@ -46,18 +47,30 @@ export class VSCodeHostAdapter {
     return boards;
   }
 
+  async ensureToolchain() {
+    if (this.toolchain) return this.toolchain;
+    if (!this.resolveToolchain) throw new Error('LLVM WASM toolchain asset is not installed');
+    const resolved = await this.resolveToolchain();
+    this.toolchain = new LlvmWasmToolchain({ llvmPath: resolved.llvmPath, linkerPath: resolved.linkerPath });
+    this.languageService = new WicroLanguageService({ host: 'vscode', toolchain: this.toolchain });
+    return this.toolchain;
+  }
+
   /** @param {string} source @param {string} target @param {{march?:string,mabi?:string,mcpu?:string,mcu?:string}} [targetOptions] */
   async compileSource(source, target = 'riscv32', targetOptions) {
-    return this.toolchain.compileC(source, target, targetOptions);
+    const toolchain = await this.ensureToolchain();
+    return toolchain.compileC(source, target, targetOptions);
   }
 
   /** @param {{source:string,startupSource:string,linkerScript:string,target:string,targetOptions?:{mcpu?:string,mcu?:string,march?:string,mabi?:string}}} options */
   async compileBareMetal(options) {
-    return this.toolchain.compileAndLinkBareMetal(options);
+    const toolchain = await this.ensureToolchain();
+    return toolchain.compileAndLinkBareMetal(options);
   }
 
   /** @param {{uri:string,languageId:string,text:string,version:number}} document */
   openDocument(document) {
+    if (!this.languageService) throw new Error('LLVM WASM language tooling is not installed');
     this.languageService.openDocument(document);
   }
 

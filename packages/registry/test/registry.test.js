@@ -5,8 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { zipSync } from 'fflate';
 import { createManifestValidator, PackageRegistry, PlatformIoRegistry } from '../src/index.js';
-import { SdkLifecycleManager } from '../src/sdk.js';
+import { SdkLifecycleManager, sha256Bytes } from '../src/sdk.js';
 import { NodeSdkStorage } from '../src/node-cache.js';
+import { CompilerAssetManager } from '../src/compiler-assets.js';
+import { writeFile, rm as remove } from 'node:fs/promises';
 
 /** @type {import('../src/index.js').WicroPackageManifest} */
 const validManifest = {
@@ -69,10 +71,11 @@ test('SDK lifecycle downloads once, persists locks and rejects corruption', asyn
     const storage = new NodeSdkStorage({ root });
     let downloads = 0;
     const archive = zipSync({ 'Vendor/Core/Arduino.h': new TextEncoder().encode('#pragma once\n') });
+    const archiveSha256 = await sha256Bytes(archive);
     /** @type {import('../src/index.js').WicroPackageManifest} */
     const manifest = {
       name: 'vendor-core', version: '1.0.0', kind: 'framework', description: 'Vendor SDK', license: 'MIT',
-      metadata: { distribution: { url: 'https://example.invalid/vendor.zip', archiveType: 'zip', sha256: null } }
+      metadata: { distribution: { url: 'https://example.invalid/vendor.zip', archiveType: 'zip', sha256: archiveSha256 } }
     };
 
     const manager = new SdkLifecycleManager({
@@ -108,6 +111,59 @@ test('SDK lifecycle downloads once, persists locks and rejects corruption', asyn
     await assert.rejects(() => recovered.ensure(manifest), /network|download|corruption/i);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('compiler assets persist, verify and reuse across cache hits', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wicro-compiler-cache-'));
+  const clang = new Uint8Array([0, 97, 115, 109, 1, 2, 3, 4]);
+  const clangPath = join(root, 'clang.wasm.fixture');
+  await writeFile(clangPath, clang);
+  const sha = await sha256Bytes(clang);
+
+  try {
+    const storage = new NodeSdkStorage({ root: join(root, 'cache') });
+    let downloads = 0;
+    const manager = new CompilerAssetManager({
+      storage,
+      fetch: async () => {
+        downloads++;
+        return /** @type {any} */ ({ ok: true, status: 200, arrayBuffer: async () => clang.buffer.slice(clang.byteOffset, clang.byteOffset + clang.byteLength), headers: new Headers({ 'content-length': String(clang.byteLength) }) });
+      }
+    });
+    const manifest = {
+      name: 'llvm-wasm', version: 'fixture-1',
+      artifacts: {
+        clang: { url: 'https://example.invalid/llvm.wasm', mirrors: [], compression: null, sha256: sha, uncompressedSha256: sha, filename: 'llvm.wasm' }
+      }
+    };
+
+    const [first, second] = await Promise.all([manager.ensure(manifest), manager.ensure(manifest)]);
+    assert.equal(downloads, 1);
+    assert.equal(first.cache, 'downloaded');
+    assert.equal(second.cache, 'downloaded');
+
+    const hit = await new CompilerAssetManager({ storage, fetch: async () => { throw new Error('network must not be used'); } }).ensure(manifest);
+    assert.equal(hit.cache, 'cache-hit');
+  } finally {
+    await remove(root, { recursive: true, force: true });
+  }
+});
+
+test('compiler assets reject tampered local files', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wicro-compiler-tamper-'));
+  const fixture = join(root, 'llvm.wasm');
+  await writeFile(fixture, new Uint8Array([1, 2, 3, 4]));
+
+  try {
+    const storage = new NodeSdkStorage({ root: join(root, 'cache') });
+    const manager = new CompilerAssetManager({ storage });
+    await assert.rejects(() => manager.ensure({
+      name: 'llvm-wasm', version: 'tamper-1',
+      artifacts: { clang: { url: null, mirrors: [], compression: null, sha256: '0'.repeat(64), uncompressedSha256: '0'.repeat(64), filename: 'llvm.wasm' } }
+    }, { localSources: { clang: `file://${fixture}` } }), /SHA-256 mismatch|could not be installed/);
+  } finally {
+    await remove(root, { recursive: true, force: true });
   }
 });
 

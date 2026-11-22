@@ -21,6 +21,8 @@ Status values:
 | VS Code host adapter | Implemented | `@wicro/vscode` provides board listing, compile, bare-metal link and device command surfaces |
 | WASM runtime | Verified | One shared LLVM/LD WASM package executes ARM, AVR, RISC-V 32/64 and Xtensa targets through Node WASI and links STM32 ELF/BIN images |
 | ESP32-C3 ESP-IDF package | Native reference verified | ESP-IDF v6.1.1 native reference blink serial heartbeat observed on a physical C3 SuperMini; Arduino/WASM build and flash are unverified |
+| Arduino-ESP32 external distribution | Implemented/validated archive | Pinned commit archive installs, verifies and reuses cache content; ESP32-C3 variant and `Arduino.h` are present; complete firmware linking remains unverified |
+| Compiler CDN distribution | Implemented infrastructure/blocked deployment | SHA-verified cache, mirror fallback and bounded retries are implemented; compiler release URLs/checksums require explicit deployment |
 | Original ESP32 native example | Source implemented | ESP-IDF project is present; native build requires `xtensa-esp32-elf-gcc` on PATH |
 | ESP8266 native example | Source implemented | Arduino `.ino` example is present; native build requires `arduino-cli` and the ESP8266 core |
 | STM32 bare-metal fixtures | Verified | STM32F401RC native Cortex-M4 ELF/BIN, STM32F103CB native Cortex-M3 ELF/BIN and STM32H723VG native Cortex-M7 ELF/BIN fixtures build with ARM GCC |

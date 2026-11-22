@@ -14,7 +14,7 @@
     "architectures": ["riscv32", "xtensa"],
     "source": "external",
     "status": "download-on-demand",
-    "distribution": { "url": "https://github.com/espressif/arduino-esp32/archive/bc8ab15634eb0402d39e1e259a5a4a29be3e6e1c.zip", "archiveType": "zip", "sha256": null },
+    "distribution": { "url": "https://codeload.github.com/espressif/arduino-esp32/zip/bc8ab15634eb0402d39e1e259a5a4a29be3e6e1c", "mirrors": ["https://github.com/espressif/arduino-esp32/archive/bc8ab15634eb0402d39e1e259a5a4a29be3e6e1c.zip"], "archiveType": "zip", "sha256": "52bd9b2feefdcc1e9c929f7b57f87faec687e7fbfeee5199f750d3f34f9a33cd" },
     "firmwareLinking": "pending-sdk-distribution"
   }
 }

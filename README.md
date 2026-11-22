@@ -106,11 +106,12 @@ For ESP-IDF firmware work, the compiler is staged under `toolchain/llvm-wasm/cac
 
 Remaining integration work:
 
-- ESP-IDF/Pico SDK/CMSIS/Arduino SDK distributions must provide their complete headers and startup artifacts before full SDK firmware linking can be claimed
+- ESP-IDF/Pico SDK/CMSIS/Arduino SDK distributions must provide their complete headers, submodules, startup artifacts and core archives before full SDK firmware linking can be claimed
+- LLVM WASM release URLs and genuine CDN archive metadata remain deployment-blocked; local assets are used only as explicit local sources and test fixtures
 - ESP32-C3 native USB VCP ROM entry is implemented but is not yet successful on the connected unit; physical flash/execution remains unverified
 - Header dependency tracking and incremental relinking need project-wide cache integration
 - ST-LINK, USB DFU/DfuSe, STM32 UART, AVR STK500 and PICOBOOT protocol implementations are public extension surfaces but are not yet hardware-verified
-- Physical firmware verification is target-specific and must be reported separately from source and build success
+- Physical firmware verification is target-specific and must be reported separately from source and build success; no ESP32-C3 USB device is visible in every execution environment
 
 See [docs/compatibility.md](docs/compatibility.md) for the current implemented, planned and hardware-verified matrix.
 

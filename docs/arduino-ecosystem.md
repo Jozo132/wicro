@@ -8,7 +8,9 @@ Wicro uses Arduino as the default framework for new projects. The implementation
 - Multiple sketch tabs and generated C++ source mapping.
 - C, C++ and assembly input through the existing LLVM WASI runtime.
 - Bare-metal C++ ELF/BIN linking with an explicit C-linkage `main` entry for startup-based targets.
-- Incremental object cache keys for generated Arduino C++.
+- Incremental object cache keys for generated Arduino C++ and SDK/compiler identity.
+- Every project C, C++ and assembly source is compiled for object builds.
+- `compile_commands.json` is generated for project source entries.
 - `boards.txt`, `platform.txt`, `library.properties`, `library.json` and `platformio.ini` parsing.
 - Library discovery and missing-header reporting.
 - Directory and ZIP project import.
@@ -33,7 +35,7 @@ Framework distributions are declared in immutable package manifests with pinned 
 | STM32 | https://github.com/stm32duino/Arduino_Core_STM32 | `8c9c3758cf4a732fef6cdc07c5da337e381312e5` |
 | Pico | https://github.com/earlephilhower/arduino-pico | `83f7b6e5ab9988164f4a291ee6d5c3bcd0e03cdf` |
 
-These heads are recorded for reproducibility. Complete SDK distributions and upstream license/source obligations must be shipped separately before full core linking is claimed.
+These heads are recorded for reproducibility. The pinned Arduino-ESP32 Codeload archive has a validated 84 MB ZIP and SHA-256 `52bd9b2feefdcc1e9c929f7b57f87faec687e7fbfeee5199f750d3f34f9a33cd`. It contains the ESP32 core and ESP32-C3 variant. ESP-IDF, compiler CDNs and complete precompiled Arduino core archives still require separate complete distributions before firmware linking is claimed.
 
 ## Explicitly pending
 
@@ -42,6 +44,9 @@ These heads are recorded for reproducibility. Complete SDK distributions and ups
 - Precompiled core archive linking for every preset.
 - Official Arduino board/platform index downloads into persistent offline caches.
 - C library archive ABI validation against official Arduino toolchains.
-- Physical flash and execution verification beyond the existing ESP32-C3 tests.
+- Physical flash and execution verification beyond the existing ESP32-C3 native ESP-IDF tests.
+- Compiler CDN URLs and genuine release assets for the LLVM WASM binaries.
+- ESP-IDF source distributions that include required submodules and toolchain components.
+- Complete WASM-ABI-compatible core/archive linkage for bootable Arduino firmware.
 
 No native Arduino, PlatformIO, Make or CMake command is executed by the Wicro build engine.

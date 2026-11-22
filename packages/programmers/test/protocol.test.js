@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ProgrammerProtocolRegistry, programmerProtocols } from '../src/index.js';
 import { NodeEspSerialTransport } from '../src/nodeEspSerial.js';
+import { validateEsp32FlashImages } from '../src/index.js';
 
 test('simulated programmer protocol validates and reports flash writes', async () => {
   const protocol = await programmerProtocols.create('simulated', { transport: {} });
@@ -14,6 +15,15 @@ test('simulated programmer protocol validates and reports flash writes', async (
   ));
   assert.equal(result.ok, true);
   assert.equal(result.bytes, 3);
+});
+
+test('ESP32 flash image preflight rejects incomplete images', () => {
+  assert.throws(() => validateEsp32FlashImages([{ address: 0x0, data: new Uint8Array([0xe9]) }]), /partition/);
+  assert.deepEqual(validateEsp32FlashImages([
+    { address: 0x0, data: new Uint8Array([0xe9, 1]) },
+    { address: 0x8000, data: new Uint8Array([0xaa, 0x50]) },
+    { address: 0x10000, data: new Uint8Array([0xe9, 2]) }
+  ]), { ok: true, addresses: [0, 0x8000, 0x10000], bootloaderBytes: 2, partitionBytes: 2, applicationBytes: 2 });
 });
 
 test('native USB VCP reset emits DTR and RTS boot signals', async () => {

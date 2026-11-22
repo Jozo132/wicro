@@ -43,5 +43,52 @@ test('core engine preprocesses .ino as C++ and writes generated source', async (
   const value = /** @type {{generatedCpp?:string}} */ (result.value);
   assert.equal(value.generatedCpp, 'project/.wicro/build/sketch.cpp');
   assert.ok(files.has('project/.wicro/build/sketch.cpp'));
-  assert.ok(files.has('project/.wicro/build/main.o'));
+  assert.ok(files.has('project/.wicro/build/blink.o'));
+});
+
+test('core engine compiles every C and C++ project source', async () => {
+  const multiFiles = new Map([
+    ['registry/multi/package.json', JSON.stringify({
+      name: 'multi', version: '1.0.0', kind: 'board', description: 'Multi-source board', license: 'MIT',
+      metadata: { build: { kind: 'object', target: 'riscv32', targetOptions: { march: 'rv32imc', mabi: 'ilp32' }, output: '.wicro/build' } }
+    })],
+    ['multi/wicro.json', JSON.stringify({ board: 'multi', build: { sourceDir: 'src' } })],
+    ['multi/src/main.cpp', 'int helper(void);\nint main(void) { return helper(); }\n'],
+    ['multi/src/helper.c', 'int helper(void) { return 7; }\n']
+  ]);
+  /** @type {{source:string,target:string,targetOptions:{march?:string,mabi?:string},language?:string}[]} */
+  const compiled = [];
+  const multiHost = {
+    host: /** @type {const} */ ('node'),
+    async readFile(/** @type {string} */ path) {
+      const value = multiFiles.get(path);
+      if (value === undefined) throw new Error(`File not found: ${path}`);
+      return value;
+    },
+    async readdir(/** @type {string} */ path) {
+      if (path === 'multi/src') return ['main.cpp', 'helper.c'];
+      throw new Error(`Directory not found: ${path}`);
+    },
+    async writeFile(/** @type {string} */ path, /** @type {string|Uint8Array} */ data) {
+      multiFiles.set(path, typeof data === 'string' ? data : new TextDecoder().decode(data));
+    }
+  };
+  const multiToolchain = {
+    async compileSource(/** @type {string} */ source, /** @type {string} */ target, /** @type {{march?:string,mabi?:string}} */ targetOptions, /** @type {{language?:string}} */ options) {
+      compiled.push({ source, target, targetOptions, language: options.language });
+      return { object: new Uint8Array([0x7f, 0x45, 0x4c, 0x46]), target, cache: 'miss', diagnostics: [] };
+    },
+    async targets() { return ['riscv32']; }
+  };
+
+  const engine = createWicroEngine({ host: multiHost, toolchain: /** @type {any} */ (multiToolchain) });
+  const result = await engine.execute({ command: 'build', project: 'multi' });
+  assert.equal(result.ok, true);
+  assert.deepEqual(compiled.map((item) => item.language), ['c', 'c++']);
+  assert.ok(multiFiles.has('multi/.wicro/build/main.o'));
+  assert.ok(multiFiles.has('multi/.wicro/build/helper.o'));
+
+  const commands = JSON.parse(/** @type {string} */ (multiFiles.get('multi/.wicro/build/compile_commands.json')));
+  assert.equal(commands.length, 2);
+  assert.ok(commands.every((/** @type {{file:string}} */ entry) => typeof entry.file === 'string'));
 });

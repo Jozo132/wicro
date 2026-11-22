@@ -12,6 +12,7 @@
 /** @typedef {object} SdkDistribution
  * @property {string} url
  * @property {'zip'} [archiveType]
+ * @property {string[]} [mirrors]
  * @property {string|null} [sha256]
  */
 
@@ -99,21 +100,35 @@ export class SdkLifecycleManager {
     await this.storage.remove(cacheName);
     await this.storage.mkdir(cacheName);
 
+    /** @type {string[]} */
+    const urls = [distribution.url, ...(distribution.mirrors ?? [])].filter((url) => typeof url === 'string' && url.length > 0);
     let response;
-    try {
-      response = await this.fetch(distribution.url, { headers: { accept: 'application/zip' } });
-    } catch (error) {
-      await this.storage.remove(cacheName);
-      throw new Error(`SDK download failed for ${manifest.name}: ${error instanceof Error ? error.message : String(error)}`);
+    let lastError;
+    for (const url of urls) {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, 150 * attempt));
+          response = await this.fetch(url, { headers: { accept: 'application/zip' } });
+          if (response.ok) break;
+          lastError = new Error(`SDK download failed (${response.status}) for ${manifest.name}: ${url}`);
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      if (response?.ok) break;
     }
-    if (!response.ok) {
+    if (!response?.ok) {
       await this.storage.remove(cacheName);
-      throw new Error(`SDK download failed (${response.status}) for ${manifest.name}: ${distribution.url}`);
+      throw new Error(`SDK download failed for ${manifest.name} after mirror and retry attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
     }
 
     const bytes = new Uint8Array(await response.arrayBuffer());
     const sha256 = await sha256Bytes(bytes);
-    if (typeof distribution.sha256 === 'string' && distribution.sha256.length > 0 && distribution.sha256.toLowerCase() !== sha256) {
+    if (typeof distribution.sha256 !== 'string' || distribution.sha256.length !== 64) {
+      await this.storage.remove(cacheName);
+      throw new Error(`SDK '${manifest.name}' has no trusted SHA-256 archive identity. Configure a verified immutable distribution before installation.`);
+    }
+    if (distribution.sha256.toLowerCase() !== sha256) {
       await this.storage.remove(cacheName);
       throw new Error(`SDK SHA-256 mismatch for ${manifest.name}: expected ${distribution.sha256}, got ${sha256}`);
     }

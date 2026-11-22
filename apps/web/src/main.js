@@ -2,6 +2,8 @@ import * as monaco from 'monaco-editor';
 import { WASI, OpenFile, File, PreopenDirectory, ConsoleStdout } from '@bjorn3/browser_wasi_shim';
 import { ESPLoader, Transport } from 'esptool-js';
 import { WicroLanguageService } from '../../../packages/language-server/src/index.js';
+import { BrowserSdkStorage } from '../../../packages/registry/src/browser-cache.js';
+import { CompilerAssetManager } from '../../../packages/registry/src/compiler-assets.js';
 import { preprocessIno } from '../../../packages/arduino/src/index.js';
 import './style.css';
 
@@ -100,8 +102,15 @@ const loadBrowserWasm = async () => {
   const manifestResponse = await fetch('/toolchain/manifest.json', { cache: 'no-cache' });
   if (!manifestResponse.ok) throw new Error(`Toolchain manifest failed (${manifestResponse.status})`);
   const manifest = await manifestResponse.json();
-  const compilerUrl = new URL(manifest.tools.clang.url, new URL('/toolchain/', window.location.href));
-  const response = await fetch(compilerUrl);
+  const storage = new BrowserSdkStorage();
+  const localManifest = structuredClone(manifest);
+  if (!localManifest.artifacts?.clang?.url) {
+    localManifest.artifacts ??= {};
+    localManifest.artifacts.clang.url = new URL('/toolchain/llvm.wasm', window.location.href).href;
+  }
+  const resolved = await new CompilerAssetManager({ storage }).ensure(localManifest);
+  const compilerBytes = await storage.readBytes(resolved.clang);
+  const response = { ok: true, status: 200, arrayBuffer: async () => compilerBytes.buffer.slice(compilerBytes.byteOffset, compilerBytes.byteOffset + compilerBytes.byteLength) };
   if (!response.ok) throw new Error(`Toolchain download failed (${response.status})`);
   browserWasmModule = await WebAssembly.compile(await response.arrayBuffer());
   return browserWasmModule;
@@ -348,13 +357,7 @@ compileButton?.addEventListener('click', async () => {
     const targetConfig = configs[targetName];
     if (!targetConfig) throw new Error(`Unknown board target: ${targetName}`);
 
-    const manifestResponse = await fetch('/toolchain/manifest.json', { cache: 'no-cache' });
-    if (!manifestResponse.ok) throw new Error(`Toolchain manifest failed (${manifestResponse.status})`);
-    const manifest = await manifestResponse.json();
-
-    const compilerUrl = new URL(manifest.tools.clang.url, new URL('/toolchain/', window.location.href));
-    const response = await fetch(compilerUrl);
-    if (!response.ok) throw new Error(`Toolchain download failed (${response.status})`);
+    const wasm = await loadBrowserWasm();
 
     const sketchSource = editor.getValue();
     const useArduino = targetName === 'arduino-uno'
@@ -389,7 +392,6 @@ compileButton?.addEventListener('click', async () => {
       root
     ]);
 
-    const wasm = await WebAssembly.compile(await response.arrayBuffer());
     const instance = await WebAssembly.instantiate(wasm, {
       wasi_snapshot_preview1: wasi.wasiImport
     });

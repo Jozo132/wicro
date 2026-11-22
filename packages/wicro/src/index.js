@@ -30,22 +30,22 @@ const findRegistryRoot = async () => {
   throw new Error('Wicro package registry is unavailable');
 };
 
-/** @returns {Promise<string>} */
-const findLlvmWasm = async () => {
+/** @returns {Promise<{manifest:string,manifestValue:any}>} */
+const findToolchainManifest = async () => {
   const { readFile } = await import('node:fs/promises');
   const candidates = [
-    resolve(new URL('../toolchain/llvm-wasm/cache/llvm.wasm', import.meta.url).pathname),
-    resolve(new URL('../../../toolchain/llvm-wasm/cache/llvm.wasm', import.meta.url).pathname)
+    resolve(new URL('../toolchain/llvm-wasm/manifest.json', import.meta.url).pathname),
+    resolve(new URL('../../../toolchain/llvm-wasm/manifest.json', import.meta.url).pathname)
   ];
   for (const candidate of candidates) {
     try {
-      await readFile(candidate);
-      return candidate;
+      const manifestValue = JSON.parse(await readFile(candidate, 'utf8'));
+      return { manifest: candidate, manifestValue };
     } catch {
       // Try the repository or prepared-package location.
     }
   }
-  throw new Error('Wicro LLVM WASM toolchain is unavailable');
+  throw new Error('Wicro LLVM WASM compiler manifest is unavailable');
 };
 
 /** @param {string} source */
@@ -291,8 +291,45 @@ export const main = async (args = []) => {
           await writeFile(absolute, data);
         }
       };
-      const llvmPath = await findLlvmWasm();
-      const engine = createWicroEngine({ host, llvmPath });
+      let /** @type {string|undefined} */ llvmPath;
+      let /** @type {string|undefined} */ linkerPath;
+      try {
+        const { manifestValue } = await findToolchainManifest();
+        let compilerModule;
+        try {
+          compilerModule = await import('../../registry/src/compiler-assets.js');
+        } catch {
+          compilerModule = await import('../vendor/registry/src/compiler-assets.js');
+        }
+        const { CompilerAssetManager } = compilerModule;
+        const compilerStorage = new NodeSdkStorage({ root: cacheDirectory });
+        const compilerManager = new CompilerAssetManager({ storage: compilerStorage });
+        /** @type {Record<string,string>} */
+        const localSources = {};
+        for (const [name, artifact] of Object.entries(/** @type {Record<string,{filename:string}>} */ (manifestValue.artifacts ?? {}))) {
+          const candidates = [
+            resolve(new URL(`../../../toolchain/llvm-wasm/cache/${artifact.filename}`, import.meta.url).pathname),
+            resolve(new URL(`../toolchain/llvm-wasm/cache/${artifact.filename}`, import.meta.url).pathname)
+          ];
+          for (const candidate of candidates) {
+            try {
+              await readFile(candidate);
+              localSources[name] = new URL(`file://${candidate}`).href;
+              break;
+            } catch {
+              // Candidate is not available in this installation.
+            }
+          }
+        }
+        const result = await compilerManager.ensure(manifestValue, { localSources });
+        llvmPath = compilerStorage.absolute(result.clang);
+        if (result.ld) linkerPath = compilerStorage.absolute(result.ld);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        emit({ ok: false, command, error: `Compiler asset resolution failed: ${message}` }, json, `Build failed: Compiler asset resolution failed: ${message}`);
+        return 1;
+      }
+      const engine = createWicroEngine({ host, llvmPath, resolveToolchain: async () => ({ llvmPath, linkerPath }) });
       const result = await engine.execute({ command: 'build', project: target, board });
       if (!result.ok) {
         const message = result.diagnostics?.map((/** @type {{message:string}} */ diagnostic) => diagnostic.message).join('; ') ?? 'Build failed';

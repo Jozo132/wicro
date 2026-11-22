@@ -35,6 +35,7 @@ import { preprocessIno } from '../../arduino/src/index.js';
  * @property {import('../../registry/src/index.js').PackageRegistry} [registry]
  * @property {LlvmWasmToolchain} [toolchain]
  * @property {string} [llvmPath]
+ * @property {() => Promise<{llvmPath:string,linkerPath?:string}>} [resolveToolchain]
  */
 
 /**
@@ -44,9 +45,21 @@ import { preprocessIno } from '../../arduino/src/index.js';
 export const createWicroEngine = (options) => {
   if (!options.host) throw new Error('A host adapter is required');
 
-  const toolchain = options.toolchain ?? new LlvmWasmToolchain({
-    llvmPath: options.llvmPath ?? 'toolchain/llvm-wasm/cache/llvm.wasm'
-  });
+  let toolchain = options.toolchain;
+  /** @returns {Promise<LlvmWasmToolchain>} */
+  const ensureToolchain = async () => {
+    if (toolchain) return toolchain;
+    if (options.resolveToolchain) {
+      const resolved = await options.resolveToolchain();
+      toolchain = new LlvmWasmToolchain({ llvmPath: resolved.llvmPath, linkerPath: resolved.linkerPath });
+      return toolchain;
+    }
+    if (options.llvmPath) {
+      toolchain = new LlvmWasmToolchain({ llvmPath: options.llvmPath });
+      return toolchain;
+    }
+    throw new Error('LLVM WASM toolchain asset is not installed. Configure an external compiler distribution or local source and retry.');
+  };
 
   return Object.freeze({
     host: options.host.host,
@@ -57,6 +70,8 @@ export const createWicroEngine = (options) => {
      * @returns {Promise<WicroResult>}
      */
     async execute(command) {
+      const resolvedToolchain = await ensureToolchain();
+      toolchain = resolvedToolchain;
       if (typeof command === 'string') {
         if (command === 'targets') {
           try {
@@ -198,7 +213,7 @@ const loadSdkFiles = async (host, boardManifest) => {
 
 /**
  * @typedef {object} BuildManifest
- * @property {'object'|'bare-metal'} kind
+ * @property {'object'|'bare-metal'|'firmware'} kind
  * @property {string} target
  * @property {{march?:string,mabi?:string,mcpu?:string,mcu?:string}} [targetOptions]
  * @property {string} [source]
@@ -212,7 +227,7 @@ const asBuildManifest = (value) => {
   if (!value || typeof value !== 'object') return undefined;
   const build = /** @type {Record<string, unknown>} */ (value);
   if (typeof build.target !== 'string') return undefined;
-  if (build.kind !== 'object' && build.kind !== 'bare-metal') return undefined;
+  if (build.kind !== 'object' && build.kind !== 'bare-metal' && build.kind !== 'firmware') return undefined;
 
   const targetOptionsValue = build.targetOptions;
   const targetOptions = targetOptionsValue && typeof targetOptionsValue === 'object'
@@ -291,6 +306,9 @@ const buildProject = async (host, toolchain, project, boardName) => {
   const boardManifest = await loadBoardManifest(host, board);
   const build = asBuildManifest(boardManifest.metadata?.build);
   if (!build) throw new Error(`Board '${board}' has no compilation recipe`);
+  if (build.kind === 'firmware') {
+    throw new Error(`Complete firmware linking for board '${board}' is pending verified Arduino-ESP32 SDK and linker assets`);
+  }
 
   const sdk = await loadSdkFiles(host, boardManifest);
   const boardMetadata = /** @type {{clockHz?:number}} */ (boardManifest.metadata ?? {});
@@ -352,6 +370,8 @@ const buildProject = async (host, toolchain, project, boardName) => {
   let result;
   let generatedCpp;
   let sourceMap;
+  /** @type {{path:string,object:Uint8Array,cache:string,diagnostics:string[]}[]} */
+  const compiledObjects = [];
   if (inoPaths.length > 0) {
     const tabs = Object.fromEntries(inoPaths.map((path) => [path, sourceFiles[path] ?? '']));
     const sketch = preprocessIno(tabs);
@@ -384,6 +404,20 @@ const buildProject = async (host, toolchain, project, boardName) => {
         defines,
         cacheDirectory: `${project}/.wicro/cache`
       });
+      compiledObjects.push({ path: inoPaths[0] ?? 'sketch.cpp', object: result.object, cache: result.cache, diagnostics: result.diagnostics });
+
+      for (const sourcePath of sourcePaths.filter((path) => !/\.(ino|pde)$/i.test(path))) {
+        const source = sourceFiles[sourcePath];
+        const language = /\.(cpp|cxx|cc)$/i.test(sourcePath) ? 'c++' : /\.(s|S|asm)$/i.test(sourcePath) ? 'assembly' : 'c';
+        const compiled = await toolchain.compileSource(source, build.target, build.targetOptions, {
+          language,
+          includeDirs: sdk.includeDirs,
+          files: sdk.files,
+          defines,
+          cacheDirectory: `${project}/.wicro/cache`
+        });
+        compiledObjects.push({ path: sourcePath, object: compiled.object, cache: compiled.cache, diagnostics: compiled.diagnostics });
+      }
     }
   } else if (build.kind === 'bare-metal') {
     if (!build.startupSource || !build.linkerScript) {
@@ -405,30 +439,54 @@ const buildProject = async (host, toolchain, project, boardName) => {
       language: /\.(cpp|cxx|cc)$/i.test(primarySource ?? '') ? 'c++' : 'c'
     });
   } else {
-    const cppPaths = sourcePaths.filter((path) => /\.(cpp|cxx|cc)$/i.test(path));
-    const cPaths = sourcePaths.filter((path) => /\.c$/i.test(path));
-    const primaryPath = cppPaths[0] ?? cPaths[0];
-    if (!primaryPath) throw new Error(`No C or C++ source found for project '${project}'`);
-    const primarySource = sourceFiles[primaryPath];
-    result = /\.(cpp|cxx|cc)$/i.test(primaryPath)
-      ? await toolchain.compileSource(primarySource, build.target, build.targetOptions, {
-          language: 'c++',
-          includeDirs: sdk.includeDirs,
-          files: sdk.files,
-          defines,
-          cacheDirectory: `${project}/.wicro/cache`
-        })
-      : await toolchain.compileSource(primarySource, build.target, build.targetOptions, {
-          language: 'c',
-          includeDirs: sdk.includeDirs,
-          files: sdk.files,
-          defines,
-          cacheDirectory: `${project}/.wicro/cache`
-        });
+    const compilablePaths = sourcePaths.filter((path) => /\.(c|cpp|cxx|cc|s|S|asm)$/i.test(path));
+    if (compilablePaths.length === 0) throw new Error(`No C, C++, or assembly sources found for project '${project}'`);
+
+    for (const sourcePath of compilablePaths) {
+      const language = /\.(cpp|cxx|cc)$/i.test(sourcePath) ? 'c++' : /\.(s|S|asm)$/i.test(sourcePath) ? 'assembly' : 'c';
+      const compiled = await toolchain.compileSource(sourceFiles[sourcePath], build.target, build.targetOptions, {
+        language,
+        includeDirs: sdk.includeDirs,
+        files: sdk.files,
+        defines,
+        cacheDirectory: `${project}/.wicro/cache`
+      });
+      compiledObjects.push({ path: sourcePath, object: compiled.object, cache: compiled.cache, diagnostics: compiled.diagnostics });
+    }
+    result = {
+      object: compiledObjects[0]?.object ?? new Uint8Array(0),
+      target: build.target,
+      cache: compiledObjects[0]?.cache ?? 'miss',
+      diagnostics: [...new Set(compiledObjects.flatMap((item) => item.diagnostics))]
+    };
   }
 
   const output = build.output ?? '.wicro/build';
   if (generatedCpp) await host.writeFile(`${project}/${output}/sketch.cpp`, generatedCpp);
+  for (const compiled of compiledObjects) {
+    const objectName = compiled.path.split('/').pop()?.replace(/\.(ino|pde|c|cc|cpp|cxx|s|S|asm)$/i, '') ?? 'main';
+    await host.writeFile(`${project}/${output}/${objectName}.o`, compiled.object);
+  }
+  if (compiledObjects.length > 0) {
+    await host.writeFile(`${project}/${output}/main.o`, compiledObjects[0].object);
+  }
+
+  const compileCommands = sourcePaths
+    .filter((path) => /\.(ino|pde|c|cc|cpp|cxx|s|S|asm)$/i.test(path))
+    .map((path) => ({
+      directory: `${project}/${output}`,
+      file: `${project}/${path}`,
+      arguments: [
+        'clang++',
+        `--target=${build.target}`,
+        ...sdk.includeDirs.flatMap((directoryName) => ['-I', directoryName]),
+        ...defines.flatMap((define) => ['-D', define]),
+        '-c',
+        `${project}/${path}`
+      ]
+    }));
+  await host.writeFile(`${project}/${output}/compile_commands.json`, JSON.stringify(compileCommands, null, 2));
+
   if ('elf' in result && 'bin' in result) {
     await host.writeFile(`${project}/${output}/firmware.elf`, result.elf);
     await host.writeFile(`${project}/${output}/firmware.bin`, result.bin);
@@ -447,6 +505,8 @@ const buildProject = async (host, toolchain, project, boardName) => {
     diagnostics: result.diagnostics,
     generatedCpp: generatedCpp ? `${project}/${output}/sketch.cpp` : undefined,
     sourceMap,
-    sources: sourcePaths
+    sources: sourcePaths,
+    compileCommands: `${project}/${output}/compile_commands.json`,
+    objects: compiledObjects.map((item) => ({ path: item.path, cache: item.cache }))
   };
 };

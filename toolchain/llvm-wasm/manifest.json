@@ -11,6 +11,24 @@
     "llvm-project-commit": "50f388758bdf0b0d99018a6f2b1d3402bdb51002",
     "wasi-sdk": "34.0"
   },
+  "artifacts": {
+    "clang": {
+      "url": null,
+      "mirrors": [],
+      "compression": null,
+      "sha256": null,
+      "uncompressedSha256": "32a1fb128050002a4e2c8797c4730fbd08bdb6c6991c204645d92aec85b212d4",
+      "filename": "llvm.wasm"
+    },
+    "ld": {
+      "url": null,
+      "mirrors": [],
+      "compression": null,
+      "sha256": null,
+      "uncompressedSha256": "cb8d0a223ca28c5eefc134399d7a54313b95ab5c7f1cbf84edccb23080f58c32",
+      "filename": "ld.wasm"
+    }
+  },
   "tools": {
     "clang": { "url": "llvm.wasm", "argv0": "clang" },
     "ld": { "url": "ld.wasm", "argv0": "ld" }

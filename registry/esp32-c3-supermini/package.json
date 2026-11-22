@@ -15,7 +15,7 @@
     "architecture": "riscv32",
     "framework": "arduino",
     "build": {
-      "kind": "object",
+      "kind": "firmware",
       "target": "riscv32",
       "targetOptions": { "march": "rv32imc", "mabi": "ilp32" },
       "source": "main/main.c",
