@@ -47,6 +47,6 @@ These heads are recorded for reproducibility. The pinned Arduino-ESP32 Codeload 
 - Physical flash and execution verification beyond the existing ESP32-C3 native ESP-IDF tests.
 - Compiler CDN URLs and genuine release assets for the LLVM WASM binaries.
 - ESP-IDF source distributions that include required submodules and toolchain components.
-- Complete WASM-ABI-compatible core/archive linkage for bootable Arduino firmware.
+- Complete WASM-ABI-compatible core/archive linkage for bootable Arduino firmware. Native PlatformIO reference builds have been verified, but WASM compilation of the real Arduino sketch is blocked by staged sysroot coverage and WASI memory limits with large archive inputs.
 
 No native Arduino, PlatformIO, Make or CMake command is executed by the Wicro build engine.

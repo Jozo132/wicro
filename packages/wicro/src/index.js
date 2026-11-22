@@ -280,6 +280,7 @@ export const main = async (args = []) => {
       const host = {
         host: 'node',
         cacheDirectory,
+        sdkCacheDirectory: resolve(process.cwd(), 'registry-cache'),
         readFile: async (/** @type {string} */ path, /** @type {{encoding?:'utf8'|'binary'}|undefined} */ options) => {
           const normalized = path.replace(/\\/g, '/');
           const sdkMatch = normalized.match(/(?:^|\/)registry\/([^/]+)(?:\/(.*))?$/);

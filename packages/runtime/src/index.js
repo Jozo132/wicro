@@ -424,6 +424,66 @@ export class LlvmWasmToolchain {
     }
   }
 
+  /**
+   * Link explicit object/archive inputs with LLD entirely through the WASM toolchain.
+   * @param {{objects:Record<string,Uint8Array>|Uint8Array[],archives?:Record<string,Uint8Array>,linkerScripts?:Record<string,string|string|Uint8Array>,libraryPaths?:string[],libraries?:string[],undefinedSymbols?:string[],target:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},entry?:string}} options
+   */
+  async linkEsp32Elf(options) {
+    const directory = await mkdtemp(join(tmpdir(), 'wicro-esp32-link-'));
+    try {
+      /** @type {[string,Uint8Array][]} */
+      const objectEntries = Array.isArray(options.objects)
+        ? options.objects.map((data, index) => [`object-${index}.o`, data])
+        : Object.entries(options.objects).map(([name, data]) => [name, /** @type {Uint8Array} */ (data)]);
+      for (const [name, data] of objectEntries) {
+        if (name.includes('..') || name.startsWith('/')) throw new Error(`Unsafe object path: ${name}`);
+        await mkdir(join(directory, name).slice(0, join(directory, name).lastIndexOf('/')), { recursive: true });
+        await writeFile(join(directory, name), data);
+      }
+
+      for (const [name, data] of Object.entries(options.archives ?? {})) {
+        if (name.includes('..') || name.startsWith('/')) throw new Error(`Unsafe archive path: ${name}`);
+        await mkdir(join(directory, name).slice(0, join(directory, name).lastIndexOf('/')), { recursive: true });
+        await writeFile(join(directory, name), data);
+      }
+
+      /** @type {string[]} */
+      const linkerArgs = [];
+      for (const [name, script] of Object.entries(options.linkerScripts ?? {})) {
+        if (name.includes('..') || name.startsWith('/')) throw new Error(`Unsafe linker script path: ${name}`);
+        await mkdir(join(directory, name).slice(0, join(directory, name).lastIndexOf('/')), { recursive: true });
+        await writeFile(join(directory, name), script);
+        linkerArgs.push('-T', `/tmp/${name}`);
+      }
+
+      const args = [
+        'ld.lld',
+        '--gc-sections',
+        '-EL',
+        ...(options.entry ? ['-e', options.entry] : []),
+        ...linkerArgs,
+        '--start-group',
+        ...objectEntries.map(([name]) => `/tmp/${name}`),
+        ...Object.keys(options.archives ?? {}).map((name) => `/tmp/${name}`),
+        '--end-group',
+        ...options.undefinedSymbols?.flatMap((symbol) => ['-u', symbol]) ?? [],
+        ...options.libraryPaths?.flatMap((libraryPath) => ['-L', `/tmp/${libraryPath}`]) ?? [],
+        ...options.libraries?.flatMap((library) => ['-l', library]) ?? [],
+        '-o',
+        '/tmp/firmware.elf'
+      ];
+
+      const linked = await this.runner.run(this.llvmPath, { args, preopens: { '/tmp': directory } });
+      if (linked.exitCode !== 0) throw new Error(linked.stderr || linked.stdout || `Linker exited with status ${linked.exitCode}`);
+
+      const elf = await readFile(join(directory, 'firmware.elf'));
+      if (elf.length < 52 || elf.subarray(0, 4).toString('hex') !== '7f454c46') throw new Error('Linked output is not an ELF32 image');
+      return { elf, bin: this.elfToBin(elf), target: options.target, diagnostics: linked.stderr ? [linked.stderr] : [] };
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  }
+
   /** @param {Uint8Array} elf @returns {Uint8Array} */
   elfToBin(elf) {
     const view = new DataView(elf.buffer, elf.byteOffset, elf.byteLength);

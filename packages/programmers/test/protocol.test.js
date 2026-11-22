@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ProgrammerProtocolRegistry, programmerProtocols } from '../src/index.js';
 import { NodeEspSerialTransport, SlipDecoder, ESP32_C3_USB_JTAG_RESET_STEPS } from '../src/nodeEspSerial.js';
-import { validateEsp32FlashImages } from '../src/index.js';
+import { validateEsp32FlashImages, validateEsp32ApplicationPartition } from '../src/index.js';
 
 test('simulated programmer protocol validates and reports flash writes', async () => {
   const protocol = await programmerProtocols.create('simulated', { transport: {} });
@@ -84,6 +84,11 @@ test('native USB VCP reset emits DTR and RTS boot signals', async () => {
   assert.ok(signals.some((signal) => signal.rts === true));
   await transport.disconnect();
   assert.equal(transport.port, undefined);
+});
+
+test('ESP32 application partition rejects oversized firmware', () => {
+  assert.deepEqual(validateEsp32ApplicationPartition(100, 0x10000, 0x180000), { ok: true, partitionOffset: 0x10000, partitionCapacity: 0x180000, applicationSize: 100 });
+  assert.throws(() => validateEsp32ApplicationPartition(0x180001, 0x10000, 0x180000), /exceeds partition capacity/);
 });
 
 test('custom programmer protocol factories are public', async () => {

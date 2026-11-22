@@ -26,6 +26,7 @@ import { preprocessIno } from '../../arduino/src/index.js';
  * @property {(path: string, options?: {encoding?: 'utf8'|'binary'}) => Promise<string|Uint8Array>} readFile
  * @property {(path: string) => Promise<string[]>} [readdir]
  * @property {string} [cacheDirectory]
+ * @property {string} [sdkCacheDirectory]
  * @property {(path: string, data: string|Uint8Array) => Promise<void>} writeFile
  */
 
@@ -162,6 +163,52 @@ const loadSdkFiles = async (host, boardManifest) => {
   const files = {};
   /** @type {string[]} */
   const includeDirs = [];
+  /** @type {Record<string,Uint8Array>} */
+  const archives = {};
+  /** @type {Record<string,string>} */
+  const linkerScripts = {};
+  const readdir = host.readdir;
+
+  /** @param {string} directory @param {string} relative */
+  const walk = async (directory, relative) => {
+    if (!readdir) return;
+    let names;
+    try {
+      names = await readdir(directory);
+    } catch {
+      return;
+    }
+    for (const name of names.sort()) {
+      const absolute = `${directory}/${name}`.replace(/\/+/g, '/');
+      const relativePath = `${relative}/${name}`.replace(/^\//, '').replace(/\/+/g, '/');
+      if (/\.a$/i.test(name)) {
+        try {
+          const binary = await host.readFile(absolute, { encoding: 'binary' });
+          if (binary instanceof Uint8Array) archives[`sdk/lib/${name}`] = binary;
+        } catch {
+          // Archive remains missing and the firmware linker fails closed.
+        }
+        continue;
+      }
+      try {
+        const value = await host.readFile(absolute, { encoding: 'utf8' });
+        if (typeof value === 'string') {
+          const segments = relativePath.split('/');
+          const normalized = segments.length > 1 ? segments.slice(1).join('/') : relativePath;
+          const virtualPath = `sdk/${normalized}`.replace(/\/+/g, '/');
+          files[virtualPath] = value;
+          if (/\.(h|hpp|inc)$/i.test(name)) {
+            includeDirs.push(virtualPath.slice(0, virtualPath.lastIndexOf('/')));
+          }
+          if (/\.(ld|lds)$/i.test(name)) {
+            linkerScripts[`sdk/${name}`] = value;
+          }
+        }
+      } catch {
+        await walk(absolute, relativePath);
+      }
+    }
+  };
 
   for (const frameworkName of Object.keys(boardManifest.dependencies ?? {})) {
     let frameworkManifest;
@@ -171,11 +218,11 @@ const loadSdkFiles = async (host, boardManifest) => {
       continue;
     }
     if (!host.cacheDirectory || !host.readdir) continue;
-    const readdir = host.readdir;
 
     const cacheRoot = `${host.cacheDirectory}/${frameworkName}-${frameworkManifest.version}`;
     /** @param {string} directory @param {string} relative */
-    const walk = async (directory, relative) => {
+    const frameworkWalk = async (directory, relative) => {
+      if (!readdir) return;
       let names;
       try {
         names = await readdir(directory);
@@ -185,6 +232,15 @@ const loadSdkFiles = async (host, boardManifest) => {
       for (const name of names.sort()) {
         const absolute = `${directory}/${name}`.replace(/\/+/g, '/');
         const relativePath = `${relative}/${name}`.replace(/^\//, '').replace(/\/+/g, '/');
+        if (/\.a$/i.test(name)) {
+          try {
+            const binary = await host.readFile(absolute, { encoding: 'binary' });
+            if (binary instanceof Uint8Array) archives[`sdk/lib/${name}`] = binary;
+          } catch {
+            // The archive will remain missing and the firmware linker will fail closed.
+          }
+          continue;
+        }
         try {
           const value = await host.readFile(absolute, { encoding: 'utf8' });
           if (typeof value === 'string') {
@@ -192,11 +248,17 @@ const loadSdkFiles = async (host, boardManifest) => {
             const normalized = segments.length > 1 ? segments.slice(1).join('/') : relativePath;
             const virtualPath = `sdk/${normalized}`.replace(/\/+/g, '/');
             files[virtualPath] = value;
+            if (/\.(h|hpp|inc)$/i.test(name)) {
+              includeDirs.push(virtualPath.slice(0, virtualPath.lastIndexOf('/')));
+            }
             if (/\/Arduino\.h$|^sdk\/Arduino\.h$/i.test(virtualPath)) {
               includeDirs.push(virtualPath.slice(0, virtualPath.lastIndexOf('/')));
             }
             if (/\/pins_arduino\.h$/i.test(virtualPath)) {
               includeDirs.push(virtualPath.slice(0, virtualPath.lastIndexOf('/')));
+            }
+            if (/\.(ld|lds)$/i.test(name)) {
+              linkerScripts[`sdk/${name}`] = value;
             }
           }
         } catch {
@@ -205,10 +267,14 @@ const loadSdkFiles = async (host, boardManifest) => {
       }
     };
 
-    await walk(cacheRoot, '');
+    await frameworkWalk(cacheRoot, '');
   }
 
-  return { files, includeDirs: [...new Set(includeDirs)] };
+  if (host.sdkCacheDirectory) {
+    await walk(host.sdkCacheDirectory, '');
+  }
+
+  return { files, includeDirs: [...new Set(includeDirs)], archives, linkerScripts };
 };
 
 /**
@@ -306,8 +372,8 @@ const buildProject = async (host, toolchain, project, boardName) => {
   const boardManifest = await loadBoardManifest(host, board);
   const build = asBuildManifest(boardManifest.metadata?.build);
   if (!build) throw new Error(`Board '${board}' has no compilation recipe`);
-  if (build.kind === 'firmware') {
-    throw new Error(`Complete firmware linking for board '${board}' is pending verified Arduino-ESP32 SDK and linker assets`);
+  if (build.kind === 'firmware' && !toolchain.linkEsp32Elf) {
+    throw new Error(`Board '${board}' firmware linking requires a WASM-native ESP32 ELF linker`);
   }
 
   const sdk = await loadSdkFiles(host, boardManifest);
@@ -395,6 +461,28 @@ const buildProject = async (host, toolchain, project, boardName) => {
         target: build.target,
         targetOptions: build.targetOptions,
         language: 'c++'
+      });
+    } else if (build.kind === 'firmware') {
+      if (!sdk.archives['sdk/lib/libFrameworkArduino.a']) {
+        throw new Error(`ESP32-C3 firmware linking is missing sdk/lib/libFrameworkArduino.a in the staged target SDK`);
+      }
+      if (!sdk.linkerScripts['sdk/memory.ld'] || !sdk.linkerScripts['sdk/sections.ld']) {
+        throw new Error(`ESP32-C3 firmware linking is missing memory.ld or sections.ld in the staged target SDK`);
+      }
+      const compiledApp = await toolchain.compileSource(generatedCpp, build.target, build.targetOptions, {
+        language: 'c++',
+        includeDirs: sdk.includeDirs,
+        files: sdk.files,
+        defines,
+        cacheDirectory: `${project}/.wicro/cache`
+      });
+      result = await toolchain.linkEsp32Elf({
+        objects: { 'main.o': compiledApp.object },
+        archives: sdk.archives,
+        linkerScripts: sdk.linkerScripts,
+        undefinedSymbols: ['_Z5setupv', '_Z4loopv', 'app_main', 'start_app'],
+        target: build.target,
+        targetOptions: build.targetOptions
       });
     } else {
       result = await toolchain.compileSource(generatedCpp, build.target, build.targetOptions, {

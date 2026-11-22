@@ -25,6 +25,8 @@ Status values:
 | Compiler CDN distribution | Implemented infrastructure/blocked deployment | SHA-verified cache, mirror fallback and bounded retries are implemented; compiler release URLs/checksums require explicit deployment |
 | ESP32-C3 USB ROM flashing | Verified ROM sync and application flash | Wicro ROM sync, 4 MB flash detection, stub upload and app-only write to 0x10000 verified; readback matches the known-good ESP-IDF image byte-for-byte |
 | ESP32-C3 automatic reset | Implemented and verified direct CDC reset | Exact USB-JTAG DTR/RTS CDC pulse sequence detaches the kernel driver, enters ROM download mode and resynchronizes; manual BOOT/RESET is no longer required |
+| Native Arduino-ESP32 reference build | Verified external reference | PlatformIO built a real ESP32-C3 Arduino firmware ELF (6,041,556 bytes) and BIN (270,640 bytes); this is reference evidence, not Wicro WASM compilation |
+| Complete Arduino-ESP32 WASM firmware | Planned/blocked | Wicro's generic WASM LLD link now accepts staged objects, archives and linker scripts, and can emit ELF objects; complete hosted sysroot, C++ runtime and ESP-IDF archive linking remain unresolved |
 | Original ESP32 native example | Source implemented | ESP-IDF project is present; native build requires `xtensa-esp32-elf-gcc` on PATH |
 | ESP8266 native example | Source implemented | Arduino `.ino` example is present; native build requires `arduino-cli` and the ESP8266 core |
 | STM32 bare-metal fixtures | Verified | STM32F401RC native Cortex-M4 ELF/BIN, STM32F103CB native Cortex-M3 ELF/BIN and STM32H723VG native Cortex-M7 ELF/BIN fixtures build with ARM GCC |

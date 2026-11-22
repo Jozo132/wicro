@@ -4,6 +4,15 @@ import { NodeEspSerialTransport } from './nodeEspSerial.js';
 
 export { NodeEspSerialTransport };
 
+/** @param {number} applicationSize @param {number} [partitionOffset] @param {number} [partitionCapacity] */
+export const validateEsp32ApplicationPartition = (applicationSize, partitionOffset = 0x10000, partitionCapacity = 0x180000) => {
+  if (!Number.isSafeInteger(applicationSize) || applicationSize <= 0) throw new Error('ESP32 application image size is invalid');
+  if (!Number.isSafeInteger(partitionOffset) || partitionOffset < 0) throw new Error('ESP32 application partition offset is invalid');
+  if (!Number.isSafeInteger(partitionCapacity) || partitionCapacity <= 0) throw new Error('ESP32 application partition capacity is invalid');
+  if (applicationSize > partitionCapacity) throw new Error(`ESP32 application image (${applicationSize} bytes) exceeds partition capacity (${partitionCapacity} bytes)`);
+  return { ok: true, partitionOffset, partitionCapacity, applicationSize };
+};
+
 /** @param {{address:number,data:Uint8Array}[]} files */
 export const validateEsp32FlashImages = (files) => {
   if (files.length === 1 && files[0].address === 0x10000) {
@@ -42,7 +51,7 @@ export class Esp32C3NodeProgrammer {
     return esp;
   }
 
-  /** @param {{address:number,data:Uint8Array}[]} files @param {{baudRate?:number,path?:string,resetMode?:'no_reset'|'touch_1200'}} [options] */
+  /** @param {{address:number,data:Uint8Array}[]} files @param {{baudRate?:number,path?:string,resetMode?:'no_reset'|'touch_1200',verifyReadback?:boolean,applicationPartitionOffset?:number,applicationPartitionCapacity?:number}} [options] */
   async writeFlash(files, options = {}) {
     validateEsp32FlashImages(files);
     const port = options.path ? { path: options.path } : await this.findPort();
@@ -84,8 +93,18 @@ export class Esp32C3NodeProgrammer {
     try {
       let detected = false;
       try {
-        await loader.detectChip('no_reset', 3);
-        detected = true;
+        if (options.resetMode === 'touch_1200') {
+          await transport.resetUsbJtagWithCdc();
+          await new Promise((resolve) => setTimeout(resolve, 1500));
+          const rediscovered = await waitForEspPortDetailed(this.options?.rediscoveryTimeoutMs ?? 5000);
+          await transport.connect(options.baudRate ?? 115200);
+          await transport.readLoop();
+          await loader.detectChip('no_reset', 7);
+          detected = true;
+        } else {
+          await loader.detectChip('no_reset', 3);
+          detected = true;
+        }
       } catch {
         if (options.resetMode === 'no_reset') {
           throw new Error('ESP32-C3 is not in ROM download mode. Place it in bootloader mode and retry with --reset-mode=no-reset.');
@@ -102,6 +121,7 @@ export class Esp32C3NodeProgrammer {
       }
       if (!detected) throw new Error('ESP32-C3 ROM synchronization did not establish a chip connection');
       await loader.runStub();
+      for (const file of files) validateEsp32ApplicationPartition(file.data.length, file.address, file.address === 0x10000 ? 0x180000 : 0x1000000);
       await loader.writeFlash({
         fileArray: files,
         flashMode: 'dio',
@@ -110,16 +130,33 @@ export class Esp32C3NodeProgrammer {
         eraseAll: false,
         compress: false
       });
+      /** @type {{verified:boolean,bytes:number,matched:boolean}|undefined} */
+      let readback;
+      if (options.verifyReadback) {
+        for (const file of files) {
+          const data = await loader.readFlash(file.address, file.data.length);
+          const matched = data.length === file.data.length && data.every((value, index) => value === file.data[index]);
+          if (!matched) throw new Error(`ESP32 flash readback mismatch at 0x${file.address.toString(16)}`);
+          readback = { verified: true, bytes: data.length, matched: true };
+        }
+      }
+      /** @type {{requested:boolean,ok:boolean,error?:string}} */
+      let rebootStatus;
       try {
         await loader.flashFinish(true);
+        rebootStatus = { requested: true, ok: true };
       } catch (finishError) {
-        stage(`Flash write completed, but stub leave/reboot returned ${finishError instanceof Error ? finishError.message : String(finishError)}`);
+        rebootStatus = { requested: true, ok: false, error: finishError instanceof Error ? finishError.message : String(finishError) };
+        stage(`Flash write completed, but stub leave/reboot returned ${rebootStatus.error}`);
       }
       return {
         ok: true,
         chip: loader.chip.CHIP_NAME,
         mac: await loader.chip.readMac(loader),
-        flashSize: await loader.detectFlashSize()
+        flashSize: await loader.detectFlashSize(),
+        flashWrite: { ok: true, addresses: files.map((file) => file.address) },
+        readback,
+        reboot: rebootStatus
       };
     } finally {
       await transport.disconnect();

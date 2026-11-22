@@ -238,6 +238,20 @@ test('shared LLVM toolchain links STM32H723VG ELF and BIN', async () => {
   assert.equal(result.bin.length > 0, true);
 });
 
+test('WASM ESP32 linker emits a real ELF for staged object/script inputs', async () => {
+  const toolchain = new LlvmWasmToolchain({ llvmPath: llvmUrl.pathname });
+  const compiled = await toolchain.compileC('int firmware_entry(void) { return 7; }\n', 'riscv32', { march: 'rv32imc', mabi: 'ilp32' });
+  const result = await toolchain.linkEsp32Elf({
+    objects: { 'main.o': compiled.object },
+    linkerScripts: { 'firmware.ld': 'MEMORY { IRAM (rx) : ORIGIN = 0x40370000, LENGTH = 0x10000 }\nSECTIONS { .text : { *(.text*) } > IRAM }' },
+    target: 'riscv32',
+    targetOptions: { march: 'rv32imc', mabi: 'ilp32' },
+    entry: 'firmware_entry'
+  });
+  assert.equal(result.elf.subarray(0, 4).toString('hex'), '7f454c46');
+  assert.equal(result.elf.readUInt16LE(18), 243);
+});
+
 test('shared LLVM linker is executable', async () => {
   const runner = new NodeWasiRunner();
   const result = await runner.run(ldUrl.pathname, {

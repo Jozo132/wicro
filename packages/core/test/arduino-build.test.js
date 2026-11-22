@@ -92,3 +92,40 @@ test('core engine compiles every C and C++ project source', async () => {
   assert.equal(commands.length, 2);
   assert.ok(commands.every((/** @type {{file:string}} */ entry) => typeof entry.file === 'string'));
 });
+
+test('firmware build fails closed when staged Arduino ESP32 archives are missing', async () => {
+  const files = new Map([
+    ['registry/firmware-board/package.json', JSON.stringify({
+      name: 'firmware-board', version: '1.0.0', kind: 'board', description: 'Firmware board', license: 'MIT',
+      metadata: { build: { kind: 'firmware', target: 'riscv32', targetOptions: { march: 'rv32imc', mabi: 'ilp32' }, output: '.wicro/build' } }
+    })],
+    ['project/wicro.json', JSON.stringify({ board: 'firmware-board', build: { sourceDir: 'src' } })],
+    ['project/src/main.ino', 'void setup() {}\nvoid loop() {}\n']
+  ]);
+  const host = {
+    host: /** @type {const} */ ('node'),
+    sdkCacheDirectory: '/missing/sdk',
+    async readFile(/** @type {string} */ path) {
+      const value = files.get(path);
+      if (value === undefined) throw new Error(`File not found: ${path}`);
+      return value;
+    },
+    async readdir(/** @type {string} */ path) {
+      if (path === 'project/src') return ['main.ino'];
+      if (path === '/missing/sdk') return [];
+      throw new Error(`Directory not found: ${path}`);
+    },
+    async writeFile(/** @type {string} */ path, /** @type {string|Uint8Array} */ data) {
+      files.set(path, typeof data === 'string' ? data : new TextDecoder().decode(data));
+    }
+  };
+  const toolchain = {
+    async compileSource() { return { object: new Uint8Array([0x7f, 0x45, 0x4c, 0x46]), target: 'riscv32', cache: 'miss', diagnostics: [] }; },
+    async linkEsp32Elf() { return { elf: new Uint8Array([0x7f, 0x45, 0x4c, 0x46]), bin: new Uint8Array([1]), target: 'riscv32', diagnostics: [] }; },
+    async targets() { return ['riscv32']; }
+  };
+  const engine = createWicroEngine({ host, toolchain: /** @type {any} */ (toolchain) });
+  const result = await engine.execute({ command: 'build', project: 'project', board: 'firmware-board' });
+  assert.equal(result.ok, false);
+  assert.ok(result.diagnostics?.some((/** @type {{message:string}} */ diagnostic) => /libFrameworkArduino\.a|staged target SDK/i.test(diagnostic.message)));
+});
