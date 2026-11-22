@@ -10,7 +10,7 @@
     "targets": ["esp8266"],
     "source": "external",
     "status": "download-on-demand",
-    "distribution": { "url": "https://github.com/esp8266/Arduino/archive/7d5a4cec8f4639177995bd15f583a922ecd2f793.zip", "archiveType": "zip", "sha256": null },
+    "distribution": { "url": "https://codeload.github.com/esp8266/Arduino/zip/7d5a4cec8f4639177995bd15f583a922ecd2f793", "mirrors": ["https://github.com/esp8266/Arduino/archive/7d5a4cec8f4639177995bd15f583a922ecd2f793.zip"], "archiveType": "zip", "sha256": "329fe1a98b0a27f2df939cc9b9415583e631f24c3bdf6b7ffa20e995eb55e013" },
     "firmwareLinking": "pending-sdk-distribution"
   }
 }

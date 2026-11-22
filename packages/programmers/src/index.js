@@ -6,6 +6,13 @@ export { NodeEspSerialTransport };
 
 /** @param {{address:number,data:Uint8Array}[]} files */
 export const validateEsp32FlashImages = (files) => {
+  if (files.length === 1 && files[0].address === 0x10000) {
+    const application = files[0].data;
+    if (!(application instanceof Uint8Array) || application.length === 0) throw new Error('ESP32 application image is empty');
+    if (application[0] !== 0xe9) throw new Error('ESP32 application image magic is invalid');
+    return { ok: true, addresses: [0x10000], bootloaderBytes: 0, partitionBytes: 0, applicationBytes: application.length };
+  }
+
   const required = new Map([[0x0, 'bootloader'], [0x8000, 'partition'], [0x10000, 'application']]);
   for (const [address, role] of required) {
     const file = files.find((item) => item.address === address);
@@ -23,7 +30,7 @@ export const validateEsp32FlashImages = (files) => {
 export { ProgrammerProtocolRegistry, programmerProtocols } from './protocolRegistry.js';
 
 export class Esp32C3NodeProgrammer {
-  /** @param {{path:string,baudRate?:number,debugLogging?:boolean,rediscoveryTimeoutMs?:number}} [options] */
+  /** @param {{path?:string,baudRate?:number,debugLogging?:boolean,rediscoveryTimeoutMs?:number}} [options] */
   constructor(options) {
     this.options = options;
   }
@@ -35,7 +42,7 @@ export class Esp32C3NodeProgrammer {
     return esp;
   }
 
-  /** @param {{address:number,data:Uint8Array}[]} files @param {{baudRate?:number,path?:string}} [options] */
+  /** @param {{address:number,data:Uint8Array}[]} files @param {{baudRate?:number,path?:string,resetMode?:'no_reset'|'touch_1200'}} [options] */
   async writeFlash(files, options = {}) {
     validateEsp32FlashImages(files);
     const port = options.path ? { path: options.path } : await this.findPort();
@@ -53,10 +60,7 @@ export class Esp32C3NodeProgrammer {
     stage(`Opening USB JTAG/serial port ${port.path}`);
     await transport.connect(options.baudRate ?? 115200);
     await transport.readLoop();
-    stage('Applying one bounded USB-JTAG DTR/RTS download reset');
-    await transport.resetForDownload();
-    await transport.flushOutput();
-    await transport.drainInput(100, 400);
+    stage('Testing existing ROM mode without reset');
 
     const terminal = {
       clean: () => {},
@@ -78,27 +82,72 @@ export class Esp32C3NodeProgrammer {
     });
 
     try {
+      let detected = false;
       try {
-        await loader.detectChip('usb_reset', 1);
-      } catch (error) {
-        await transport.resetIntoApplication();
-        throw new Error(`ESP32-C3 native USB JTAG/serial did not enter ROM download mode after one bounded reset. Hold BOOT, press and release RESET, then release BOOT, or use a USB-UART adapter. Automatic reset was stopped; normal application reset was requested. ${error instanceof Error ? error.message : String(error)}`);
+        await loader.detectChip('no_reset', 3);
+        detected = true;
+      } catch {
+        if (options.resetMode === 'no_reset') {
+          throw new Error('ESP32-C3 is not in ROM download mode. Place it in bootloader mode and retry with --reset-mode=no-reset.');
+        }
+        await transport.disconnect();
+        stage('Applying exact USB-JTAG CDC reset and waiting for re-enumeration');
+        await transport.resetUsbJtagWithCdc();
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const rediscovered = await waitForEspPortDetailed(this.options?.rediscoveryTimeoutMs ?? 5000);
+        await transport.connect(options.baudRate ?? 115200);
+        await transport.readLoop();
+        await loader.detectChip('no_reset', 7);
+        detected = true;
       }
+      if (!detected) throw new Error('ESP32-C3 ROM synchronization did not establish a chip connection');
+      await loader.runStub();
       await loader.writeFlash({
         fileArray: files,
         flashMode: 'dio',
         flashFreq: '80m',
-        flashSize: 'detect',
+        flashSize: '4MB',
         eraseAll: false,
-        compress: true
+        compress: false
       });
-      await loader.flashFinish(true);
+      try {
+        await loader.flashFinish(true);
+      } catch (finishError) {
+        stage(`Flash write completed, but stub leave/reboot returned ${finishError instanceof Error ? finishError.message : String(finishError)}`);
+      }
       return {
         ok: true,
         chip: loader.chip.CHIP_NAME,
         mac: await loader.chip.readMac(loader),
         flashSize: await loader.detectFlashSize()
       };
+    } finally {
+      await transport.disconnect();
+    }
+  }
+
+  /** @param {{baudRate?:number,path?:string}} [options] */
+  async probe(options = {}) {
+    const port = options.path ? { path: options.path } : await this.findPort();
+    const transport = new NodeEspSerialTransport({ path: port.path, baudRate: options.baudRate ?? 115200, vid: 0x303a, pid: 0x1001 });
+    transport.tracing = this.options?.debugLogging ?? false;
+    await transport.connect(options.baudRate ?? 115200);
+    await transport.readLoop();
+    const terminal = { clean: () => {}, writeLine: (/** @type {string} */ value) => this.options?.debugLogging ? console.log(value) : undefined, write: () => {} };
+    const loader = new ESPLoader({ transport: /** @type {any} */ (transport), baudrate: options.baudRate ?? 115200, romBaudrate: options.baudRate ?? 115200, terminal, enableTracing: this.options?.debugLogging ?? false });
+    try {
+      try {
+        await loader.detectChip('no_reset', 3);
+      } catch {
+        await transport.disconnect();
+        await transport.resetUsbJtagWithCdc();
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        const rediscovered = await waitForEspPortDetailed(this.options?.rediscoveryTimeoutMs ?? 5000);
+        await transport.connect(options.baudRate ?? 115200);
+        await transport.readLoop();
+        await loader.detectChip('no_reset', 7);
+      }
+      return { ok: true, chip: loader.chip.CHIP_NAME, mac: await loader.chip.readMac(loader), path: port.path };
     } finally {
       await transport.disconnect();
     }
@@ -131,6 +180,18 @@ export class Esp32C3NodeProgrammer {
     };
   }
 }
+
+/** @param {number} timeoutMs */
+const waitForEspPortDetailed = async (timeoutMs) => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const ports = await SerialPort.list();
+    const esp = ports.find((item) => item.vendorId?.toLowerCase() === '303a' && item.productId?.toLowerCase() === '1001');
+    if (esp) return esp;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error('ESP32-C3 USB JTAG/serial device disappeared and was not rediscovered');
+};
 
 /** @param {number} timeoutMs */
 const waitForEspPort = async (timeoutMs) => {

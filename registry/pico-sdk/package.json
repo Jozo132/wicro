@@ -9,6 +9,6 @@
     "targets": ["rp2040", "rp2350"],
     "source": "external",
     "status": "download-on-demand",
-    "distribution": { "url": "https://github.com/raspberrypi/pico-sdk/archive/refs/tags/2.1.0.zip", "archiveType": "zip", "sha256": null }
+    "distribution": { "url": "https://codeload.github.com/raspberrypi/pico-sdk/zip/refs/tags/2.1.0", "mirrors": ["https://github.com/raspberrypi/pico-sdk/archive/refs/tags/2.1.0.zip"], "archiveType": "zip", "sha256": "395a5dd0434acc4159bfe4b3f340c9c8a61da7694a6be942de69020e3b5fe0db" }
   }
 }

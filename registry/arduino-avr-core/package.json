@@ -15,7 +15,7 @@
     "architectures": ["avr"],
     "source": "external",
     "status": "download-on-demand",
-    "distribution": { "url": "https://github.com/arduino/ArduinoCore-avr/archive/11b9130371e8447920edb65a75706a6c951e51fc.zip", "archiveType": "zip", "sha256": null },
+    "distribution": { "url": "https://codeload.github.com/arduino/ArduinoCore-avr/zip/11b9130371e8447920edb65a75706a6c951e51fc", "mirrors": ["https://github.com/arduino/ArduinoCore-avr/archive/11b9130371e8447920edb65a75706a6c951e51fc.zip"], "archiveType": "zip", "sha256": "6b54749a5e53ccbe5d179dcc5c37ffa5610518556ca944cc528c6ee94766dce7" },
     "firmwareLinking": "pending-sdk-distribution"
   }
 }

@@ -102,16 +102,18 @@ npm run pack:check
 
 For ESP-IDF firmware work, the compiler is staged under `toolchain/llvm-wasm/cache`, while the ESP32-C3 framework and native reference environment are under `toolchain/esp32-c3/esp-idf`. Downloaded compiler, framework and build assets are ignored by Git; their manifests remain versioned in `registry/`.
 
+SDK and package archives may be staged in `registry-cache/`. The filename convention is `<manifest-name>-<manifest-version>.zip`, for example `arduino-esp32-1.0.0.zip`. Local files are attempted before network mirrors, their SHA-256 identity is still verified, and `registry-cache/` is ignored by Git.
+
 ## Repository status
 
 Remaining integration work:
 
-- ESP-IDF/Pico SDK/CMSIS/Arduino SDK distributions must provide their complete headers, submodules, startup artifacts and core archives before full SDK firmware linking can be claimed
+- ESP-IDF/Pico SDK/CMSIS/Arduino SDK distributions must provide their complete headers, submodules, startup artifacts and core archives before full SDK firmware linking can be claimed; pinned AVR, ESP8266, STM32, Pico and Pico SDK archives now have verified SHA-256 identities
 - LLVM WASM release URLs and genuine CDN archive metadata remain deployment-blocked; local assets are used only as explicit local sources and test fixtures
 - ESP32-C3 native USB VCP ROM entry is implemented but is not yet successful on the connected unit; physical flash/execution remains unverified
 - Header dependency tracking and incremental relinking need project-wide cache integration
 - ST-LINK, USB DFU/DfuSe, STM32 UART, AVR STK500 and PICOBOOT protocol implementations are public extension surfaces but are not yet hardware-verified
-- Physical firmware verification is target-specific and must be reported separately from source and build success; no ESP32-C3 USB device is visible in every execution environment
+- Physical firmware verification is target-specific and must be reported separately from source and build success. ESP32-C3 ROM sync and application-only stub flashing are now physically verified on `/dev/ttyACM0`; direct CDC DTR/RTS reset re-enters ROM mode automatically
 
 See [docs/compatibility.md](docs/compatibility.md) for the current implemented, planned and hardware-verified matrix.
 

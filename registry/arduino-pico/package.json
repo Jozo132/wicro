@@ -14,7 +14,7 @@
     "architectures": ["armv6m", "armv8m-mainline"],
     "source": "external",
     "status": "download-on-demand",
-    "distribution": { "url": "https://github.com/earlephilhower/arduino-pico/archive/83f7b6e5ab9988164f4a291ee6d5c3bcd0e03cdf.zip", "archiveType": "zip", "sha256": null },
+    "distribution": { "url": "https://codeload.github.com/earlephilhower/arduino-pico/zip/83f7b6e5ab9988164f4a291ee6d5c3bcd0e03cdf", "mirrors": ["https://github.com/earlephilhower/arduino-pico/archive/83f7b6e5ab9988164f4a291ee6d5c3bcd0e03cdf.zip"], "archiveType": "zip", "sha256": "bba35afa87c2fb97a39bb8d8b15fc4b5e0d3e144dfea209b519b411ab9017e54" },
     "firmwareLinking": "pending-sdk-distribution"
   }
 }

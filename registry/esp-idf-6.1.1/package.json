@@ -9,7 +9,7 @@
     "targets": ["esp32c2", "esp32c3", "esp32c6", "esp32h2"],
     "source": "external",
     "status": "download-on-demand",
-    "distribution": { "url": "https://github.com/espressif/esp-idf/archive/refs/tags/v6.1.1.zip", "archiveType": "zip", "sha256": null },
+    "distribution": { "url": "https://codeload.github.com/espressif/esp-idf/zip/refs/tags/v6.1.1", "mirrors": ["https://github.com/espressif/esp-idf/archive/refs/tags/v6.1.1.zip"], "archiveType": "zip", "sha256": "da0a8e8b6d56a09f0edbd0ffe847eb9957b43a7e6601f9bc1f27fc9975da1730" },
     "bootloader": true,
     "partitionTables": true
   }

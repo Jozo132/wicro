@@ -244,7 +244,26 @@ export const main = async (args = []) => {
           try {
             const frameworkManifest = JSON.parse(await readFile(resolve(registryRoot, frameworkName, 'package.json'), 'utf8'));
             if (frameworkManifest.metadata?.distribution?.url) {
-              await sdkLifecycle.ensure(frameworkManifest);
+              /** @type {Record<string,string>} */
+              const localSources = {};
+              const localCacheRoots = [
+                resolve(new URL('../../../registry-cache', import.meta.url).pathname),
+                resolve(process.cwd(), 'registry-cache')
+              ];
+              for (const localCacheRoot of localCacheRoots) {
+                for (const candidate of [`${frameworkName}-${frameworkManifest.version}.zip`, `${frameworkName}.zip`]) {
+                  const localPath = resolve(localCacheRoot, candidate);
+                  try {
+                    await readFile(localPath);
+                    localSources[frameworkName] = new URL(`file://${localPath}`).href;
+                    break;
+                  } catch {
+                    // Try the next cache candidate.
+                  }
+                }
+                if (localSources[frameworkName]) break;
+              }
+              await sdkLifecycle.ensure(frameworkManifest, { localSources });
             }
           } catch (error) {
             if (error instanceof Error && error.message.includes('no downloadable distribution')) throw error;
@@ -392,6 +411,30 @@ export const main = async (args = []) => {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       emit({ ok: false, command: 'board list', implemented: false, error: message }, json, `Board registry unavailable: ${message}`);
+      return 1;
+    }
+  }
+
+  if (command === 'device' && flags[1] === 'probe') {
+    try {
+      let programmerModule;
+      try {
+        programmerModule = await import('../../programmers/src/index.js');
+      } catch {
+        programmerModule = await import('../vendor/programmers/src/index.js');
+      }
+      const { Esp32C3NodeProgrammer } = programmerModule;
+      /** @type {any} */
+      const Programmer = Esp32C3NodeProgrammer;
+      const port = flags.find((arg) => arg.startsWith('--port='))?.slice('--port='.length);
+      const result = await new Programmer({ debugLogging: flags.includes('--verbose') }).probe({ path: port });
+      emit({ ok: true, command: 'device probe', implemented: true, ...result }, json,
+        `ESP32-C3 ROM synchronized on ${result.path}: ${result.chip}, MAC ${result.mac}`);
+      return 0;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      emit({ ok: false, command: 'device probe', implemented: false, error: message }, json,
+        `ESP32-C3 ROM probe failed: ${message}`);
       return 1;
     }
   }
@@ -568,13 +611,15 @@ export const main = async (args = []) => {
       const appName = await appBin;
       if (!appName) throw new Error(`No application binary found in ${target}/build`);
 
-      const files = [
-        { address: 0x0, data: await readFile(resolve(target, 'build/bootloader/bootloader.bin')) },
-        { address: 0x8000, data: await readFile(resolve(target, 'build/partition_table/partition-table.bin')) },
-        { address: 0x10000, data: await readFile(resolve(target, 'build', appName)) }
-      ];
+      /** @type {{address:number,data:Uint8Array}[]} */
+      const files = [];
+      // Preserve existing bootloader and partition table unless full-image flashing is explicitly requested later.
+      files.push({ address: 0x10000, data: await readFile(resolve(target, 'build', appName)) });
       const port = flags.find((arg) => arg.startsWith('--port='))?.slice('--port='.length);
-      const result = await new Esp32C3NodeProgrammer().writeFlash(files, { path: port, baudRate: 115200 });
+      const resetModeFlag = flags.find((arg) => arg.startsWith('--reset-mode='))?.slice('--reset-mode='.length);
+      /** @type {'no_reset'|'touch_1200'|undefined} */
+      const resetMode = resetModeFlag === 'no-reset' ? 'no_reset' : resetModeFlag === 'touch-1200' ? 'touch_1200' : undefined;
+      const result = await new Esp32C3NodeProgrammer().writeFlash(files, { path: port, baudRate: 115200, resetMode });
       emit({ command: 'upload', ...result }, json, `Uploaded ${appName} to ${port ?? 'ESP32-C3'}`);
       return 0;
     } catch (error) {

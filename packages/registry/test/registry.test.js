@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { zipSync } from 'fflate';
@@ -111,6 +111,53 @@ test('SDK lifecycle downloads once, persists locks and rejects corruption', asyn
     await assert.rejects(() => recovered.ensure(manifest), /network|download|corruption/i);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('SDK lifecycle prefers a local registry cache archive', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'wicro-local-sdk-cache-'));
+  try {
+    const storage = new NodeSdkStorage({ root });
+    const archive = zipSync({ 'Local/Core.h': new TextEncoder().encode('#pragma once\n') });
+    const archivePath = join(root, 'local-sdk.zip');
+    await writeFile(archivePath, archive);
+    const archiveSha256 = await sha256Bytes(archive);
+    /** @type {import('../src/index.js').WicroPackageManifest} */
+    const manifest = {
+      name: 'local-sdk', version: '1.0.0', kind: 'framework', description: 'Local SDK', license: 'MIT',
+      metadata: { distribution: { url: 'https://example.invalid/local-sdk.zip', sha256: archiveSha256 } }
+    };
+    let downloads = 0;
+    const manager = new SdkLifecycleManager({
+      storage,
+      fetch: async () => { downloads++; throw new Error('network must not be used'); }
+    });
+    const result = await manager.ensure(manifest, { localSources: { 'local-sdk': `file://${archivePath}` } });
+    assert.equal(result.cache, 'downloaded');
+    assert.equal(downloads, 0);
+  } finally {
+    await remove(root, { recursive: true, force: true });
+  }
+});
+
+test('registry-cache archives match their manifest checksums', async () => {
+  const root = new URL('../../../registry-cache/', import.meta.url);
+  const manifests = new URL('../../../registry/', import.meta.url);
+  const cases = [
+    ['arduino-avr-core-1.0.0.zip', 'arduino-avr-core/package.json'],
+    ['arduino-esp32-1.0.0.zip', 'arduino-esp32/package.json'],
+    ['arduino-esp8266-1.0.0.zip', 'arduino-esp8266/package.json'],
+    ['arduino-pico-1.0.0.zip', 'arduino-pico/package.json'],
+    ['arduino-stm32-core-1.0.0.zip', 'arduino-stm32-core/package.json'],
+    ['esp-idf-6.1.1.zip', 'esp-idf-6.1.1/package.json'],
+    ['pico-sdk-1.0.0.zip', 'pico-sdk/package.json']
+  ];
+
+  for (const [fileName, manifestName] of cases) {
+    const archive = new Uint8Array(await readFile(new URL(fileName, root)));
+    const manifest = JSON.parse(await readFile(new URL(manifestName, manifests), 'utf8'));
+    const distribution = manifest.metadata?.distribution;
+    assert.equal(await sha256Bytes(archive), distribution.sha256, `${fileName} must match ${manifestName}`);
   }
 });
 

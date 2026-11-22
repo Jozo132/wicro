@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { ProgrammerProtocolRegistry, programmerProtocols } from '../src/index.js';
-import { NodeEspSerialTransport } from '../src/nodeEspSerial.js';
+import { NodeEspSerialTransport, SlipDecoder, ESP32_C3_USB_JTAG_RESET_STEPS } from '../src/nodeEspSerial.js';
 import { validateEsp32FlashImages } from '../src/index.js';
 
 test('simulated programmer protocol validates and reports flash writes', async () => {
@@ -17,6 +17,12 @@ test('simulated programmer protocol validates and reports flash writes', async (
   assert.equal(result.bytes, 3);
 });
 
+test('ESP32 application-only flash preserves bootloader and partition table', () => {
+  assert.deepEqual(validateEsp32FlashImages([
+    { address: 0x10000, data: new Uint8Array([0xe9, 1, 2, 3]) }
+  ]), { ok: true, addresses: [0x10000], bootloaderBytes: 0, partitionBytes: 0, applicationBytes: 4 });
+});
+
 test('ESP32 flash image preflight rejects incomplete images', () => {
   assert.throws(() => validateEsp32FlashImages([{ address: 0x0, data: new Uint8Array([0xe9]) }]), /partition/);
   assert.deepEqual(validateEsp32FlashImages([
@@ -24,6 +30,42 @@ test('ESP32 flash image preflight rejects incomplete images', () => {
     { address: 0x8000, data: new Uint8Array([0xaa, 0x50]) },
     { address: 0x10000, data: new Uint8Array([0xe9, 2]) }
   ]), { ok: true, addresses: [0, 0x8000, 0x10000], bootloaderBytes: 2, partitionBytes: 2, applicationBytes: 2 });
+});
+
+test('SLIP decoder preserves fragmented packets, escapes and packet boundaries', () => {
+  const decoder = new SlipDecoder();
+  decoder.feed(new Uint8Array([0xc0, 0x01, 0x02]));
+  decoder.feed(new Uint8Array([0xdb, 0xdc, 0x03, 0xc0]));
+  assert.deepEqual(decoder.shiftPacket(), new Uint8Array([0x01, 0x02, 0xc0, 0x03]));
+
+  decoder.feed(new Uint8Array([0xc0, 0x41, 0xc0, 0xc0, 0x42, 0xdb, 0xdd, 0xc0]));
+  assert.deepEqual(decoder.shiftPacket(), new Uint8Array([0x41]));
+  assert.deepEqual(decoder.shiftPacket(), new Uint8Array([0x42, 0xdb]));
+});
+
+test('ESP32-C3 USB-JTAG reset uses the proven CDC line-state sequence', () => {
+  assert.deepEqual(ESP32_C3_USB_JTAG_RESET_STEPS, [
+    { dtr: false, rts: true, delayAfterMs: 0 },
+    { dtr: true, rts: true, delayAfterMs: 100 },
+    { dtr: false, rts: true, delayAfterMs: 100 },
+    { dtr: false, rts: true, delayAfterMs: 0 },
+    { dtr: true, rts: false, delayAfterMs: 0 },
+    { dtr: true, rts: true, delayAfterMs: 0 },
+    { dtr: true, rts: false, delayAfterMs: 100 },
+    { dtr: true, rts: false, delayAfterMs: 0 },
+    { dtr: true, rts: true, delayAfterMs: 0 }
+  ]);
+});
+
+test('SLIP decoder rejects malformed escape and bounded queue overflow', () => {
+  const malformed = new SlipDecoder();
+  malformed.feed(new Uint8Array([0xc0, 0xdb, 0x00, 0xc0]));
+  assert.throws(() => malformed.shiftPacket(), /Invalid SLIP escape/);
+
+  const bounded = new SlipDecoder();
+  bounded.feed(new Uint8Array([0xc0, 0xc0]));
+  for (let index = 0; index < 17; index++) bounded.feed(new Uint8Array([0x01, 0xc0]));
+  assert.throws(() => bounded.shiftPacket(), /queue exceeded|Invalid SLIP escape|packet exceeded/i);
 });
 
 test('native USB VCP reset emits DTR and RTS boot signals', async () => {

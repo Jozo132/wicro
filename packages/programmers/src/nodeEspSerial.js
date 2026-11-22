@@ -5,7 +5,108 @@ const SLIP_ESC = 0xdb;
 const SLIP_ESC_END = 0xdc;
 const SLIP_ESC_ESC = 0xdd;
 
+export const ESP32_C3_USB_JTAG_RESET_STEPS = Object.freeze([
+  Object.freeze({ dtr: false, rts: true, delayAfterMs: 0 }),
+  Object.freeze({ dtr: true, rts: true, delayAfterMs: 100 }),
+  Object.freeze({ dtr: false, rts: true, delayAfterMs: 100 }),
+  Object.freeze({ dtr: false, rts: true, delayAfterMs: 0 }),
+  Object.freeze({ dtr: true, rts: false, delayAfterMs: 0 }),
+  Object.freeze({ dtr: true, rts: true, delayAfterMs: 0 }),
+  Object.freeze({ dtr: true, rts: false, delayAfterMs: 100 }),
+  Object.freeze({ dtr: true, rts: false, delayAfterMs: 0 }),
+  Object.freeze({ dtr: true, rts: true, delayAfterMs: 0 })
+]);
+
 const sleep = (/** @type {number} */ ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export class SlipDecoder {
+  constructor() {
+    /** @type {Uint8Array[]} */
+    this.packets = [];
+    /** @type {number[]} */
+    this.packet = [];
+    this.inPacket = false;
+    this.escaping = false;
+    /** @type {Error|undefined} */
+    this.malformedError = undefined;
+  }
+
+  reset() {
+    this.packets = [];
+    this.packet = [];
+    this.inPacket = false;
+    this.escaping = false;
+    /** @type {Error|undefined} */
+    this.malformedError = undefined;
+  }
+
+  /** @param {Uint8Array} bytes */
+  feed(bytes) {
+    if (this.malformedError) return;
+    for (const byte of bytes) {
+      if (byte === SLIP_END) {
+        if (this.inPacket && this.packet.length > 0) {
+          if (this.packets.length >= 16) {
+            this.malformedError = new Error('SLIP receive queue exceeded 16 packets');
+            this.resetExceptQueueError();
+            return;
+          }
+          this.packets.push(Uint8Array.from(this.packet));
+        }
+        this.packet = [];
+        this.inPacket = true;
+        this.escaping = false;
+        continue;
+      }
+
+      if (!this.inPacket) continue;
+      if (this.escaping) {
+        this.escaping = false;
+        if (byte === SLIP_ESC_END) this.packet.push(SLIP_END);
+        else if (byte === SLIP_ESC_ESC) this.packet.push(SLIP_ESC);
+        else {
+          this.malformedError = new Error(`Invalid SLIP escape (0xdb, 0x${byte.toString(16).padStart(2, '0')})`);
+          this.resetExceptQueueError();
+          return;
+        }
+      } else if (byte === SLIP_ESC) {
+        this.escaping = true;
+      } else {
+        this.packet.push(byte);
+      }
+
+      if (this.packet.length > 16 * 1024 * 1024) {
+        this.malformedError = new Error('SLIP packet exceeded 16 MB receive limit');
+        this.resetExceptQueueError();
+        return;
+      }
+    }
+  }
+
+  resetExceptQueueError() {
+    /** @type {Error|undefined} */
+    const error = this.malformedError;
+    this.packets = [];
+    this.packet = [];
+    this.inPacket = false;
+    this.escaping = false;
+    this.malformedError = error;
+  }
+
+  /** @returns {Uint8Array|undefined} */
+  shiftPacket() {
+    if (this.malformedError) {
+      const error = this.malformedError;
+      this.reset();
+      throw error;
+    }
+    return this.packets.shift();
+  }
+
+  get queuedBytes() {
+    return this.packets.reduce((total, packet) => total + packet.length, 0) + this.packet.length;
+  }
+}
 
 export class NodeEspSerialTransport {
   /** @param {{path:string,baudRate?:number,vid?:number,pid?:number}} options */
@@ -15,6 +116,7 @@ export class NodeEspSerialTransport {
     this.vid = options.vid;
     this.pid = options.pid;
     this.buffer = new Uint8Array(0);
+    this.decoder = new SlipDecoder();
     /** @type {any} */
     this.port = undefined;
     this.tracing = false;
@@ -79,21 +181,36 @@ export class NodeEspSerialTransport {
   async readLoop() {
     if (!this.port) return;
     this.onData = (/** @type {any} */ data) => {
-      const chunk = new Uint8Array(data);
+      const chunk = data instanceof Uint8Array ? data : new Uint8Array(data);
+      if (this.buffer.length + chunk.length > 64 * 1024) {
+        this.buffer = new Uint8Array(0);
+        this.decoder.reset();
+        this.decoder.malformedError = new Error('Serial receive buffer exceeded 64 KB');
+        return;
+      }
       this.buffer = this.appendArray(this.buffer, chunk);
+      this.decoder.feed(this.buffer);
+      this.buffer = new Uint8Array(0);
     };
     this.port.on('data', this.onData);
   }
 
   flushInput() {
     this.buffer = new Uint8Array(0);
+    this.decoder.reset();
   }
 
   async drainInput(quietMs = 100, maxMs = 400) {
     const deadline = Date.now() + maxMs;
     let previousLength = -1;
-    while (Date.now() < deadline && this.buffer.length !== previousLength) {
-      previousLength = this.buffer.length;
+    while (Date.now() < deadline) {
+      const length = this.decoder.queuedBytes + this.buffer.length;
+      if (length === 0 || length === previousLength) {
+        if (length === previousLength) break;
+        previousLength = length;
+      } else {
+        previousLength = length;
+      }
       await sleep(quietMs);
     }
     this.flushInput();
@@ -107,7 +224,7 @@ export class NodeEspSerialTransport {
   }
 
   inWaiting() {
-    return this.buffer.length;
+    return this.buffer.length + this.decoder.queuedBytes;
   }
 
   peek() {
@@ -125,58 +242,36 @@ export class NodeEspSerialTransport {
 
   /** @param {number} timeout */
   async read(timeout) {
-    let packet = new Uint8Array(0);
-    let escaping = false;
     const deadline = Date.now() + timeout;
-
     while (Date.now() < deadline) {
-      if (this.buffer.length === 0) {
-        await sleep(1);
-        continue;
-      }
-
-      const bytes = this.buffer;
-      this.buffer = new Uint8Array(0);
-      for (const byte of bytes) {
-        if (packet.length === 0 && byte !== SLIP_END) continue;
-        if (byte === SLIP_END) {
-          if (packet.length > 0) return packet;
-          packet = new Uint8Array(0);
-        } else if (escaping) {
-          escaping = false;
-          packet = this.appendArray(packet, new Uint8Array([byte === SLIP_ESC_END ? SLIP_END : byte === SLIP_ESC_ESC ? SLIP_ESC : byte]));
-        } else if (byte === SLIP_ESC) {
-          escaping = true;
-        } else {
-          packet = this.appendArray(packet, new Uint8Array([byte]));
-        }
-      }
+      const packet = this.decoder.shiftPacket();
+      if (packet) return packet;
+      await sleep(1);
     }
-
     throw new Error('Serial data stream stopped or timed out');
   }
 
   /** @param {boolean} state */
   async setRTS(state) {
-    if (!this.port?.isOpen) return;
-    await new Promise((resolve) => {
-      this.port.set({ rts: state }, (/** @type {Error|null} */ error) => resolve(undefined));
+    if (!this.port?.isOpen) throw new Error('Serial port is not open');
+    await new Promise((resolve, reject) => {
+      this.port.set({ rts: state }, (/** @type {Error|null} */ error) => error ? reject(error) : resolve(undefined));
     });
   }
 
   /** @param {boolean} state */
   async setDTR(state) {
-    if (!this.port?.isOpen) return;
-    await new Promise((resolve) => {
-      this.port.set({ dtr: state }, (/** @type {Error|null} */ error) => resolve(undefined));
+    if (!this.port?.isOpen) throw new Error('Serial port is not open');
+    await new Promise((resolve, reject) => {
+      this.port.set({ dtr: state }, (/** @type {Error|null} */ error) => error ? reject(error) : resolve(undefined));
     });
   }
 
   /** @param {boolean} dtr @param {boolean} rts */
   async setSignals(dtr, rts) {
-    if (!this.port?.isOpen) return;
-    await new Promise((resolve) => {
-      this.port.set({ dtr, rts }, (/** @type {Error|null} */ error) => resolve(undefined));
+    if (!this.port?.isOpen) throw new Error('Serial port is not open');
+    await new Promise((resolve, reject) => {
+      this.port.set({ dtr, rts }, (/** @type {Error|null} */ error) => error ? reject(error) : resolve(undefined));
     });
   }
 
@@ -192,18 +287,13 @@ export class NodeEspSerialTransport {
 
   async resetForDownload() {
     if (!this.port?.isOpen) await this.connect(this.baudRate);
-    await this.setSignals(false, false);
+    await this.setSignals(true, true);
     await sleep(100);
-    await this.setDTR(true);
-    await this.setRTS(false);
+    await this.setSignals(false, true);
     await sleep(100);
-    await this.setRTS(true);
-    await this.setDTR(false);
-    await this.setRTS(true);
+    await this.setSignals(true, false);
     await sleep(100);
-    await this.setRTS(false);
-    await this.setDTR(false);
-    await sleep(300);
+    await this.setSignals(true, true);
   }
 
   async resetIntoApplication() {
@@ -215,19 +305,43 @@ export class NodeEspSerialTransport {
     await this.setRTS(false);
   }
 
+  async resetUsbJtagWithCdc() {
+    let usbModule;
+    try {
+      usbModule = await import('usb');
+    } catch (error) {
+      throw new Error(`Direct USB-JTAG reset is unavailable: ${error instanceof Error ? error.message : String(error)}`);
+    }
+    const devices = await usbModule.usb.getDevices();
+    const device = devices.find((/** @type {any} */ item) => item.vendorId === this.vid && item.productId === this.pid);
+    if (!device) throw new Error('ESP32-C3 USB JTAG/serial device not found for CDC reset');
+
+    await device.open();
+    try {
+      try { await device.detachKernelDriver(0); } catch { /* Interface may not be kernel-bound. */ }
+      await device.selectConfiguration(1);
+      await device.claimInterface(0);
+      const setLines = async (/** @type {boolean} */ dtr, /** @type {boolean} */ rts) => {
+        const value = (dtr ? 1 : 0) | (rts ? 2 : 0);
+        await device.controlTransferOut({ requestType: 'class', recipient: 'interface', request: 0x22, value, index: 0 }, new Uint8Array(0));
+      };
+
+      for (const step of ESP32_C3_USB_JTAG_RESET_STEPS) {
+        await setLines(step.dtr, step.rts);
+        if (step.delayAfterMs > 0) await sleep(step.delayAfterMs);
+      }
+      await device.releaseInterface(0);
+    } finally {
+      try { await device.attachKernelDriver(0); } catch { /* Interface may already be released to the kernel. */ }
+      await device.close();
+    }
+  }
+
   async touchUsbVcp() {
     await this.connect(1200);
-    await this.setRTS(false);
-    await this.setDTR(false);
-    await sleep(100);
-    await this.setDTR(true);
-    await this.setRTS(false);
-    await sleep(100);
-    await this.setDTR(false);
-    await this.setRTS(true);
-    await sleep(100);
+    await this.flushOutput();
+    await sleep(300);
     await this.disconnect();
-    await sleep(500);
   }
 
   async disconnect() {

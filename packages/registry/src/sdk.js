@@ -39,7 +39,7 @@ export class SdkLifecycleManager {
 
   /**
    * @param {import('./index.js').WicroPackageManifest} manifest
-   * @param {{cacheName?:string}} [options]
+   * @param {{cacheName?:string,localSources?:Record<string,string>}} [options]
    * @returns {Promise<SdkInstallResult>}
    */
   async ensure(manifest, options = {}) {
@@ -50,7 +50,7 @@ export class SdkLifecycleManager {
     const pending = this.pending.get(cacheName);
     if (pending) return pending;
 
-    const promise = this.ensureUncached(manifest, distribution, cacheName);
+    const promise = this.ensureUncached(manifest, distribution, cacheName, options);
     this.pending.set(cacheName, promise);
     try {
       return await promise;
@@ -63,9 +63,10 @@ export class SdkLifecycleManager {
    * @param {import('./index.js').WicroPackageManifest} manifest
    * @param {SdkDistribution} distribution
    * @param {string} cacheName
+   * @param {{cacheName?:string,localSources?:Record<string,string>}} [options]
    * @returns {Promise<SdkInstallResult>}
    */
-  async ensureUncached(manifest, distribution, cacheName) {
+  async ensureUncached(manifest, distribution, cacheName, options = {}) {
     const markerPath = `${cacheName}/package.json`;
     if (await this.storage.exists(markerPath)) {
       try {
@@ -101,28 +102,36 @@ export class SdkLifecycleManager {
     await this.storage.mkdir(cacheName);
 
     /** @type {string[]} */
-    const urls = [distribution.url, ...(distribution.mirrors ?? [])].filter((url) => typeof url === 'string' && url.length > 0);
-    let response;
+    const urls = [];
+    const localSource = options.localSources?.[manifest.name];
+    if (typeof localSource === 'string' && localSource.length > 0) urls.push(localSource);
+    urls.push(...[distribution.url, ...(distribution.mirrors ?? [])].filter((url) => typeof url === 'string' && url.length > 0));
+
+    let bytes;
     let lastError;
     for (const url of urls) {
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, 150 * attempt));
-          response = await this.fetch(url, { headers: { accept: 'application/zip' } });
-          if (response.ok) break;
-          lastError = new Error(`SDK download failed (${response.status}) for ${manifest.name}: ${url}`);
+          if (/^file:\/\//.test(url) || /^\//.test(url) || /^[A-Za-z]:[\\/]/.test(url)) {
+            const { readFile } = await import('node:fs/promises');
+            bytes = new Uint8Array(await readFile(/^file:\/\//.test(url) ? new URL(url) : url));
+          } else {
+            const response = await this.fetch(url, { headers: { accept: 'application/zip' } });
+            if (!response.ok) throw new Error(`SDK download failed (${response.status}) for ${manifest.name}: ${url}`);
+            bytes = new Uint8Array(await response.arrayBuffer());
+          }
+          break;
         } catch (error) {
           lastError = error;
         }
       }
-      if (response?.ok) break;
+      if (bytes) break;
     }
-    if (!response?.ok) {
+    if (!bytes) {
       await this.storage.remove(cacheName);
-      throw new Error(`SDK download failed for ${manifest.name} after mirror and retry attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+      throw new Error(`SDK download failed for ${manifest.name} after local-cache, mirror and retry attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
     }
-
-    const bytes = new Uint8Array(await response.arrayBuffer());
     const sha256 = await sha256Bytes(bytes);
     if (typeof distribution.sha256 !== 'string' || distribution.sha256.length !== 64) {
       await this.storage.remove(cacheName);
