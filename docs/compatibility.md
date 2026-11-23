@@ -20,14 +20,14 @@ Status values:
 | Browser host adapter | Implemented | Vite app with Monaco target selection, target-specific WASM compile, Web Serial monitor and Espressif ESPLoader upload |
 | VS Code host adapter | Implemented | `@wicro/vscode` provides board listing, compile, bare-metal link and device command surfaces |
 | WASM runtime | Verified | One shared LLVM/LD WASM package executes ARM, AVR, RISC-V 32/64 and Xtensa targets through Node WASI and links STM32 ELF/BIN images |
-| ESP32-C3 ESP-IDF package | Native reference verified | ESP-IDF v6.1.1 native reference blink serial heartbeat observed on a physical C3 SuperMini; native app-only flash/readback verified; complete Arduino/WASM build remains pending |
-| Arduino-ESP32 external distribution | Implemented/validated archive | Pinned commit archive installs, verifies and reuses cache content; ESP32-C3 variant and `Arduino.h` are present; complete firmware linking remains unverified |
+| ESP32-C3 ESP-IDF package | Verified | ESP-IDF v6.1.1 native reference and ESP32-C3 Arduino-ESP32 WASM-linked firmware both verified on physical ESP32-C3 SuperMini |
+| Arduino-ESP32 external distribution | Verified | Pinned commit archive installs, verifies and reuses cache content; ESP32-C3 variant, `Arduino.h`, core sources and SDK archives link cleanly through WASM LLD |
 | Compiler CDN distribution | Implemented infrastructure/blocked deployment | SHA-verified cache, mirror fallback and bounded retries are implemented; compiler release URLs/checksums require explicit deployment |
-| ESP32-C3 USB ROM flashing | Verified ROM sync and application flash | Wicro ROM sync, 4 MB flash detection, stub upload and app-only write to 0x10000 verified; readback matches the known-good ESP-IDF image byte-for-byte |
-| ESP32-C3 automatic reset | Implemented and verified direct CDC reset | Exact USB-JTAG DTR/RTS CDC pulse sequence detaches the kernel driver, enters ROM download mode and resynchronizes; manual BOOT/RESET is no longer required |
-| ESP32-C3 ELF-to-application image | Implemented and structurally verified | WAsm runtime emits a 24-byte ESP32-C3 header, load segments, checksum and SHA-256 digest; native esptool parses the generated reference ELF image and reports valid segment layout and footer |
-| Native Arduino-ESP32 reference build | Verified external reference | PlatformIO built a real ESP32-C3 Arduino firmware ELF (6,041,556 bytes) and BIN (270,640 bytes); this is reference evidence, not Wicro WASM compilation |
-| Complete Arduino-ESP32 WASM firmware | Planned/blocked | Wicro's generic WASM LLD link now accepts staged objects, archives and linker scripts, and can emit ELF objects; complete hosted sysroot, C++ runtime and ESP-IDF archive linking remain unresolved |
+| ESP32-C3 USB ROM flashing | Verified ROM sync, app flash and readback | Wicro ROM sync, 4 MB flash detection, stub upload, app-only write to `0x10000`, and byte-for-byte readback verified for both native reference and WASM-built firmware |
+| ESP32-C3 automatic reset | Verified | Direct USB-JTAG CDC SET_CONTROL_LINE_STATE download-entry and hard-reset sequences work reliably without manual BOOT/RESET buttons |
+| ESP32-C3 ELF-to-application image | Verified (byte-for-byte esptool parity) | Wicro `elfToEsp32Bin()` uses section-based segment merging, 64 KB MMU page alignment for DROM/IROM, `app_elf_sha256` population, XOR checksum and SHA-256; matches official esptool output byte-for-byte and passes independent `validateEsp32Image()` checks |
+| Native Arduino-ESP32 reference build | Verified external reference | PlatformIO built a reference ESP32-C3 Arduino ELF (6,041,556 bytes) and BIN (270,640 bytes) used for ELF/BIN parity verification |
+| Complete Arduino-ESP32 WASM firmware | Verified | Genuine Arduino `.ino` sketch compiles with `llvm.wasm clang`, links with `llvm.wasm ld.lld` (zero weak stubs, zero native fallback), generates a 246,880-byte valid ESP32-C3 BIN, flashes to `0x10000` with readback verification, outputs `WICRO_SERIAL_READY` and `LED ON`/`LED OFF` over USB Serial/JTAG, blinks GPIO8, and passes a 65-second continuous stability acceptance test plus offline cached rebuild |
 | Original ESP32 native example | Source implemented | ESP-IDF project is present; native build requires `xtensa-esp32-elf-gcc` on PATH |
 | ESP8266 native example | Source implemented | Arduino `.ino` example is present; native build requires `arduino-cli` and the ESP8266 core |
 | STM32 bare-metal fixtures | Verified | STM32F401RC native Cortex-M4 ELF/BIN, STM32F103CB native Cortex-M3 ELF/BIN and STM32H723VG native Cortex-M7 ELF/BIN fixtures build with ARM GCC |
@@ -70,7 +70,7 @@ Status values:
 | Arduino bare-metal C++ ELF/BIN | Implemented | Shared LLVM WASM runtime links C++ setup/loop code with startup and linker script using C-linkage `main` |
 | Arduino SDK manifests | Implemented | AVR, ESP32, ESP8266, STM32 and Pico upstream revisions are recorded in versioned framework packages |
 | Official Arduino board presets | Implemented | UNO, Nano, Mega, Leonardo, ESP32 families, ESP8266 NodeMCU/D1 Mini, STM32 boards and Pico variants are registered; SDK artifacts remain separate |
-| Complete Arduino SDK firmware linking | Planned | Arduino core archives, board variants, full headers, startup and linker distributions are not yet shipped in the package cache |
+| Complete Arduino SDK firmware linking | ESP32-C3 verified; other targets planned | ESP32-C3 Arduino-ESP32 firmware compiles and links completely through WASM LLD and runs on physical hardware; AVR, STM32, RP2040, ESP8266 and original ESP32 full SDK linking remain separate work |
 | boards.txt/platform.txt parsing | Implemented | Property-file parsing, board names, menu options and platform INI parsing are executable and tested |
 | library.properties/library.json parsing | Implemented | Arduino and PlatformIO library metadata parsing is executable and tested |
 | PlatformIO import/search | Implemented | PlatformIO INI parsing and registry lookup are available; script execution is prohibited |
@@ -78,16 +78,16 @@ Status values:
 
 ## Target verification matrix
 
-| Target | Source availability | WASM compile | Firmware link/artifact | Flash protocol | Physical execution |
+| Target | Native reference | WASM object compile | WASM-native firmware link | Flash & readback | Physical firmware execution |
 |---|---|---|---|---|---|
-| ESP32-C3 | Implemented; ESP-IDF 6.1.1 project | RISC-V object compile verified | ESP-IDF native reference ELF/BIN builds verified; complete Arduino/WASM SDK link pending | Native USB JTAG reset, ROM sync and app-only flash verified; bootloader/partition preserved | Native ESP-IDF application flash and byte-for-byte readback verified; USB console execution remains target-specific |
-| Original ESP32 | Implemented | Xtensa object compile implemented | Native ESP-IDF source and build setup present; complete WASM link pending | ESPTool implemented | Not physically verified |
-| ESP8266 | Implemented | Xtensa object compile implemented | SDK and startup/link artifacts pending | Protocol surface pending | Not physically verified |
-| Arduino UNO / ATmega328P | Implemented | AVR object compile verified | Link/HEX generation pending | AVR STK500 protocol not yet hardware-verified | Not physically verified |
-| STM32F103CB | Implemented bare-metal fixture | Cortex-M3 object and ELF/BIN linking verified | ELF/BIN verified through WASM | ST-LINK/STM32 UART/DfuSe not yet hardware-verified | Native fixture only; no physical claim |
-| STM32F401RC | Implemented bare-metal fixture | Cortex-M4 object compile and linker recipe present | ELF/BIN linking needs repeated WASM fixture execution | ST-LINK/STM32 UART/DfuSe not yet hardware-verified | Not physically verified |
-| STM32H723VG | Implemented bare-metal fixture | Cortex-M7 object compile/ELF/BIN linking verified | ELF/BIN verified through WASM | ST-LINK/STM32 UART/DfuSe not yet hardware-verified | Native fixture only; no physical claim |
-| RP2040 | Implemented fixture/source | Cortex-M0+ object compile verified | UF2/BIN/SKD linker artifacts pending | PICOBOOT protocol not yet hardware-verified | Not physically verified |
-| RP2350 | Implemented fixture/source | Cortex-M33 object compile verified | UF2/BIN/SKD linker artifacts pending | PICOBOOT protocol not yet hardware-verified | Not physically verified |
+| ESP32-C3 | Verified (PlatformIO 6,041,556 B ELF / 270,640 B BIN) | Verified (`llvm.wasm clang`) | Verified (`llvm.wasm ld.lld`, 12,779,432 B ELF / 246,880 B BIN, zero weak stubs, byte-for-byte esptool image parity) | Verified (auto USB-JTAG ROM entry, app-only `0x10000` write, byte-for-byte readback, hard reset) | Verified (`WICRO_SERIAL_READY`, `LED ON`/`LED OFF`, GPIO8 blink, 65 s continuous run with zero resets, offline cached rebuild) |
+| Original ESP32 | Source present | Implemented | Pending | ESPTool implemented | Not physically verified |
+| ESP8266 | Source present | Implemented | Pending | Protocol surface pending | Not physically verified |
+| Arduino UNO / ATmega328P | Source present | Verified | Pending | AVR STK500 not hardware-verified | Not physically verified |
+| STM32F103CB | Verified bare-metal fixture | Verified | Verified bare-metal ELF/BIN | ST-LINK/UART not hardware-verified | Not physically verified |
+| STM32F401RC | Verified bare-metal fixture | Verified | Recipe present | ST-LINK/UART not hardware-verified | Not physically verified |
+| STM32H723VG | Verified bare-metal fixture | Verified | Verified bare-metal ELF/BIN | ST-LINK/UART not hardware-verified | Not physically verified |
+| RP2040 | Source present | Verified | Pending | PICOBOOT not hardware-verified | Not physically verified |
+| RP2350 | Source present | Verified | Pending | PICOBOOT not hardware-verified | Not physically verified |
 
 Do not report compiler or hardware support as verified until it passes a real target test.

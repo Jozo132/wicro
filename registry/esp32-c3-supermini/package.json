@@ -17,8 +17,8 @@
     "build": {
       "kind": "firmware",
       "target": "riscv32",
-      "targetOptions": { "march": "rv32imc", "mabi": "ilp32" },
-      "source": "main/main.c",
+      "targetOptions": { "march": "rv32imc_zicsr_zifencei", "mabi": "ilp32" },
+      "source": "main/main.ino",
       "output": ".wicro/build"
     },
     "flashAutoDetect": true,

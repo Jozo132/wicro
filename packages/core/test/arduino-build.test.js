@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createWicroEngine } from '../src/index.js';
+import { createWicroEngine, ESP32_C3_ARDUINO_RECIPE, prepareEsp32C3LinkerScripts } from '../src/index.js';
 
 const files = new Map([
   ['registry/esp8266/package.json', JSON.stringify({
@@ -177,7 +177,17 @@ test('ESP32 firmware build passes Clang C++ compatibility flags', async () => {
   const result = await engine.execute({ command: 'build', project: 'project', board: 'firmware-board' });
   assert.equal(result.ok, true);
   assert.ok(compileOptions);
-  assert.deepEqual(compileOptions.compilerFlags, ['-fno-builtin', '-Wno-invalid-constexpr', '-std=gnu++11']);
+  assert.deepEqual(compileOptions.compilerFlags, [...ESP32_C3_ARDUINO_RECIPE.compilerFlags]);
   const commands = JSON.parse(/** @type {string} */ (files.get('project/.wicro/build/compile_commands.json')));
   assert.ok(commands[0].arguments.includes('-Wno-invalid-constexpr'));
+});
+
+test('prepareEsp32C3LinkerScripts preserves assertions while adapting for LLD', () => {
+  const mem = 'MEMORY { drom0_0_seg (R) : org = 0x3C000020, len = 0x7FFFE0 }\n  ASSERT(_flash_rodata_dummy_start == ORIGIN(default_rodata_seg), "msg")\n';
+  const sec = 'SECTIONS {\n  .iram0.text : { *(.text) }\n  /**\n   * This section is required to skip .iram0.text\n   */\n  .dram0.dummy (NOLOAD) : {}\n  .eh_frame : { KEEP (*(.eh_frame)) }\n  .iram0.text_end (NOLOAD) : {}\n  /* Marks the end of data, bss */\n  .dram0.heap_start (NOLOAD) : {}\n}\n';
+  const prepared = prepareEsp32C3LinkerScripts(mem, sec);
+  assert.equal(prepared.memoryLd.includes('ASSERT(_flash_rodata_dummy_start'), false);
+  assert.ok(prepared.sectionsLd.includes('ASSERT(_flash_rodata_dummy_start == ORIGIN(default_rodata_seg)'));
+  assert.ok(prepared.sectionsLd.includes('/DISCARD/ : { *(.eh_frame) *(.eh_frame_hdr) }'));
+  assert.ok(prepared.sectionsLd.indexOf('.iram0.text_end') < prepared.sectionsLd.indexOf('.dram0.dummy'));
 });

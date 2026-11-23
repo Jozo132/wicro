@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { LlvmWasmToolchain, NodeWasiRunner } from '../src/index.js';
+import { LlvmWasmToolchain, NodeWasiRunner, validateEsp32Image } from '../src/index.js';
 
 const llvmUrl = new URL('../../../toolchain/llvm-wasm/cache/llvm.wasm', import.meta.url);
 const ldUrl = new URL('../../../toolchain/llvm-wasm/cache/ld.wasm', import.meta.url);
@@ -248,11 +248,27 @@ test('WASM ESP32 encoder converts native ESP32-C3 ELF to a parseable application
   }
   const toolchain = new LlvmWasmToolchain({ llvmPath: llvmUrl.pathname });
   const bin = toolchain.elfToEsp32Bin(elf);
-  assert.equal(bin[0], 0xe9);
-  assert.equal(bin[1] >= 1, true);
-  assert.equal(bin[2], 2);
-  assert.equal(new DataView(bin.buffer, bin.byteOffset, bin.byteLength).getUint32(4, true), 0x40381f4c);
-  assert.equal(bin.length > 200000, true);
+  const validation = validateEsp32Image(bin);
+  assert.equal(validation.valid, true, validation.errors.join('; '));
+  assert.equal(validation.chipId, 5);
+  assert.equal(validation.hasAppDesc, true);
+  assert.equal(validation.sha256Valid, true);
+  assert.equal(validation.entry, 0x40381f4c);
+
+  const referenceUrl = new URL('../../../../registry-cache/esp32-c3-sdk-4.20017.260907/reference-firmware.bin', import.meta.url);
+  try {
+    const reference = await readFile(referenceUrl);
+    assert.equal(Buffer.compare(bin, reference), 0, 'elfToEsp32Bin must match official esptool output byte-for-byte');
+  } catch {
+    // Reference binary is optional when cache is absent.
+  }
+
+  // Tampering a byte must fail checksum and SHA-256 validation
+  const tampered = new Uint8Array(bin);
+  tampered[32] ^= 0xff;
+  const tamperedResult = validateEsp32Image(tampered);
+  assert.equal(tamperedResult.valid, false);
+  assert.equal(tamperedResult.sha256Valid, false);
 });
 
 test('ESP32-C3 reference application image has a valid Espressif header', async () => {

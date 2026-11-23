@@ -1,5 +1,143 @@
-import { LlvmWasmToolchain } from '../../runtime/src/index.js';
+import { LlvmWasmToolchain, extractArchiveMember, patchElfSectionFlags, validateEsp32Image } from '../../runtime/src/index.js';
 import { preprocessIno } from '../../arduino/src/index.js';
+
+/**
+ * Versioned, deterministic ESP32-C3 Arduino-ESP32 WASM firmware build recipe.
+ * Uses file-backed `/sdk` WASI preopens so SDK archives remain on disk.
+ */
+export const ESP32_C3_ARDUINO_RECIPE = Object.freeze({
+  version: 'esp32-c3-arduino-wasm-v1',
+  target: 'riscv32',
+  targetOptions: Object.freeze({ march: 'rv32imc_zicsr_zifencei', mabi: 'ilp32' }),
+  compilerFlags: Object.freeze([
+    '-std=gnu++11',
+    '-Os',
+    '-ffunction-sections',
+    '-fdata-sections',
+    '-fno-rtti',
+    '-fno-exceptions',
+    '-fno-builtin',
+    '-Wno-invalid-constexpr',
+    '-Wno-section',
+    '-Wno-ignored-attributes',
+    '-Wno-unknown-attributes',
+    '-Wno-deprecated-builtins',
+    '-Wno-keyword-compat',
+    '-Wno-extern-c-compat'
+  ]),
+  defines: Object.freeze([
+    'F_CPU=160000000L',
+    'ARDUINO=10812',
+    'ARDUINO_ESP32C3_DEV',
+    'ARDUINO_ARCH_ESP32',
+    'ESP32=ESP32',
+    'CORE_DEBUG_LEVEL=0',
+    'ARDUINO_USB_MODE=1',
+    'ARDUINO_USB_CDC_ON_BOOT=1',
+    'ARDUINO_RUNNING_CORE=0',
+    'ARDUINO_EVENT_RUNNING_CORE=0'
+  ]),
+  includeDirs: Object.freeze([
+    '/sdk/sysroot/include', '/sdk/sysroot/gcc', '/sdk/sysroot/include-cpp/15.2.0',
+    '/sdk/core', '/sdk/variant', '/sdk/include', '/sdk/include/config',
+    '/sdk/include/freertos/include', '/sdk/include/freertos/include/esp_additions/freertos',
+    '/sdk/include/freertos/include/esp_additions', '/sdk/include/freertos/port/riscv/include',
+    '/sdk/include/driver/include', '/sdk/include/driver/esp32c3/include',
+    '/sdk/include/esp_common/include',
+    '/sdk/include/esp_rom/include', '/sdk/include/esp_rom/esp32c3', '/sdk/include/esp_rom/include/esp32c3',
+    '/sdk/include/esp_hw_support/include', '/sdk/include/esp_hw_support/include/soc',
+    '/sdk/include/esp_hw_support/include/soc/esp32c3',
+    '/sdk/include/riscv/include', '/sdk/include/esp_timer/include', '/sdk/include/heap/include',
+    '/sdk/include/esp_system/include', '/sdk/include/esp_event/include',
+    '/sdk/include/esp_wifi/include', '/sdk/include/esp_netif/include', '/sdk/include/esp_eth/include',
+    '/sdk/include/tcpip_adapter/include',
+    '/sdk/include/lwip/include', '/sdk/include/lwip/include/apps', '/sdk/include/lwip/include/apps/sntp',
+    '/sdk/include/lwip/lwip/src/include', '/sdk/include/lwip/port/esp32/include',
+    '/sdk/include/lwip/port/esp32/include/arch',
+    '/sdk/include/spi_flash/include', '/sdk/include/app_update/include',
+    '/sdk/include/bootloader_support/include', '/sdk/include/efuse/include', '/sdk/include/efuse/esp32c3/include',
+    '/sdk/include/esp_pm/include', '/sdk/include/esp_ipc/include',
+    '/sdk/include/mbedtls/mbedtls/include', '/sdk/include/mbedtls/port/include',
+    '/sdk/include/log/include', '/sdk/include/esp_ringbuf/include',
+    '/sdk/include/soc/include', '/sdk/include/soc/esp32c3/include',
+    '/sdk/include/hal/include', '/sdk/include/hal/esp32c3/include',
+    '/sdk/include/newlib/platform_include', '/sdk/include/vfs/include'
+  ]),
+  coreSources: Object.freeze(['core/HWCDC.cpp', 'core/HardwareSerial.cpp']),
+  libArchives: Object.freeze([
+    'libFrameworkArduino.a', 'libspi_flash.a', 'libesp_system.a', 'libfreertos.a', 'libdriver.a',
+    'libesp_hw_support.a', 'libesp_rom.a', 'libesp_common.a', 'libesp_timer.a',
+    'libhal.a', 'libsoc.a', 'libheap.a', 'liblog.a', 'libnewlib.a', 'libvfs.a',
+    'libpthread.a', 'libcxx.a', 'libriscv.a', 'libefuse.a', 'libesp_pm.a',
+    'libesp_ipc.a', 'libesp_event.a', 'libesp_ringbuf.a', 'libapp_update.a',
+    'libbootloader_support.a', 'libnvs_flash.a', 'libesp_phy.a', 'libbt.a',
+    'libespcoredump.a', 'libcoexist.a', 'libesp_wifi.a', 'libesp_netif.a',
+    'liblwip.a', 'libwpa_supplicant.a', 'libmbedcrypto.a', 'libesp_gdbstub.a',
+    'libstdc++.a', 'libsupc++.a', 'libc.a', 'libm.a', 'libnosys.a', 'libgcc.a'
+  ]),
+  ldArchives: Object.freeze(['libphy.a', 'libbtdm_app.a', 'libbtbb.a']),
+  romLinkerScripts: Object.freeze([
+    'esp32c3.rom.ld',
+    'esp32c3.rom.api.ld',
+    'esp32c3.rom.libgcc.ld',
+    'esp32c3.rom.newlib.ld',
+    'esp32c3.rom.version.ld',
+    'esp32c3.rom.newlib-time.ld',
+    'esp32c3.rom.eco3.ld',
+    'esp32c3.peripherals.ld'
+  ]),
+  undefinedSymbols: Object.freeze([
+    '_Z5setupv', '_Z4loopv', 'esp_app_desc',
+    'pthread_include_pthread_impl', 'pthread_include_pthread_cond_var_impl',
+    'pthread_include_pthread_local_storage_impl', 'pthread_include_pthread_rwlock_impl',
+    'include_esp_phy_override', 'start_app', '__ubsan_include', '__assert_func',
+    'vfs_include_syscalls_impl', 'app_main',
+    'newlib_include_heap_impl', 'newlib_include_syscalls_impl',
+    'newlib_include_pthread_impl', 'newlib_include_assert_impl',
+    '__cxa_guard_dummy', 'uxTopUsedPriority'
+  ]),
+  extraLinkerArgs: Object.freeze(['-z', 'norelro']),
+  image: Object.freeze({ flashMode: 'dio', flashFreq: '80m', flashSize: '4MB', appOffset: 0x10000, chipId: 5 })
+});
+
+/**
+ * Adapt upstream ESP-IDF memory.ld and sections.ld for LLD's pass-1 symbol
+ * evaluation and section garbage collection while preserving exact memory regions,
+ * section addresses, and all upstream assertions.
+ * @param {string} rawMemoryLd
+ * @param {string} rawSectionsLd
+ * @returns {{memoryLd:string,sectionsLd:string}}
+ */
+export const prepareEsp32C3LinkerScripts = (rawMemoryLd, rawSectionsLd) => {
+  const assertIndex = rawMemoryLd.indexOf('  ASSERT(_flash_rodata_dummy_start');
+  const memoryLd = assertIndex >= 0 ? rawMemoryLd.slice(0, assertIndex) : rawMemoryLd;
+
+  let sectionsLd = rawSectionsLd;
+  const iramEndStart = sectionsLd.indexOf('  .iram0.text_end (NOLOAD) :');
+  const heapStart = sectionsLd.indexOf('  /* Marks the end of data, bss');
+  const dramDummyStart = sectionsLd.indexOf('  /**\n   * This section is required to skip .iram0.text');
+  if (iramEndStart >= 0 && heapStart > iramEndStart && dramDummyStart >= 0 && dramDummyStart < iramEndStart) {
+    const iramTailBlock = sectionsLd.slice(iramEndStart, heapStart);
+    sectionsLd = sectionsLd.slice(0, iramEndStart) + sectionsLd.slice(heapStart);
+    const updatedDramDummyStart = sectionsLd.indexOf('  /**\n   * This section is required to skip .iram0.text');
+    sectionsLd = sectionsLd.slice(0, updatedDramDummyStart) + iramTailBlock + '\n' + sectionsLd.slice(updatedDramDummyStart);
+  }
+
+  sectionsLd = sectionsLd
+    .replace('KEEP (*(.eh_frame))', '')
+    .replace('KEEP (*(.eh_frame_hdr))', '');
+
+  const heapIdx = sectionsLd.lastIndexOf('  .dram0.heap_start');
+  if (heapIdx >= 0) {
+    sectionsLd = sectionsLd.slice(0, heapIdx)
+      + '  /DISCARD/ : { *(.eh_frame) *(.eh_frame_hdr) }\n'
+      + sectionsLd.slice(heapIdx);
+  }
+  if (assertIndex >= 0) {
+    sectionsLd += '\nASSERT(_flash_rodata_dummy_start == ORIGIN(default_rodata_seg), ".flash_rodata_dummy section must be placed at the beginning of the rodata segment.")\n';
+  }
+  return { memoryLd, sectionsLd };
+};
 
 /** @typedef {'browser'|'node'|'vscode'} WicroHost */
 
@@ -401,68 +539,68 @@ const buildProject = async (host, toolchain, project, boardName) => {
   }
 
   const sdk = await loadSdkFiles(host, boardManifest);
-  if (build?.target === 'riscv32' && host.sdkCacheDirectory) {
-    const stagedArchive = `${host.sdkCacheDirectory}/lib/libFrameworkArduino.a`.replace(/\/+/g, '/');
-    if (!sdk.archives['sdk/lib/libFrameworkArduino.a']) {
+  const isEsp32C3Firmware = build.kind === 'firmware' && build.target === 'riscv32';
+
+  /** @type {string|undefined} */
+  let rawEsp32MemoryLd = sdk.linkerScripts['sdk/memory.ld'];
+  /** @type {string|undefined} */
+  let rawEsp32SectionsLd = sdk.linkerScripts['sdk/sections.ld'];
+  let hasEsp32FrameworkArchive = Boolean(sdk.archives['sdk/lib/libFrameworkArduino.a']);
+  /** @type {Uint8Array|undefined} */
+  let esp32VectorsObj;
+  let hasFullStagedEsp32Sdk = false;
+
+  if (isEsp32C3Firmware && host.sdkCacheDirectory) {
+    const sdkRoot = host.sdkCacheDirectory.replace(/\/+$/, '');
+    if (!hasEsp32FrameworkArchive) {
       try {
-        const binary = await host.readFile(stagedArchive, { encoding: 'binary' });
-        if (binary instanceof Uint8Array) sdk.archives['sdk/lib/libFrameworkArduino.a'] = binary;
+        const probe = await host.readFile(`${sdkRoot}/lib/libFrameworkArduino.a`, { encoding: 'binary' });
+        if (probe instanceof Uint8Array && probe.length > 0) hasEsp32FrameworkArchive = true;
       } catch {
         // Firmware linker will fail closed below.
       }
     }
-    const stagedRuntimeArchives = [
-      'libdriver.a', 'libfreertos.a', 'libesp_system.a', 'libgcc.a',
-      'liblog.a', 'libsoc.a', 'libesp_hw_support.a', 'libesp_rom.a',
-      'libhal.a', 'libesp_common.a', 'libesp_pm.a', 'libefuse.a',
-      'libheap.a', 'libriscv.a', 'libnewlib.a', 'libbootloader_support.a'
-    ];
-    if (host.readdir) {
-      for (const archiveName of stagedRuntimeArchives) {
-        if (sdk.archives[`sdk/lib/${archiveName}`]) continue;
+    if (!rawEsp32MemoryLd) {
+      for (const candidate of [`${sdkRoot}/ld/memory.ld`, `${sdkRoot}/memory.ld`]) {
         try {
-          const binary = await host.readFile(`${host.sdkCacheDirectory}/lib/${archiveName}`, { encoding: 'binary' });
-          if (binary instanceof Uint8Array) sdk.archives[`sdk/lib/${archiveName}`] = binary;
+          const text = await host.readFile(candidate, { encoding: 'utf8' });
+          if (typeof text === 'string') { rawEsp32MemoryLd = text; break; }
         } catch {
-          // The linker will report only symbols that this staged closure cannot satisfy.
+          // Try next candidate.
         }
       }
     }
-    const stagedScriptNames = [
-      'memory.ld', 'sections.ld', 'esp32c3.rom.ld', 'esp32c3.rom.api.ld',
-      'esp32c3.rom.eco3.ld', 'esp32c3.rom.eco7.ld', 'esp32c3.rom.libgcc.ld',
-      'esp32c3.rom.newlib.ld', 'esp32c3.rom.newlib-nano.ld',
-      'esp32c3.rom.newlib-time.ld', 'esp32c3.rom.version.ld'
-    ];
-    if (host.readdir) {
-      try {
-        for (const name of await host.readdir(`${host.sdkCacheDirectory}/ld`)) {
-          if (/\.ld$/i.test(name) && !stagedScriptNames.includes(name)) stagedScriptNames.push(name);
+    if (!rawEsp32SectionsLd) {
+      for (const candidate of [`${sdkRoot}/ld/sections.ld`, `${sdkRoot}/sections.ld`]) {
+        try {
+          const text = await host.readFile(candidate, { encoding: 'utf8' });
+          if (typeof text === 'string') { rawEsp32SectionsLd = text; break; }
+        } catch {
+          // Try next candidate.
         }
-      } catch {
-        // The known script set remains available below.
       }
     }
-    for (const scriptName of stagedScriptNames) {
-      const scriptKey = `sdk/${scriptName}`;
-      if (!sdk.linkerScripts[scriptKey]) {
-        try {
-          const script = await host.readFile(`${host.sdkCacheDirectory}/ld/${scriptName}`, { encoding: 'utf8' });
-          if (typeof script === 'string') sdk.linkerScripts[scriptKey] = script;
-        } catch {
-          // Firmware linker will fail closed below.
-        }
+    try {
+      const libriscv = await host.readFile(`${sdkRoot}/lib/libriscv.a`, { encoding: 'binary' });
+      if (libriscv instanceof Uint8Array && libriscv.length > 8) {
+        esp32VectorsObj = patchElfSectionFlags(extractArchiveMember(libriscv, 'vectors.S.obj'), '.exception_vectors.text', 0x6);
+        hasFullStagedEsp32Sdk = true;
       }
+    } catch {
+      // Minimal mock SDKs without libriscv.a fall through cleanly for unit tests.
     }
   }
+
   const boardMetadata = /** @type {{clockHz?:number}} */ (boardManifest.metadata ?? {});
   const boardDefine = board.replace(/[^A-Za-z0-9]/g, '_').toUpperCase();
-  const defines = [
-    `F_CPU=${typeof boardMetadata.clockHz === 'number' ? boardMetadata.clockHz : 16000000}L`,
-    'ARDUINO=10808',
-    `ARDUINO_${boardDefine}`,
-    `ARDUINO_ARCH_${String(boardManifest.metadata?.architecture ?? '').replace(/[^A-Za-z0-9]/g, '_').toUpperCase()}`
-  ].filter((value) => !value.endsWith('_'));
+  const defines = isEsp32C3Firmware
+    ? [...ESP32_C3_ARDUINO_RECIPE.defines, ...(projectManifest.build?.defines ?? [])]
+    : [
+        `F_CPU=${typeof boardMetadata.clockHz === 'number' ? boardMetadata.clockHz : 16000000}L`,
+        'ARDUINO=10808',
+        `ARDUINO_${boardDefine}`,
+        `ARDUINO_ARCH_${String(boardManifest.metadata?.architecture ?? '').replace(/[^A-Za-z0-9]/g, '_').toUpperCase()}`
+      ].filter((value) => !value.endsWith('_'));
 
   const explicitSources = projectManifest.build?.sources ?? projectManifest.sources;
   /** @type {string[]} */
@@ -515,29 +653,73 @@ const buildProject = async (host, toolchain, project, boardName) => {
   let generatedCpp;
   let sourceMap;
   const riscvEsp32CompilerFlags = build.target === 'riscv32'
-    ? ['-fno-builtin', '-Wno-invalid-constexpr', '-std=gnu++11']
+    ? [...ESP32_C3_ARDUINO_RECIPE.compilerFlags, ...(projectManifest.build?.flags ?? [])]
     : [];
   const riscvEsp32IncludeDirs = build.target === 'riscv32'
-    ? [
-        '/sdk/sysroot/include', '/sdk/sysroot/gcc', '/sdk/sysroot/include-cpp/15.2.0',
-        '/sdk/include', '/sdk/include/freertos/include', '/sdk/include/freertos/include/esp_additions/freertos',
-        '/sdk/include/freertos/include/esp_additions', '/sdk/include/freertos/port/riscv/include',
-        '/sdk/include/driver/include', '/sdk/include/esp_common/include',
-        '/sdk/include/esp_rom/include', '/sdk/include/esp_rom/esp32c3',
-        '/sdk/include/esp_hw_support/include', '/sdk/include/esp_hw_support/include/soc',
-        '/sdk/include/esp_hw_support/include/soc/esp32c3',
-        '/sdk/include/riscv/include', '/sdk/include/esp_timer/include', '/sdk/include/heap/include',
-        '/sdk/include/esp_system/include',
-        '/sdk/include/soc/include', '/sdk/include/soc/esp32c3/include',
-        '/sdk/include/hal/include', '/sdk/include/hal/esp32c3/include',
-        '/sdk/include/newlib/platform_include'
-      ]
+    ? [...ESP32_C3_ARDUINO_RECIPE.includeDirs]
     : [];
   const riscvEsp32Preopens = build.target === 'riscv32' && host.sdkCacheDirectory
     ? { '/sdk': host.sdkCacheDirectory }
     : undefined;
   /** @type {{path:string,object:Uint8Array,cache:string,diagnostics:string[]}[]} */
   const compiledObjects = [];
+
+  /**
+   * Link compiled objects into an ESP32-C3 ELF and validate the resulting BIN.
+   * @param {Record<string,Uint8Array>} objects
+   */
+  const linkEsp32C3Firmware = async (objects) => {
+    if (!hasEsp32FrameworkArchive) {
+      throw new Error(`ESP32-C3 firmware linking is missing sdk/lib/libFrameworkArduino.a in the staged target SDK`);
+    }
+    if (!rawEsp32MemoryLd || !rawEsp32SectionsLd) {
+      throw new Error(`ESP32-C3 firmware linking is missing memory.ld or sections.ld in the staged target SDK`);
+    }
+    const { memoryLd, sectionsLd } = prepareEsp32C3LinkerScripts(rawEsp32MemoryLd, rawEsp32SectionsLd);
+
+    const linkResult = hasFullStagedEsp32Sdk
+      ? await toolchain.linkEsp32Elf({
+          preObjects: esp32VectorsObj ? { 'vectors.S.obj': esp32VectorsObj } : undefined,
+          objects,
+          archivePaths: [
+            ...ESP32_C3_ARDUINO_RECIPE.libArchives.map((archive) => `/sdk/lib/${archive}`),
+            ...ESP32_C3_ARDUINO_RECIPE.ldArchives.map((archive) => `/sdk/ld/${archive}`)
+          ],
+          linkerScripts: {
+            'memory.ld': memoryLd,
+            'sections.ld': sectionsLd
+          },
+          linkerScriptPaths: ESP32_C3_ARDUINO_RECIPE.romLinkerScripts.map((script) => `/sdk/ld/${script}`),
+          libraryPaths: ['/sdk/ld', '/sdk/lib'],
+          undefinedSymbols: [...ESP32_C3_ARDUINO_RECIPE.undefinedSymbols],
+          extraLinkerArgs: [...ESP32_C3_ARDUINO_RECIPE.extraLinkerArgs],
+          target: build.target,
+          targetOptions: build.targetOptions ?? ESP32_C3_ARDUINO_RECIPE.targetOptions,
+          preopens: riscvEsp32Preopens
+        })
+      : await toolchain.linkEsp32Elf({
+          objects,
+          archives: sdk.archives,
+          linkerScripts: { ...sdk.linkerScripts, 'sdk/memory.ld': memoryLd, 'sdk/sections.ld': sectionsLd },
+          undefinedSymbols: [...ESP32_C3_ARDUINO_RECIPE.undefinedSymbols],
+          extraLinkerArgs: [...ESP32_C3_ARDUINO_RECIPE.extraLinkerArgs],
+          target: build.target,
+          targetOptions: build.targetOptions,
+          preopens: riscvEsp32Preopens
+        });
+
+    if (linkResult.bin.length > 24) {
+      const validation = validateEsp32Image(linkResult.bin);
+      if (!validation.valid) {
+        throw new Error(`Generated ESP32-C3 firmware image failed validation: ${validation.errors.join('; ')}`);
+      }
+      if (!validation.hasAppDesc) {
+        throw new Error('Generated ESP32-C3 firmware image is missing esp_app_desc_t metadata in DROM');
+      }
+    }
+    return linkResult;
+  };
+
   if (inoPaths.length > 0) {
     const tabs = Object.fromEntries(inoPaths.map((path) => [path, sourceFiles[path] ?? '']));
     const sketch = preprocessIno(tabs);
@@ -563,29 +745,63 @@ const buildProject = async (host, toolchain, project, boardName) => {
         language: 'c++'
       });
     } else if (build.kind === 'firmware') {
-      if (!sdk.archives['sdk/lib/libFrameworkArduino.a']) {
+      if (!hasEsp32FrameworkArchive) {
         throw new Error(`ESP32-C3 firmware linking is missing sdk/lib/libFrameworkArduino.a in the staged target SDK`);
       }
-      if (!sdk.linkerScripts['sdk/memory.ld'] || !sdk.linkerScripts['sdk/sections.ld']) {
+      if (!rawEsp32MemoryLd || !rawEsp32SectionsLd) {
         throw new Error(`ESP32-C3 firmware linking is missing memory.ld or sections.ld in the staged target SDK`);
       }
+      const compileIncludeDirs = [...new Set([...riscvEsp32IncludeDirs, ...sdk.includeDirs])];
       const compiledApp = await toolchain.compileSource(generatedCpp, build.target, build.targetOptions, {
         language: 'c++',
-        includeDirs: [...new Set([...riscvEsp32IncludeDirs, ...sdk.includeDirs])],
+        includeDirs: compileIncludeDirs,
         compilerFlags: riscvEsp32CompilerFlags,
         preopens: riscvEsp32Preopens,
-        files: sdk.files,
+        files: hasFullStagedEsp32Sdk ? undefined : sdk.files,
         defines,
         cacheDirectory: `${project}/.wicro/cache`
       });
-      result = await toolchain.linkEsp32Elf({
-        objects: { 'main.o': compiledApp.object },
-        archives: sdk.archives,
-        linkerScripts: sdk.linkerScripts,
-        undefinedSymbols: ['_Z5setupv', '_Z4loopv', 'app_main', 'start_app'],
-        target: build.target,
-        targetOptions: build.targetOptions
-      });
+      compiledObjects.push({ path: inoPaths[0] ?? 'sketch.cpp', object: compiledApp.object, cache: compiledApp.cache, diagnostics: compiledApp.diagnostics });
+
+      /** @type {Record<string,Uint8Array>} */
+      const linkObjects = { 'main.o': compiledApp.object };
+
+      for (const sourcePath of sourcePaths.filter((path) => !/\.(ino|pde)$/i.test(path))) {
+        const source = sourceFiles[sourcePath];
+        const language = /\.(cpp|cxx|cc)$/i.test(sourcePath) ? 'c++' : /\.(s|S|asm)$/i.test(sourcePath) ? 'assembly' : 'c';
+        const compiled = await toolchain.compileSource(source, build.target, build.targetOptions, {
+          language,
+          includeDirs: compileIncludeDirs,
+          compilerFlags: language === 'c++' ? riscvEsp32CompilerFlags : [],
+          preopens: riscvEsp32Preopens,
+          files: hasFullStagedEsp32Sdk ? undefined : sdk.files,
+          defines,
+          cacheDirectory: `${project}/.wicro/cache`
+        });
+        compiledObjects.push({ path: sourcePath, object: compiled.object, cache: compiled.cache, diagnostics: compiled.diagnostics });
+        linkObjects[`user-${compiledObjects.length}.o`] = compiled.object;
+      }
+
+      if (hasFullStagedEsp32Sdk && host.sdkCacheDirectory) {
+        const sdkRoot = host.sdkCacheDirectory.replace(/\/+$/, '');
+        for (const coreSource of ESP32_C3_ARDUINO_RECIPE.coreSources) {
+          const coreText = await host.readFile(`${sdkRoot}/${coreSource}`, { encoding: 'utf8' });
+          if (typeof coreText !== 'string') throw new Error(`Missing ESP32-C3 core source: ${coreSource}`);
+          const coreObj = await toolchain.compileSource(coreText, build.target, build.targetOptions, {
+            language: 'c++',
+            includeDirs: compileIncludeDirs,
+            compilerFlags: riscvEsp32CompilerFlags,
+            preopens: riscvEsp32Preopens,
+            defines,
+            cacheDirectory: `${project}/.wicro/cache`
+          });
+          const objKey = `${coreSource.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'core'}.o`;
+          linkObjects[objKey] = coreObj.object;
+        }
+      }
+
+      result = await linkEsp32C3Firmware(linkObjects);
+      result.diagnostics = [...new Set([...compiledObjects.flatMap((item) => item.diagnostics), ...result.diagnostics])];
     } else {
       result = await toolchain.compileSource(generatedCpp, build.target, build.targetOptions, {
         language: 'c++',
@@ -650,32 +866,26 @@ const buildProject = async (host, toolchain, project, boardName) => {
       compiledObjects.push({ path: sourcePath, object: compiled.object, cache: compiled.cache, diagnostics: compiled.diagnostics });
     }
     if (build.kind === 'firmware') {
-      if (!sdk.archives['sdk/lib/libFrameworkArduino.a']) {
-        throw new Error(`ESP32-C3 firmware linking is missing sdk/lib/libFrameworkArduino.a in the staged target SDK`);
-      }
-      if (!sdk.linkerScripts['sdk/memory.ld'] || !sdk.linkerScripts['sdk/sections.ld']) {
-        throw new Error(`ESP32-C3 firmware linking is missing memory.ld or sections.ld in the staged target SDK`);
-      }
       const firmwareObjects = Object.fromEntries(compiledObjects.map((item, index) => [`source-${index}.o`, item.object]));
-      for (const relativeObject of [
-        'objects/libc/libc_a-assert.o', 'objects/libc/libc_a-reent.o',
-        'objects/libc/libc_a-impure.o'
-      ]) {
-        try {
-          const objectData = await host.readFile(`${host.sdkCacheDirectory}/${relativeObject}`, { encoding: 'binary' });
-          if (objectData instanceof Uint8Array) firmwareObjects[relativeObject.split('/').pop() ?? relativeObject] = objectData;
-        } catch {
-          // The linker will fail closed if an extracted runtime object is missing.
+      if (hasFullStagedEsp32Sdk && host.sdkCacheDirectory) {
+        const sdkRoot = host.sdkCacheDirectory.replace(/\/+$/, '');
+        const compileIncludeDirs = [...new Set([...riscvEsp32IncludeDirs, ...sdk.includeDirs])];
+        for (const coreSource of ESP32_C3_ARDUINO_RECIPE.coreSources) {
+          const coreText = await host.readFile(`${sdkRoot}/${coreSource}`, { encoding: 'utf8' });
+          if (typeof coreText !== 'string') throw new Error(`Missing ESP32-C3 core source: ${coreSource}`);
+          const coreObj = await toolchain.compileSource(coreText, build.target, build.targetOptions, {
+            language: 'c++',
+            includeDirs: compileIncludeDirs,
+            compilerFlags: riscvEsp32CompilerFlags,
+            preopens: riscvEsp32Preopens,
+            defines,
+            cacheDirectory: `${project}/.wicro/cache`
+          });
+          const objKey = `${coreSource.split('/').pop()?.replace(/\.[^.]+$/, '') ?? 'core'}.o`;
+          firmwareObjects[objKey] = coreObj.object;
         }
       }
-      result = await toolchain.linkEsp32Elf({
-        objects: firmwareObjects,
-        archives: sdk.archives,
-        linkerScripts: sdk.linkerScripts,
-        undefinedSymbols: ['app_main', 'call_start_cpu0', 'start_app'],
-        target: build.target,
-        targetOptions: build.targetOptions
-      });
+      result = await linkEsp32C3Firmware(firmwareObjects);
       result.diagnostics = [...new Set([...compiledObjects.flatMap((item) => item.diagnostics), ...result.diagnostics])];
     } else {
       result = {

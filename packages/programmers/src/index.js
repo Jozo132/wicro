@@ -94,9 +94,12 @@ export class Esp32C3NodeProgrammer {
       let detected = false;
       try {
         if (options.resetMode === 'touch_1200') {
+          await transport.disconnect();
+          stage('Applying exact USB-JTAG CDC reset and waiting for re-enumeration');
           await transport.resetUsbJtagWithCdc();
           await new Promise((resolve) => setTimeout(resolve, 1500));
           const rediscovered = await waitForEspPortDetailed(this.options?.rediscoveryTimeoutMs ?? 5000);
+          transport.path = rediscovered.path;
           await transport.connect(options.baudRate ?? 115200);
           await transport.readLoop();
           await loader.detectChip('no_reset', 7);
@@ -114,6 +117,7 @@ export class Esp32C3NodeProgrammer {
         await transport.resetUsbJtagWithCdc();
         await new Promise((resolve) => setTimeout(resolve, 1500));
         const rediscovered = await waitForEspPortDetailed(this.options?.rediscoveryTimeoutMs ?? 5000);
+        transport.path = rediscovered.path;
         await transport.connect(options.baudRate ?? 115200);
         await transport.readLoop();
         await loader.detectChip('no_reset', 7);
@@ -140,20 +144,31 @@ export class Esp32C3NodeProgrammer {
           readback = { verified: true, bytes: data.length, matched: true };
         }
       }
+      const chipName = loader.chip.CHIP_NAME;
+      const mac = await loader.chip.readMac(loader);
+      const flashSize = await loader.detectFlashSize();
+
       /** @type {{requested:boolean,ok:boolean,error?:string}} */
       let rebootStatus;
       try {
-        await loader.flashFinish(true);
+        try {
+          await loader.flashFinish(true);
+        } catch {
+          // Stub leave may return status 198 after writeFlash already left flash mode; hard reset below exits download mode cleanly.
+        }
+        await transport.disconnect();
+        await transport.hardResetUsbJtagWithCdc();
         rebootStatus = { requested: true, ok: true };
       } catch (finishError) {
         rebootStatus = { requested: true, ok: false, error: finishError instanceof Error ? finishError.message : String(finishError) };
-        stage(`Flash write completed, but stub leave/reboot returned ${rebootStatus.error}`);
+        stage(`Flash write completed, but hard reset returned ${rebootStatus.error}`);
       }
       return {
         ok: true,
-        chip: loader.chip.CHIP_NAME,
-        mac: await loader.chip.readMac(loader),
-        flashSize: await loader.detectFlashSize(),
+        path: transport.path,
+        chip: chipName,
+        mac,
+        flashSize,
         flashWrite: { ok: true, addresses: files.map((file) => file.address) },
         readback,
         reboot: rebootStatus
@@ -192,11 +207,25 @@ export class Esp32C3NodeProgrammer {
 
   /** @param {{baudRate?:number,path?:string,onLine:(line:string)=>void,onError?:()=>void}} options */
   async monitor(options) {
-    const port = options.path ? { path: options.path } : await this.findPort();
-    const serial = new SerialPort({ path: port.path, baudRate: options.baudRate ?? 115200, autoOpen: false });
-    await new Promise((resolve, reject) => {
-      serial.open((error) => error ? reject(error) : resolve(undefined));
-    });
+    const port = options.path ? { path: options.path } : await waitForEspPortDetailed(this.options?.rediscoveryTimeoutMs ?? 5000);
+    /** @type {SerialPort|undefined} */
+    let serial;
+    const deadline = Date.now() + 2000;
+    let lastError;
+    while (Date.now() < deadline) {
+      const candidate = new SerialPort({ path: port.path, baudRate: options.baudRate ?? 115200, autoOpen: false });
+      try {
+        await new Promise((resolve, reject) => {
+          candidate.open((error) => error ? reject(error) : resolve(undefined));
+        });
+        serial = candidate;
+        break;
+      } catch (error) {
+        lastError = error;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+    }
+    if (!serial) throw lastError ?? new Error(`Unable to open serial port ${port.path}`);
 
     let pending = '';
     const onData = (/** @type {any} */ data) => {
@@ -207,11 +236,12 @@ export class Esp32C3NodeProgrammer {
     };
     serial.on('data', onData);
 
+    const activeSerial = serial;
     return {
       close: async () => {
-        serial.off('data', onData);
+        activeSerial.off('data', onData);
         await new Promise((resolve, reject) => {
-          serial.close((error) => error ? reject(error) : resolve(undefined));
+          activeSerial.close((error) => error ? reject(error) : resolve(undefined));
         });
       }
     };

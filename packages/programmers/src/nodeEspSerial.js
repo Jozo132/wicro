@@ -6,15 +6,16 @@ const SLIP_ESC_END = 0xdc;
 const SLIP_ESC_ESC = 0xdd;
 
 export const ESP32_C3_USB_JTAG_RESET_STEPS = Object.freeze([
-  Object.freeze({ dtr: false, rts: true, delayAfterMs: 0 }),
-  Object.freeze({ dtr: true, rts: true, delayAfterMs: 100 }),
-  Object.freeze({ dtr: false, rts: true, delayAfterMs: 100 }),
-  Object.freeze({ dtr: false, rts: true, delayAfterMs: 0 }),
-  Object.freeze({ dtr: true, rts: false, delayAfterMs: 0 }),
-  Object.freeze({ dtr: true, rts: true, delayAfterMs: 0 }),
+  Object.freeze({ dtr: false, rts: false, delayAfterMs: 100 }),
   Object.freeze({ dtr: true, rts: false, delayAfterMs: 100 }),
-  Object.freeze({ dtr: true, rts: false, delayAfterMs: 0 }),
-  Object.freeze({ dtr: true, rts: true, delayAfterMs: 0 })
+  Object.freeze({ dtr: false, rts: true, delayAfterMs: 100 }),
+  Object.freeze({ dtr: false, rts: false, delayAfterMs: 50 })
+]);
+
+export const ESP32_C3_USB_JTAG_HARD_RESET_STEPS = Object.freeze([
+  Object.freeze({ dtr: false, rts: false, delayAfterMs: 20 }),
+  Object.freeze({ dtr: false, rts: true, delayAfterMs: 0 }),
+  Object.freeze({ dtr: false, rts: false, delayAfterMs: 0 })
 ]);
 
 const sleep = (/** @type {number} */ ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -305,7 +306,8 @@ export class NodeEspSerialTransport {
     await this.setRTS(false);
   }
 
-  async resetUsbJtagWithCdc() {
+  /** @param {readonly Readonly<{dtr:boolean,rts:boolean,delayAfterMs:number}>[]} [steps] */
+  async resetUsbJtagWithCdc(steps = ESP32_C3_USB_JTAG_RESET_STEPS) {
     let usbModule;
     try {
       usbModule = await import('usb');
@@ -326,7 +328,7 @@ export class NodeEspSerialTransport {
         await device.controlTransferOut({ requestType: 'class', recipient: 'interface', request: 0x22, value, index: 0 }, new Uint8Array(0));
       };
 
-      for (const step of ESP32_C3_USB_JTAG_RESET_STEPS) {
+      for (const step of steps) {
         await setLines(step.dtr, step.rts);
         if (step.delayAfterMs > 0) await sleep(step.delayAfterMs);
       }
@@ -335,6 +337,10 @@ export class NodeEspSerialTransport {
       try { await device.attachKernelDriver(0); } catch { /* Interface may already be released to the kernel. */ }
       await device.close();
     }
+  }
+
+  async hardResetUsbJtagWithCdc() {
+    await this.resetUsbJtagWithCdc(ESP32_C3_USB_JTAG_HARD_RESET_STEPS);
   }
 
   async touchUsbVcp() {

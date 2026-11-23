@@ -4,6 +4,6 @@
   "framework": "arduino",
   "toolchain": "llvm-wasm-espressif",
   "build": {
-    "sources": ["main/main.c"]
+    "sources": ["main/main.ino"]
   }
 }

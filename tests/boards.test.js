@@ -17,9 +17,25 @@ const examples = [
 for (const name of examples) {
   test(`ESP32-C3 ${name} example is present`, async () => {
     await access(`examples/esp32-c3-supermini/${name}/CMakeLists.txt`);
-    await access(`examples/esp32-c3-supermini/${name}/main/main.c`);
+    if (name === 'blink') {
+      await access('examples/esp32-c3-supermini/blink/main/main.ino');
+    } else {
+      await access(`examples/esp32-c3-supermini/${name}/main/main.c`);
+    }
   });
 }
+
+test('ESP32-C3 blink declares a genuine Arduino sketch without startup stubs', async () => {
+  const manifest = JSON.parse(await readFile('examples/esp32-c3-supermini/blink/wicro.json', 'utf8'));
+  const sketch = await readFile('examples/esp32-c3-supermini/blink/main/main.ino', 'utf8');
+
+  assert.equal(manifest.framework, 'arduino');
+  assert.equal(manifest.build.sources[0], 'main/main.ino');
+  assert.match(sketch, /void setup\s*\(/);
+  assert.match(sketch, /void loop\s*\(/);
+  assert.match(sketch, /WICRO_SERIAL_READY/);
+  assert.doesNotMatch(sketch, /WICRO_WEAK_STUB|weak placeholder|__attribute__\(\(weak\)\)/);
+});
 
 test('verified blink ELF is ELF32 RISC-V', async () => {
   let elf;

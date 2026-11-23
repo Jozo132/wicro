@@ -45,15 +45,10 @@ test('SLIP decoder preserves fragmented packets, escapes and packet boundaries',
 
 test('ESP32-C3 USB-JTAG reset uses the proven CDC line-state sequence', () => {
   assert.deepEqual(ESP32_C3_USB_JTAG_RESET_STEPS, [
-    { dtr: false, rts: true, delayAfterMs: 0 },
-    { dtr: true, rts: true, delayAfterMs: 100 },
-    { dtr: false, rts: true, delayAfterMs: 100 },
-    { dtr: false, rts: true, delayAfterMs: 0 },
-    { dtr: true, rts: false, delayAfterMs: 0 },
-    { dtr: true, rts: true, delayAfterMs: 0 },
+    { dtr: false, rts: false, delayAfterMs: 100 },
     { dtr: true, rts: false, delayAfterMs: 100 },
-    { dtr: true, rts: false, delayAfterMs: 0 },
-    { dtr: true, rts: true, delayAfterMs: 0 }
+    { dtr: false, rts: true, delayAfterMs: 100 },
+    { dtr: false, rts: false, delayAfterMs: 50 }
   ]);
 });
 

@@ -229,7 +229,7 @@ export const main = async (args = []) => {
         coreModule = await import(vendorSpecifier);
       }
       const { createWicroEngine } = coreModule;
-      const { readFile, writeFile } = await import('node:fs/promises');
+      const { readFile, readdir: readDirectory, writeFile } = await import('node:fs/promises');
       const { dirname } = await import('node:path');
       const cacheOverride = flags.find((arg) => arg.startsWith('--cache='))?.slice('--cache='.length);
       /** @type {any} */
@@ -295,11 +295,24 @@ export const main = async (args = []) => {
         return 1;
       }
 
+      const registryCacheRoot = resolve(process.cwd(), 'registry-cache');
+      let sdkCacheDirectory = registryCacheRoot;
+      try {
+        const cacheNames = await readDirectory(registryCacheRoot);
+        const sdkCacheName = cacheNames
+          .filter((name) => /^esp32-c3-sdk-.+$/.test(name))
+          .sort()
+          .at(-1);
+        if (sdkCacheName) sdkCacheDirectory = resolve(registryCacheRoot, sdkCacheName);
+      } catch {
+        // The SDK lifecycle may install the cache during resolution below.
+      }
+
       /** @type {import('../../core/src/index.js').WicroHostAdapter} */
       const host = {
         host: 'node',
         cacheDirectory,
-        sdkCacheDirectory: resolve(process.cwd(), 'registry-cache'),
+        sdkCacheDirectory,
         readFile: async (/** @type {string} */ path, /** @type {{encoding?:'utf8'|'binary'}|undefined} */ options) => {
           const normalized = path.replace(/\\/g, '/');
           const sdkMatch = normalized.match(/(?:^|\/)registry\/([^/]+)(?:\/(.*))?$/);
