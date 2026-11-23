@@ -5,12 +5,13 @@
   "description": "STM32F103CB Blue Pill compatible board package",
   "license": "MIT",
   "dependencies": {
-    "llvm-wasm-espressif": "^20.1.1",
+    "llvm-wasm": "^20.1.1",
     "cmsis-stm32f1": "^1.0.0"
   },
   "metadata": {
     "manufacturer": "STMicroelectronics",
     "mcu": "STM32F103CB",
+    "platform": "st-stm32-bare-metal",
     "package": "LQFP48",
     "architecture": "armv7-m",
     "cpu": "cortex-m3",

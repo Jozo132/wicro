@@ -1,0 +1,10 @@
+{
+  "name": "stm32f103cb-bare-metal-blink",
+  "board": "stm32f103cb",
+  "framework": "bare-metal",
+  "toolchain": "llvm-wasm",
+  "build": {
+    "sources": ["main.c"],
+    "formats": ["hex"]
+  }
+}

@@ -17,7 +17,10 @@ Status values:
 | CLI `init` | Implemented | CLI integration tests |
 | CLI `clean` / `doctor` | Implemented | CLI integration tests |
 | Machine-readable CLI output | Implemented | JSON output tests |
-| Browser host adapter | Implemented | Vite app with Monaco target selection, target-specific WASM compile, Web Serial monitor and Espressif ESPLoader upload |
+| Canonical platform architecture | Implemented and verified | `WicroPlatformRegistry` abstracts architectures, platforms, boards, frameworks, firmware formats (`elf`, `bin`, `hex`, `uf2`, `esp32-c3-bin`) and programmers with zero vendor hardcoding in `@wicro/core`; validated on both `espressif-esp32c3` (RISC-V Arduino) and `st-stm32-bare-metal` (ARM Cortex-M3) |
+| Automatic SDK & compiler distribution | Implemented and tested | Atomic staged extraction, Web Crypto SHA-256 verification, mirror fallback/retries, concurrent deduplication, SHA-based invalidation, cross-project OS cache (`~/.cache/wicro`) and `--offline` mode; reproducible packager in `scripts/package-esp32-c3-sdk.js` |
+| Node.js & Browser WASI parity | Verified | `LlvmWasmToolchain` (Node WASI) and `BrowserLlvmWasmToolchain` (`@bjorn3/browser_wasi_shim`) produce byte-for-byte identical STM32F103CB ELF, BIN, HEX and UF2 firmware through the shared `@wicro/core` engine |
+| Browser host adapter | Implemented | Vite app with Monaco target selection using shared `resolveArchitectureTargetArgs()`, target-specific WASM compile, Web Serial monitor and Espressif ESPLoader upload |
 | VS Code host adapter | Implemented | `@wicro/vscode` provides board listing, compile, bare-metal link and device command surfaces |
 | WASM runtime | Verified | One shared LLVM/LD WASM package executes ARM, AVR, RISC-V 32/64 and Xtensa targets through Node WASI and links STM32 ELF/BIN images |
 | ESP32-C3 ESP-IDF package | Verified | ESP-IDF v6.1.1 native reference and ESP32-C3 Arduino-ESP32 WASM-linked firmware both verified on physical ESP32-C3 SuperMini |

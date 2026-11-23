@@ -452,13 +452,13 @@ export class LlvmWasmToolchain {
   }
 
   /**
-   * Link explicit object/archive inputs with LLD entirely through the WASM toolchain.
+   * Link explicit object/archive inputs with WASM LLD for any supported target.
    * Prefers file-backed WASI preopens (`archivePaths`, `linkerScriptPaths`, `preopens`)
    * so large SDK archives stay on disk instead of being copied through JS memory.
    * @param {{objects:Record<string,Uint8Array>|Uint8Array[],preObjects?:Record<string,Uint8Array>,archives?:Record<string,Uint8Array>,archivePaths?:string[],linkerScripts?:Record<string,string|Uint8Array>,linkerScriptPaths?:string[],libraryPaths?:string[],libraries?:string[],undefinedSymbols?:string[],extraLinkerArgs?:string[],target:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},entry?:string,preopens?:Record<string,string>}} options
    */
-  async linkEsp32Elf(options) {
-    const directory = await mkdtemp(join(tmpdir(), 'wicro-esp32-link-'));
+  async linkElf(options) {
+    const directory = await mkdtemp(join(tmpdir(), 'wicro-elf-link-'));
     try {
       /** @param {string} name @param {Uint8Array|string} data */
       const stageTmp = async (name, data) => {
@@ -531,6 +531,14 @@ export class LlvmWasmToolchain {
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
+  }
+
+  /**
+   * Backward-compatible alias for linking ESP32 ELF images through WASM LLD.
+   * @param {{objects:Record<string,Uint8Array>|Uint8Array[],preObjects?:Record<string,Uint8Array>,archives?:Record<string,Uint8Array>,archivePaths?:string[],linkerScripts?:Record<string,string|Uint8Array>,linkerScriptPaths?:string[],libraryPaths?:string[],libraries?:string[],undefinedSymbols?:string[],extraLinkerArgs?:string[],target:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},entry?:string,preopens?:Record<string,string>}} options
+   */
+  async linkEsp32Elf(options) {
+    return this.linkElf(options);
   }
 
   /**

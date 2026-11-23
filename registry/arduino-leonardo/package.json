@@ -1,5 +1,5 @@
 {
   "name": "arduino-leonardo", "version": "1.0.0", "kind": "board", "description": "Arduino Leonardo ATmega32U4 preset", "license": "MIT",
-  "dependencies": { "arduino-avr-core": "^1.0.0", "llvm-wasm-espressif": "^20.1.1" },
+  "dependencies": { "arduino-avr-core": "^1.0.0", "llvm-wasm": "^20.1.1" },
   "metadata": { "manufacturer": "Arduino", "mcu": "ATmega32U4", "architecture": "avr", "framework": "arduino", "cpu": "avr5", "clockHz": 16000000, "flashCapacityBytes": 28672, "sramCapacityBytes": 2560, "eepromCapacityBytes": 1024, "build": { "kind": "object", "target": "avr", "targetOptions": { "mcu": "atmega32u4" }, "source": "main.ino", "output": ".wicro/build" }, "status": "preset", "firmwareLinking": "pending-sdk-distribution" }
 }

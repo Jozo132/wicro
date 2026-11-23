@@ -1,5 +1,5 @@
 {
-  "name": "llvm-wasm-espressif",
+  "name": "llvm-wasm",
   "version": "20.1.1",
   "kind": "toolchain",
   "description": "Shared ARM, AVR, RISC-V and Xtensa LLVM/LD WebAssembly toolchain",

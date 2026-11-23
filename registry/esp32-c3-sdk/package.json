@@ -1,0 +1,23 @@
+{
+  "name": "esp32-c3-sdk",
+  "version": "4.20017.260907",
+  "kind": "platform",
+  "description": "Prepackaged ESP32-C3 Arduino-ESP32 + ESP-IDF RISC-V headers, linker scripts, sysroot and static archives for WASM-native builds",
+  "license": "Apache-2.0",
+  "repository": "https://github.com/Jozo132/wicro",
+  "metadata": {
+    "platform": "espressif-esp32c3",
+    "architecture": "riscv32",
+    "framework": "arduino",
+    "recipe": "esp32-c3-arduino-wasm-v1",
+    "source": "external",
+    "status": "download-on-demand",
+    "distribution": {
+      "url": "https://github.com/Jozo132/wicro/releases/download/sdk-esp32-c3-4.20017.260907/esp32-c3-sdk-4.20017.260907.zip",
+      "mirrors": [],
+      "archiveType": "zip",
+      "bytes": 52105849,
+      "sha256": "ff20947b37f70dfc019225600ab0dad3fe5857767ddfbc194be234ae774e71f1"
+    }
+  }
+}

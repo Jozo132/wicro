@@ -2,7 +2,7 @@
   "name": "esp32-c3-supermini-blink",
   "board": "esp32-c3-supermini",
   "framework": "arduino",
-  "toolchain": "llvm-wasm-espressif",
+  "toolchain": "llvm-wasm",
   "build": {
     "sources": ["main/main.ino"]
   }

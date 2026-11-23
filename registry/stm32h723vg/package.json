@@ -5,7 +5,7 @@
   "description": "STM32H723VG board package",
   "license": "MIT",
   "dependencies": {
-    "llvm-wasm-espressif": "^20.1.1",
+    "llvm-wasm": "^20.1.1",
     "cmsis-stm32h7": "^1.0.0"
   },
   "metadata": {

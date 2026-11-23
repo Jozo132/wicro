@@ -126,7 +126,7 @@ export const main = async (args = []) => {
         name: name ?? 'wicro-project',
         board: 'arduino-uno-original',
         framework: 'arduino',
-        toolchain: 'llvm-wasm-espressif',
+        toolchain: 'llvm-wasm',
         build: {
           sources: ['src/main.ino']
         }
@@ -201,7 +201,7 @@ export const main = async (args = []) => {
         name: destinationName,
         board: 'arduino-uno-original',
         framework,
-        toolchain: 'llvm-wasm-espressif'
+        toolchain: 'llvm-wasm'
       };
       await fs.writeFile(resolve(target, 'wicro.json'), `${JSON.stringify(manifest, null, 2)}\n`, { flag: flags.includes('--force') ? 'w' : 'wx' });
       emit({ ok: true, command: 'import', implemented: true, path: target, framework, manifest: 'wicro.json' }, json,
@@ -247,42 +247,64 @@ export const main = async (args = []) => {
       }
       const { NodeSdkStorage, defaultWicroCacheDirectory } = nodeCacheModule;
       const { SdkLifecycleManager } = sdkModule;
+      const offline = flags.includes('--offline') || process.env.WICRO_OFFLINE === '1';
       const cacheDirectory = defaultWicroCacheDirectory(cacheOverride);
       const sdkStorage = new NodeSdkStorage({ root: cacheDirectory });
       const sdkLifecycle = new SdkLifecycleManager({ storage: sdkStorage });
 
+      /** @type {string|undefined} */
+      let installedPlatformSdkDir;
       try {
-        const registryRoot = await findRegistryRoot();
-        const manifestValue = await readFile(resolve(target, 'wicro.json'), 'utf8');
-        const projectManifest = JSON.parse(manifestValue);
+        /** @type {{board?:string}} */
+        let projectManifest = {};
+        try {
+          const manifestValue = await readFile(resolve(target, 'wicro.json'), 'utf8');
+          projectManifest = JSON.parse(manifestValue);
+        } catch {
+          // Board may be supplied via --board without a project manifest.
+        }
         const boardName = board ?? projectManifest.board;
         if (!boardName) throw new Error('No board target was specified');
         const boardManifest = (await findRegistryManifest(boardName)).manifest;
-        for (const [frameworkName, range] of Object.entries(/** @type {Record<string,string>} */ (boardManifest.dependencies ?? {}))) {
-          if (!frameworkName.startsWith('arduino-') && frameworkName !== 'esp-idf' && frameworkName !== 'pico-sdk' && frameworkName !== 'cmsis') continue;
+        for (const [depName] of Object.entries(/** @type {Record<string,string>} */ (boardManifest.dependencies ?? {}))) {
+          const isSdkDep = depName.endsWith('-sdk') || depName.startsWith('arduino-') || depName === 'esp-idf' || depName === 'cmsis';
+          if (!isSdkDep) continue;
           try {
-            const frameworkManifest = (await findRegistryManifest(frameworkName)).manifest;
-            if (frameworkManifest.metadata?.distribution?.url) {
+            const depManifest = (await findRegistryManifest(depName)).manifest;
+            if (depManifest.metadata?.distribution?.url) {
               /** @type {Record<string,string>} */
               const localSources = {};
+              const envOverride = process.env.WICRO_SDK_SOURCE;
+              if (envOverride && depName.endsWith('-sdk')) {
+                localSources[depName] = /^https?:\/\/|^file:\/\//.test(envOverride)
+                  ? envOverride
+                  : new URL(`file://${resolve(envOverride)}`).href;
+              }
               const localCacheRoots = [
+                resolve(process.cwd(), 'dist/assets'),
+                resolve(new URL('../../../dist/assets', import.meta.url).pathname),
                 resolve(new URL('../../../registry-cache', import.meta.url).pathname),
                 resolve(process.cwd(), 'registry-cache')
               ];
-              for (const localCacheRoot of localCacheRoots) {
-                for (const candidate of [`${frameworkName}-${frameworkManifest.version}.zip`, `${frameworkName}.zip`]) {
-                  const localPath = resolve(localCacheRoot, candidate);
-                  try {
-                    await readFile(localPath);
-                    localSources[frameworkName] = new URL(`file://${localPath}`).href;
-                    break;
-                  } catch {
-                    // Try the next cache candidate.
+              if (!localSources[depName]) {
+                for (const localCacheRoot of localCacheRoots) {
+                  for (const candidate of [`${depName}-${depManifest.version}.zip`, `${depName}.zip`]) {
+                    const localPath = resolve(localCacheRoot, candidate);
+                    try {
+                      await readFile(localPath);
+                      localSources[depName] = new URL(`file://${localPath}`).href;
+                      break;
+                    } catch {
+                      // Try the next cache candidate.
+                    }
                   }
+                  if (localSources[depName]) break;
                 }
-                if (localSources[frameworkName]) break;
               }
-              await sdkLifecycle.ensure(frameworkManifest, { localSources });
+              const installed = await sdkLifecycle.ensure(depManifest, { localSources, offline });
+              if (depManifest.kind === 'platform' && depName.endsWith('-sdk')) {
+                installedPlatformSdkDir = sdkStorage.absolute(installed.target);
+              }
             }
           } catch (error) {
             if (error instanceof Error && error.message.includes('no downloadable distribution')) throw error;
@@ -295,17 +317,20 @@ export const main = async (args = []) => {
         return 1;
       }
 
-      const registryCacheRoot = resolve(process.cwd(), 'registry-cache');
-      let sdkCacheDirectory = registryCacheRoot;
-      try {
-        const cacheNames = await readDirectory(registryCacheRoot);
-        const sdkCacheName = cacheNames
-          .filter((name) => /^esp32-c3-sdk-.+$/.test(name))
-          .sort()
-          .at(-1);
-        if (sdkCacheName) sdkCacheDirectory = resolve(registryCacheRoot, sdkCacheName);
-      } catch {
-        // The SDK lifecycle may install the cache during resolution below.
+      let sdkCacheDirectory = installedPlatformSdkDir;
+      if (!sdkCacheDirectory) {
+        const registryCacheRoot = resolve(process.cwd(), 'registry-cache');
+        sdkCacheDirectory = registryCacheRoot;
+        try {
+          const cacheNames = await readDirectory(registryCacheRoot);
+          const sdkCacheName = cacheNames
+            .filter((name) => /^esp32-c3-sdk-.+$/.test(name))
+            .sort()
+            .at(-1);
+          if (sdkCacheName) sdkCacheDirectory = resolve(registryCacheRoot, sdkCacheName);
+        } catch {
+          // No legacy registry-cache fallback required.
+        }
       }
 
       /** @type {import('../../core/src/index.js').WicroHostAdapter} */
@@ -373,7 +398,7 @@ export const main = async (args = []) => {
             }
           }
         }
-        const result = await compilerManager.ensure(manifestValue, { localSources });
+        const result = await compilerManager.ensure(manifestValue, { localSources, offline });
         llvmPath = compilerStorage.absolute(result.clang);
         if (result.ld) linkerPath = compilerStorage.absolute(result.ld);
       } catch (error) {

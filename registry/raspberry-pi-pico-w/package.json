@@ -1,5 +1,5 @@
 {
   "name": "raspberry-pi-pico-w", "version": "1.0.0", "kind": "board", "description": "Raspberry Pi Pico W Arduino preset", "license": "MIT",
-  "dependencies": { "arduino-pico": "^1.0.0", "llvm-wasm-espressif": "^20.1.1" },
+  "dependencies": { "arduino-pico": "^1.0.0", "llvm-wasm": "^20.1.1" },
   "metadata": { "manufacturer": "Raspberry Pi", "mcu": "RP2040", "architecture": "armv6m", "cpu": "cortex-m0plus", "framework": "arduino", "clockHz": 133000000, "flashCapacityBytes": 2097152, "sramCapacityBytes": 264192, "build": { "kind": "object", "target": "armv6m", "targetOptions": { "mcpu": "cortex-m0plus" }, "source": "main.ino", "output": ".wicro/build" }, "wireless": { "wifi": true, "bluetooth": false }, "status": "preset", "firmwareLinking": "pending-sdk-distribution" }
 }

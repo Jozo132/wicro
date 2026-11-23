@@ -6,7 +6,7 @@
   "license": "LGPL-2.1",
   "repository": "https://github.com/arduino/ArduinoCore-avr",
   "dependencies": {
-    "llvm-wasm-espressif": "^20.1.1"
+    "llvm-wasm": "^20.1.1"
   },
   "metadata": {
     "upstreamCommit": "11b9130371e8447920edb65a75706a6c951e51fc",

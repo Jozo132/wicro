@@ -7,7 +7,10 @@
  * @property {(path:string) => Promise<void>} mkdir
  * @property {(path:string) => Promise<void>} remove
  * @property {(path:string) => Promise<string[]>} readdir
+ * @property {(from:string, to:string) => Promise<void>} [rename]
  */
+
+export const SDK_CACHE_SCHEMA_VERSION = 2;
 
 /** @typedef {object} SdkDistribution
  * @property {string} url
@@ -39,18 +42,20 @@ export class SdkLifecycleManager {
 
   /**
    * @param {import('./index.js').WicroPackageManifest} manifest
-   * @param {{cacheName?:string,localSources?:Record<string,string>}} [options]
+   * @param {{cacheName?:string,localSources?:Record<string,string>,offline?:boolean}} [options]
    * @returns {Promise<SdkInstallResult>}
    */
   async ensure(manifest, options = {}) {
     const distribution = /** @type {{distribution?:SdkDistribution}} */ (manifest.metadata ?? {}).distribution;
-    if (!distribution?.url) throw new Error(`SDK package '${manifest.name}' has no downloadable distribution`);
+    if (!distribution?.url && !options.localSources?.[manifest.name]) {
+      throw new Error(`SDK package '${manifest.name}' has no downloadable distribution`);
+    }
 
     const cacheName = options.cacheName ?? `${manifest.name}-${manifest.version}`;
     const pending = this.pending.get(cacheName);
     if (pending) return pending;
 
-    const promise = this.ensureUncached(manifest, distribution, cacheName, options);
+    const promise = this.ensureUncached(manifest, distribution ?? { url: '' }, cacheName, options);
     this.pending.set(cacheName, promise);
     try {
       return await promise;
@@ -63,7 +68,7 @@ export class SdkLifecycleManager {
    * @param {import('./index.js').WicroPackageManifest} manifest
    * @param {SdkDistribution} distribution
    * @param {string} cacheName
-   * @param {{cacheName?:string,localSources?:Record<string,string>}} [options]
+   * @param {{cacheName?:string,localSources?:Record<string,string>,offline?:boolean}} [options]
    * @returns {Promise<SdkInstallResult>}
    */
   async ensureUncached(manifest, distribution, cacheName, options = {}) {
@@ -71,7 +76,9 @@ export class SdkLifecycleManager {
     if (await this.storage.exists(markerPath)) {
       try {
         const marker = JSON.parse(await this.storage.readText(markerPath));
-        if (marker.name === manifest.name && marker.version === manifest.version && typeof marker.sha256 === 'string') {
+        const expectedArchiveSha = typeof distribution.sha256 === 'string' ? distribution.sha256.toLowerCase() : null;
+        const shaMatches = !expectedArchiveSha || (typeof marker.sha256 === 'string' && marker.sha256.toLowerCase() === expectedArchiveSha);
+        if (marker.name === manifest.name && marker.version === manifest.version && typeof marker.sha256 === 'string' && shaMatches) {
           const files = /** @type {Record<string,string>|undefined} */ (marker.files);
           let intact = Boolean(files);
           if (files) {
@@ -84,22 +91,31 @@ export class SdkLifecycleManager {
           if (!intact) {
             await this.storage.remove(cacheName);
           } else {
-          return {
-            name: manifest.name,
-            version: manifest.version,
-            target: cacheName,
-            sha256: marker.sha256,
-            cache: 'cache-hit'
-          };
+            return {
+              name: manifest.name,
+              version: manifest.version,
+              target: cacheName,
+              sha256: marker.sha256,
+              cache: 'cache-hit'
+            };
           }
+        } else {
+          await this.storage.remove(cacheName);
         }
       } catch {
         await this.storage.remove(cacheName);
       }
     }
 
-    await this.storage.remove(cacheName);
-    await this.storage.mkdir(cacheName);
+    if (options.offline) {
+      throw new Error(`SDK '${manifest.name}@${manifest.version}' is not present in the local cache and offline mode is enabled`);
+    }
+
+    const stagingName = typeof this.storage.rename === 'function'
+      ? `${cacheName}.staging-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+      : cacheName;
+    if (stagingName === cacheName) await this.storage.remove(cacheName);
+    await this.storage.mkdir(stagingName);
 
     /** @type {string[]} */
     const urls = [];
@@ -129,16 +145,16 @@ export class SdkLifecycleManager {
       if (bytes) break;
     }
     if (!bytes) {
-      await this.storage.remove(cacheName);
+      await this.storage.remove(stagingName);
       throw new Error(`SDK download failed for ${manifest.name} after local-cache, mirror and retry attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
     }
     const sha256 = await sha256Bytes(bytes);
     if (typeof distribution.sha256 !== 'string' || distribution.sha256.length !== 64) {
-      await this.storage.remove(cacheName);
+      await this.storage.remove(stagingName);
       throw new Error(`SDK '${manifest.name}' has no trusted SHA-256 archive identity. Configure a verified immutable distribution before installation.`);
     }
     if (distribution.sha256.toLowerCase() !== sha256) {
-      await this.storage.remove(cacheName);
+      await this.storage.remove(stagingName);
       throw new Error(`SDK SHA-256 mismatch for ${manifest.name}: expected ${distribution.sha256}, got ${sha256}`);
     }
 
@@ -147,30 +163,40 @@ export class SdkLifecycleManager {
       const { unzipSync } = await import('fflate');
       entries = unzipSync(bytes);
     } catch (error) {
-      await this.storage.remove(cacheName);
+      await this.storage.remove(stagingName);
       throw new Error(`SDK archive extraction failed for ${manifest.name}: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     /** @type {Record<string,string>} */
     const fileHashes = {};
-    for (const [rawName, data] of Object.entries(entries)) {
-      if (rawName.endsWith('/') || rawName.endsWith('\\')) continue;
-      const safeName = safeSdkArchivePath(rawName);
-      await this.storage.mkdir(`${cacheName}/${safeName}`.split('/').slice(0, -1).join('/'));
-      await this.storage.writeBytes(`${cacheName}/${safeName}`, data);
-      fileHashes[safeName] = await sha256Bytes(data);
-    }
+    try {
+      for (const [rawName, data] of Object.entries(entries)) {
+        if (rawName.endsWith('/') || rawName.endsWith('\\')) continue;
+        const safeName = safeSdkArchivePath(rawName);
+        const parent = `${stagingName}/${safeName}`.split('/').slice(0, -1).join('/');
+        if (parent) await this.storage.mkdir(parent);
+        await this.storage.writeBytes(`${stagingName}/${safeName}`, data);
+        fileHashes[safeName] = await sha256Bytes(data);
+      }
 
-    const marker = {
-      name: manifest.name,
-      version: manifest.version,
-      sha256,
-      files: fileHashes,
-      upstreamCommit: typeof manifest.metadata?.upstreamCommit === 'string' ? manifest.metadata.upstreamCommit : undefined,
-      distribution: distribution.url
-    };
-    await this.storage.writeText(markerPath, `${JSON.stringify(marker, null, 2)}\n`);
-    await this.updateLock(manifest, sha256);
+      const marker = {
+        cacheSchemaVersion: SDK_CACHE_SCHEMA_VERSION,
+        name: manifest.name,
+        version: manifest.version,
+        sha256,
+        files: fileHashes,
+        upstreamCommit: typeof manifest.metadata?.upstreamCommit === 'string' ? manifest.metadata.upstreamCommit : undefined,
+        distribution: distribution.url
+      };
+      await this.storage.writeText(`${stagingName}/package.json`, `${JSON.stringify(marker, null, 2)}\n`);
+      if (stagingName !== cacheName && typeof this.storage.rename === 'function') {
+        await this.storage.rename(stagingName, cacheName);
+      }
+      await this.updateLock(manifest, sha256);
+    } catch (error) {
+      await this.storage.remove(stagingName);
+      throw error;
+    }
 
     return { name: manifest.name, version: manifest.version, target: cacheName, sha256, cache: 'downloaded' };
   }

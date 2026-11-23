@@ -1,5 +1,5 @@
 {
-  "name": "llvm-wasm-espressif",
+  "name": "llvm-wasm",
   "version": "202611141634-v6.0.3",
   "kind": "toolchain",
   "description": "Shared Espressif LLVM/LLD WebAssembly toolchain",

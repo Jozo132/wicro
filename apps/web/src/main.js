@@ -5,6 +5,7 @@ import { WicroLanguageService } from '../../../packages/language-server/src/inde
 import { BrowserSdkStorage } from '../../../packages/registry/src/browser-cache.js';
 import { CompilerAssetManager } from '../../../packages/registry/src/compiler-assets.js';
 import { preprocessIno } from '../../../packages/arduino/src/index.js';
+import { resolveArchitectureTargetArgs } from '../../../packages/core/src/platform/architectures.js';
 import './style.css';
 
 const defaultSource = `void setup()
@@ -315,15 +316,7 @@ const loadTargetConfigs = async () => {
 };
 
 /** @param {BoardConfig['build']} build */
-const buildArgs = (build) => {
-  if (build.target === 'riscv32') return ['--target=riscv32-esp-elf', `-march=${build.targetOptions.march ?? 'rv32imc'}`, `-mabi=${build.targetOptions.mabi ?? 'ilp32'}`];
-  if (build.target === 'xtensa') return ['--target=xtensa-esp-elf', `-mcpu=${build.targetOptions.mcpu ?? 'esp32'}`];
-  if (build.target === 'avr') return ['--target=avr', `-mmcu=${build.targetOptions.mcu ?? 'atmega328p'}`];
-  if (build.target === 'armv6m') return ['--target=arm-none-eabi', `-mcpu=${build.targetOptions.mcpu ?? 'cortex-m0plus'}`, '-mthumb'];
-  if (build.target === 'armv7-m') return ['--target=arm-none-eabi', `-mcpu=${build.targetOptions.mcpu ?? 'cortex-m3'}`, '-mthumb', '-mfloat-abi=soft'];
-  if (build.target === 'armv7e-m') return ['--target=arm-none-eabi', `-mcpu=${build.targetOptions.mcpu ?? 'cortex-m4'}`, '-mthumb', '-mfloat-abi=hard'];
-  return ['--target=arm-none-eabi', `-mcpu=${build.targetOptions.mcpu ?? 'cortex-m33'}`, '-mthumb', '-mfloat-abi=hard'];
-};
+const buildArgs = (build) => resolveArchitectureTargetArgs(build.target, build.targetOptions);
 
 /** @param {string} text */
 const setStatus = (text) => {

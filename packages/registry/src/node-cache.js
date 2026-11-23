@@ -1,6 +1,7 @@
-import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { randomBytes } from 'node:crypto';
 
 /** @param {string} [override] */
 export const defaultWicroCacheDirectory = (override) => {
@@ -48,14 +49,37 @@ export class NodeSdkStorage {
   async writeText(path, text) {
     const absolute = this.absolute(path);
     await mkdir(resolve(absolute, '..'), { recursive: true });
-    await writeFile(absolute, text, 'utf8');
+    const temp = `${absolute}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
+    try {
+      await writeFile(temp, text, 'utf8');
+      await rename(temp, absolute);
+    } catch (error) {
+      await rm(temp, { force: true });
+      throw error;
+    }
   }
 
   /** @param {string} path @param {Uint8Array} data */
   async writeBytes(path, data) {
     const absolute = this.absolute(path);
     await mkdir(resolve(absolute, '..'), { recursive: true });
-    await writeFile(absolute, data);
+    const temp = `${absolute}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
+    try {
+      await writeFile(temp, data);
+      await rename(temp, absolute);
+    } catch (error) {
+      await rm(temp, { force: true });
+      throw error;
+    }
+  }
+
+  /** @param {string} from @param {string} to */
+  async rename(from, to) {
+    const source = this.absolute(from);
+    const target = this.absolute(to);
+    await mkdir(resolve(target, '..'), { recursive: true });
+    await rm(target, { recursive: true, force: true });
+    await rename(source, target);
   }
 
   /** @param {string} path */

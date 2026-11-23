@@ -34,7 +34,7 @@ export class CompilerAssetManager {
 
   /**
    * @param {CompilerAssetManifest} manifest
-   * @param {{mirrorIndex?:number,localSources?:Record<string,string>}} [options]
+   * @param {{mirrorIndex?:number,localSources?:Record<string,string>,offline?:boolean}} [options]
    * @returns {Promise<CompilerAssetResult>}
    */
   async ensure(manifest, options = {}) {
@@ -55,7 +55,7 @@ export class CompilerAssetManager {
 
   /**
    * @param {CompilerAssetManifest} manifest
-   * @param {{mirrorIndex?:number,localSources?:Record<string,string>}} [options]
+   * @param {{mirrorIndex?:number,localSources?:Record<string,string>,offline?:boolean}} [options]
    * @returns {Promise<CompilerAssetResult>}
    */
   async ensureUncached(manifest, options = {}) {
@@ -84,6 +84,10 @@ export class CompilerAssetManager {
       }
     }
 
+    if (options.offline) {
+      throw new Error(`Compiler '${manifest.name}@${manifest.version}' is not present in the local cache and offline mode is enabled`);
+    }
+
     await this.storage.mkdir(cacheRoot);
     await this.installArtifact(cacheRoot, 'clang', clangArtifact, options);
     if (ldArtifact) await this.installArtifact(cacheRoot, 'ld', ldArtifact, options);
@@ -93,6 +97,7 @@ export class CompilerAssetManager {
       version: manifest.version,
       clang: clangArtifact.filename,
       ld: ldArtifact?.filename ?? null,
+      uncompressedSha256: clangArtifact.uncompressedSha256 ?? null,
       source: clangArtifact.url
     }, null, 2)}\n`);
 

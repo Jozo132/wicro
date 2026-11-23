@@ -1,5 +1,5 @@
 {
   "name": "raspberry-pi-pico-2", "version": "1.0.0", "kind": "board", "description": "Raspberry Pi Pico 2 Arduino preset", "license": "MIT",
-  "dependencies": { "arduino-pico": "^1.0.0", "llvm-wasm-espressif": "^20.1.1" },
+  "dependencies": { "arduino-pico": "^1.0.0", "llvm-wasm": "^20.1.1" },
   "metadata": { "manufacturer": "Raspberry Pi", "mcu": "RP2350", "architecture": "armv8m-mainline", "cpu": "cortex-m33", "framework": "arduino", "clockHz": 150000000, "flashCapacityBytes": 4194304, "sramCapacityBytes": 532480, "build": { "kind": "object", "target": "armv8m-mainline", "targetOptions": { "mcpu": "cortex-m33" }, "source": "main.ino", "output": ".wicro/build" }, "status": "preset", "firmwareLinking": "pending-sdk-distribution" }
 }

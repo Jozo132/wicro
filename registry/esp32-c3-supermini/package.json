@@ -7,17 +7,20 @@
   "dependencies": {
     "arduino-esp32": "^1.0.0",
     "esp-idf": "^6.1.0",
-    "llvm-wasm-espressif": "^20.1.1"
+    "esp32-c3-sdk": "^4.20017.0",
+    "llvm-wasm": "^20.1.1"
   },
   "metadata": {
     "manufacturer": "Espressif",
     "mcu": "ESP32-C3",
+    "platform": "espressif-esp32c3",
     "architecture": "riscv32",
     "framework": "arduino",
     "build": {
       "kind": "firmware",
       "target": "riscv32",
       "targetOptions": { "march": "rv32imc_zicsr_zifencei", "mabi": "ilp32" },
+      "firmwareFormat": "esp32-c3-bin",
       "source": "main/main.ino",
       "output": ".wicro/build"
     },

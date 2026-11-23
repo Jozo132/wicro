@@ -6,7 +6,7 @@
   "license": "LGPL-2.1",
   "repository": "https://github.com/espressif/arduino-esp32",
   "dependencies": {
-    "llvm-wasm-espressif": "^20.1.1"
+    "llvm-wasm": "^20.1.1"
   },
   "metadata": {
     "upstreamCommit": "bc8ab15634eb0402d39e1e259a5a4a29be3e6e1c",
