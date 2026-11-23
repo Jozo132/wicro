@@ -26,7 +26,11 @@ The shared engine in `packages/core/src/index.js` contains **no board- or vendor
 - `packages/core/src/platform/esp32.js` — `ESP32_C3_ARDUINO_RECIPE`, `prepareEsp32C3LinkerScripts()`, and `esp32C3PlatformAdapter`.
 - `packages/core/src/platform/stm32.js` — `stm32BareMetalPlatformAdapter` (second-architecture validation for ARM Cortex-M3/M4/M7).
 - `packages/core/src/platform/defaults.js` — `createDefaultPlatformRegistry()`.
-- `packages/runtime/src/browser-toolchain.js` — `BrowserLlvmWasmToolchain` (`@bjorn3/browser_wasi_shim`, zero Node.js imports).
+- `packages/runtime/src/browser-toolchain.js` — `BrowserLlvmWasmToolchain` (`@bjorn3/browser_wasi_shim`, zero Node.js imports, `/sdk` preopen mounting and incremental object caching).
+- `packages/runtime/src/elf-utils.js` — host-independent ELF32/ar/ESP32-C3 image conversion, validation (Web Crypto SHA-256), ELF memory stats, and Clang diagnostic parsing.
+- `packages/programmers/src/browser.js` — `BrowserEsp32Programmer` (`esptool-js` over Web Serial) and browser capability detection.
+- `packages/hardware/src/browser.js` — `BrowserSerialMonitor` and `BrowserDeviceCoordinator` for exclusive USB port ownership across flash and monitor lifecycles.
+- `apps/web/src/workers/build-worker.js` — Web Worker hosting `createWicroEngine` + `BrowserLlvmWasmToolchain` + OPFS persistent caching for `dev:web`.
 - `scripts/package-esp32-c3-sdk.js` — development-time asset packager emitting `dist/assets/esp32-c3-sdk-<version>.zip` and `dist/assets/distribution-manifest.json`.
 
 ## Extension Example

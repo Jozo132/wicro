@@ -1,4 +1,4 @@
-import { LlvmWasmToolchain, validateEsp32Image } from '../../../runtime/src/index.js';
+import { elfToEsp32Bin, validateEsp32Image } from '../../../runtime/src/elf-utils.js';
 
 /** @param {Uint8Array} elf @param {number} minAddress */
 const extractFlatBinaryFromElf = (elf, minAddress = 0x08000000) => {
@@ -173,12 +173,9 @@ export const esp32C3BinFormatHandler = Object.freeze({
   id: 'esp32-c3-bin',
   extension: '.bin',
   description: 'Espressif ESP32-C3 64 KB MMU-aligned application image',
-  convert: (elf) => {
-    const converter = new LlvmWasmToolchain({ llvmPath: '' });
-    return converter.elfToEsp32Bin(elf);
-  },
-  validate: (image) => {
-    const result = validateEsp32Image(image);
+  convert: async (elf) => elfToEsp32Bin(elf),
+  validate: async (image) => {
+    const result = await validateEsp32Image(image);
     const errors = [...result.errors];
     if (result.valid && !result.hasAppDesc) {
       errors.push('Generated ESP32-C3 firmware image is missing esp_app_desc_t metadata in DROM');

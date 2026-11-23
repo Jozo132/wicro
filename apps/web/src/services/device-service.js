@@ -1,0 +1,173 @@
+import { createDefaultPlatformRegistry } from '../../../../packages/core/src/index.js';
+import {
+  BrowserEsp32Programmer,
+  describeWebSerialPort,
+  detectBrowserCapabilities
+} from '../../../../packages/programmers/src/browser.js';
+import { BrowserDeviceCoordinator, BrowserSerialMonitor } from '../../../../packages/hardware/src/browser.js';
+
+const platforms = createDefaultPlatformRegistry();
+
+/**
+ * Platform-independent browser device & flashing service.
+ * Selects the canonical programmer adapter for the active board and coordinates
+ * exclusive USB port ownership between flashing and serial monitoring.
+ */
+export class IdeDeviceService {
+  /**
+   * @param {{
+   *   onSerialLine: (line: {text:string,timestamp:number,direction:'rx'|'tx'|'system'}) => void,
+   *   onDeviceStatus: (status: {connected:boolean,state:string,label:string}) => void,
+   *   onLog: (line: string) => void
+   * }} callbacks
+   */
+  constructor(callbacks) {
+    this.callbacks = callbacks;
+    this.capabilities = detectBrowserCapabilities();
+    this.monitor = new BrowserSerialMonitor({
+      onLine: (event) => callbacks.onSerialLine(event),
+      onStateChange: (state, detail) => {
+        callbacks.onDeviceStatus({
+          connected: state === 'connected',
+          state,
+          label: detail ?? (this.coordinator.port ? describeWebSerialPort(this.coordinator.port) : 'No device')
+        });
+      }
+    });
+    this.coordinator = new BrowserDeviceCoordinator({
+      monitor: this.monitor,
+      onDeviceChange: (info) => callbacks.onDeviceStatus(info)
+    });
+  }
+
+  /**
+   * Resolve whether a board has a supported browser programmer.
+   * @param {import('../state/ide-store.js').BoardCatalogEntry | null} board
+   */
+  resolveProgrammerForBoard(board) {
+    if (!board) return null;
+    const platformId = String(board.metadata?.platform ?? '');
+    const platform = platformId ? platforms.getPlatform(platformId) : null;
+    const programmerId = platform?.programmerId ?? (platformId === 'espressif-esp32c3' ? 'esp32-c3-usb-jtag' : null);
+    if (!programmerId) return null;
+    const descriptor = platforms.getProgrammer(programmerId);
+    return {
+      id: programmerId,
+      descriptor,
+      supportedInBrowser: programmerId === 'esp32-c3-usb-jtag'
+    };
+  }
+
+  /**
+   * Prompt the user to select a USB serial port and connect the serial monitor.
+   * @param {import('../state/ide-store.js').BoardCatalogEntry | null} board
+   * @param {number} baudRate
+   */
+  async connectMonitor(board, baudRate) {
+    if (!this.capabilities.webSerial) {
+      throw new Error('Web Serial API is unavailable in this browser. Use Chrome or Edge.');
+    }
+    const vid = board?.metadata?.usbVendorId ? Number.parseInt(String(board.metadata.usbVendorId), 16) : undefined;
+    const pid = board?.metadata?.usbProductId ? Number.parseInt(String(board.metadata.usbProductId), 16) : undefined;
+    const nav = /** @type {any} */ (navigator);
+    const filters = vid ? [{ usbVendorId: vid, ...(pid ? { usbProductId: pid } : {}) }] : [];
+    const port = await nav.serial.requestPort(filters.length > 0 ? { filters } : {});
+    this.coordinator.setPort(port);
+    this.coordinator.baudRate = baudRate;
+    await this.monitor.connect(port, baudRate);
+    this.callbacks.onDeviceStatus({
+      connected: true,
+      state: 'connected',
+      label: describeWebSerialPort(port)
+    });
+  }
+
+  async disconnectMonitor() {
+    await this.monitor.disconnect();
+    this.callbacks.onDeviceStatus({
+      connected: false,
+      state: 'disconnected',
+      label: this.coordinator.port ? `${describeWebSerialPort(this.coordinator.port)} (disconnected)` : 'No device'
+    });
+  }
+
+  /** @param {string} text @param {'\n'|'\r\n'|''} lineEnding */
+  async sendSerial(text, lineEnding = '\n') {
+    await this.monitor.write(text, lineEnding);
+  }
+
+  /**
+   * Flash a browser-built firmware binary to the connected board, coordinating
+   * monitor disconnect, flashing, optional readback verification, hard reset,
+   * and automatic serial monitor reconnection.
+   * @param {{
+   *   board: import('../state/ide-store.js').BoardCatalogEntry,
+   *   firmwareBin: Uint8Array,
+   *   verifyReadback?: boolean,
+   *   autoMonitor?: boolean,
+   *   monitorBaudRate?: number,
+   *   onProgress?: (event: {stage:string,message:string,percent?:number}) => void
+   * }} options
+   */
+  async flashFirmware(options) {
+    if (!this.capabilities.webSerial) {
+      throw new Error('Web Serial API is unavailable in this browser. Use Chrome or Edge to flash hardware.');
+    }
+    const programmerInfo = this.resolveProgrammerForBoard(options.board);
+    if (!programmerInfo?.supportedInBrowser) {
+      const name = programmerInfo?.descriptor?.name ?? options.board.name;
+      throw new Error(`Browser USB flashing is not yet supported for ${name}. Download the generated firmware artifact or use the Wicro CLI.`);
+    }
+
+    const vid = options.board.metadata?.usbVendorId ? Number.parseInt(String(options.board.metadata.usbVendorId), 16) : 0x303a;
+    const pid = options.board.metadata?.usbProductId ? Number.parseInt(String(options.board.metadata.usbProductId), 16) : 0x1001;
+    const uploadBaud = Number(options.board.metadata?.uploadBaud) || 460800;
+
+    const programmer = new BrowserEsp32Programmer({
+      baudRate: uploadBaud,
+      romBaudRate: 115200,
+      usbVendorId: vid,
+      usbProductId: pid,
+      onLog: (line) => this.callbacks.onLog(line)
+    });
+
+    const { port: existingPort } = await this.coordinator.acquireForFlash();
+    let port = existingPort ?? await programmer.rediscoverPort(400);
+    if (!port) {
+      port = await programmer.requestPort({ filterByBoard: true });
+    }
+    this.coordinator.setPort(port);
+
+    try {
+      const result = await programmer.writeFlash(
+        port,
+        [{ address: 0x10000, data: options.firmwareBin }],
+        {
+          baudRate: uploadBaud,
+          verifyReadback: Boolean(options.verifyReadback),
+          onProgress: options.onProgress
+        }
+      );
+
+      if (options.autoMonitor) {
+        options.onProgress?.({ stage: 'monitor', message: 'Reconnecting serial monitor after reset…', percent: 98 });
+        await this.coordinator.releaseAfterFlash({
+          reconnectMonitor: true,
+          baudRate: options.monitorBaudRate ?? Number(options.board.metadata?.monitorBaud) ?? 115200,
+          rediscoverTimeoutMs: 5000
+        });
+      } else {
+        await this.coordinator.releaseAfterFlash({ reconnectMonitor: false });
+      }
+
+      return result;
+    } catch (error) {
+      await this.coordinator.releaseAfterFlash({ reconnectMonitor: false });
+      throw error;
+    }
+  }
+
+  dispose() {
+    this.coordinator.dispose();
+  }
+}

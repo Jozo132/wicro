@@ -1,490 +1,329 @@
-import * as monaco from 'monaco-editor';
-import { WASI, OpenFile, File, PreopenDirectory, ConsoleStdout } from '@bjorn3/browser_wasi_shim';
-import { ESPLoader, Transport } from 'esptool-js';
-import { WicroLanguageService } from '../../../packages/language-server/src/index.js';
-import { BrowserSdkStorage } from '../../../packages/registry/src/browser-cache.js';
-import { CompilerAssetManager } from '../../../packages/registry/src/compiler-assets.js';
-import { preprocessIno } from '../../../packages/arduino/src/index.js';
-import { resolveArchitectureTargetArgs } from '../../../packages/core/src/platform/architectures.js';
+import { IdeStore } from './state/ide-store.js';
+import { WicroBuildClient } from './services/build-client.js';
+import { IdeDeviceService } from './services/device-service.js';
+import { MonacoEditorHost } from './editor/monaco-host.js';
+import { IdeShell } from './ui/ide-shell.js';
 import './style.css';
 
-const defaultSource = `void setup()
-{
-    pinMode(LED_BUILTIN, OUTPUT);
-}
-
-void loop()
-{
-    digitalWrite(LED_BUILTIN, HIGH);
-    delay(500);
-    digitalWrite(LED_BUILTIN, LOW);
-    delay(500);
-}
-`;
-
-const app = document.querySelector('#app');
-
-if (!app) throw new Error('Wicro app root not found');
-
-app.innerHTML = `
-  <header class="toolbar">
-    <div class="brand"><span class="brand-mark">W</span><strong>Wicro</strong></div>
-    <select id="target" class="target-select" aria-label="Board target">
-      <option value="arduino-uno" selected>Arduino UNO</option>
-      <option value="arduino-nano">Arduino Nano</option>
-      <option value="arduino-mega">Arduino Mega 2560</option>
-      <option value="arduino-leonardo">Arduino Leonardo</option>
-      <option value="esp32-c3">ESP32-C3 SuperMini</option>
-      <option value="esp32-devkit">ESP32 DevKit</option>
-      <option value="esp32-s2">ESP32-S2</option>
-      <option value="esp32-s3">ESP32-S3</option>
-      <option value="esp32-c6">ESP32-C6</option>
-      <option value="esp32-h2">ESP32-H2</option>
-      <option value="esp32-original">Original ESP32</option>
-      <option value="esp8266">ESP8266</option>
-      <option value="esp8266-nodemcu">ESP8266 NodeMCU</option>
-      <option value="esp8266-d1-mini">ESP8266 D1 Mini</option>
-      <option value="stm32f103cb">STM32F103CB</option>
-      <option value="stm32h723vg">STM32H723VG</option>
-      <option value="stm32f401rc">STM32F401RC</option>
-      <option value="stm32-blue-pill">STM32 Blue Pill</option>
-      <option value="stm32-black-pill">STM32 Black Pill</option>
-      <option value="stm32-nucleo-f401re">STM32 Nucleo-F401RE</option>
-      <option value="rp2040">RP2040</option>
-      <option value="rp2350">RP2350</option>
-      <option value="raspberry-pi-pico-w">Raspberry Pi Pico W</option>
-      <option value="raspberry-pi-pico-2">Raspberry Pi Pico 2</option>
-      <option value="raspberry-pi-pico-2-w">Raspberry Pi Pico 2 W</option>
-    </select>
-    <div class="actions">
-      <button id="compile" type="button">Compile</button>
-      <button id="connect" type="button" class="secondary">Connect</button>
-      <button id="upload" type="button" class="primary" disabled>Upload</button>
-      <input id="firmware" type="file" accept=".bin" hidden>
-    </div>
-  </header>
-  <main class="workspace">
-    <section class="editor-panel">
-      <div class="panel-label">main.ino</div>
-      <div id="editor"></div>
-    </section>
-    <aside class="console-panel">
-      <div class="console-header">
-        <span>Serial monitor</span>
-        <button id="clear" type="button" aria-label="Clear serial output">Clear</button>
-      </div>
-      <pre id="console" aria-live="polite"></pre>
-    </aside>
-  </main>
-  <footer class="statusbar">
-    <span id="status">Toolchain not installed</span>
-    <span id="target-status">AVR ATmega328P</span>
-  </footer>
-`;
-
-const editorRoot = /** @type {HTMLElement} */ (document.querySelector('#editor'));
-const editor = monaco.editor.create(editorRoot, {
-  value: defaultSource,
-  language: 'cpp',
-  theme: 'vs-dark',
-  automaticLayout: true,
-  minimap: { enabled: false },
-  fontFamily: 'JetBrains Mono, SFMono-Regular, Consolas, monospace',
-  fontSize: 14,
-  padding: { top: 18 }
-});
-
-/** @type {WebAssembly.Module|null} */
-let browserWasmModule = null;
-
-/** @returns {Promise<WebAssembly.Module>} */
-const loadBrowserWasm = async () => {
-  if (browserWasmModule) return browserWasmModule;
-  const manifestResponse = await fetch('/toolchain/manifest.json', { cache: 'no-cache' });
-  if (!manifestResponse.ok) throw new Error(`Toolchain manifest failed (${manifestResponse.status})`);
-  const manifest = await manifestResponse.json();
-  const storage = new BrowserSdkStorage();
-  const localManifest = structuredClone(manifest);
-  if (!localManifest.artifacts?.clang?.url) {
-    localManifest.artifacts ??= {};
-    localManifest.artifacts.clang.url = new URL('/toolchain/llvm.wasm', window.location.href).href;
-  }
-  const resolved = await new CompilerAssetManager({ storage }).ensure(localManifest);
-  const compilerBytes = await storage.readBytes(resolved.clang);
-  const response = { ok: true, status: 200, arrayBuffer: async () => compilerBytes.buffer.slice(compilerBytes.byteOffset, compilerBytes.byteOffset + compilerBytes.byteLength) };
-  if (!response.ok) throw new Error(`Toolchain download failed (${response.status})`);
-  browserWasmModule = await WebAssembly.compile(await response.arrayBuffer());
-  return browserWasmModule;
-};
-
-/**
- * @param {string[]} args
- * @param {string} source
- * @param {string} [language]
- */
-const runBrowserClang = async (args, source, language = 'c') => {
-  const module = await loadBrowserWasm();
-  const extension = language === 'c++' ? 'cpp' : 'c';
-  const root = new PreopenDirectory('.', new Map([
-    [`main.${extension}`, new File(new TextEncoder().encode(source))]
-  ]));
-  let stdout = '';
-  let stderr = '';
-  const wasi = new WASI([
-    'clang',
-    ...args,
-    '-fsyntax-only',
-    `main.${extension}`
-  ], [], [
-    new OpenFile(new File([])),
-    ConsoleStdout.lineBuffered((line) => { stdout += `${line}\n`; }),
-    ConsoleStdout.lineBuffered((line) => { stderr += `${line}\n`; }),
-    root
-  ]);
-  const instance = await WebAssembly.instantiate(module, { wasi_snapshot_preview1: wasi.wasiImport });
-  const exitCode = wasi.start(/** @type {any} */ (instance));
-  return { exitCode, stdout, stderr };
-};
-
-const browserLanguageToolchain = {
-  /** @param {{source:string,target?:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},language?:'c'|'c++',includeDirs?:string[],files?:Record<string,string|Uint8Array>,defines?:string[],line?:number,column?:number}} options */
-  async diagnoseSource(options) {
-    const targetName = options.target ?? 'riscv32';
-    const configs = await loadTargetConfigs();
-    const config = Object.values(configs).find((item) => item.build.target === targetName);
-    const args = config ? buildArgs(config.build) : buildArgs({ target: 'riscv32', targetOptions: {} });
-    const result = await runBrowserClang(args, options.source, options.language);
-    const diagnostics = [];
-    for (const line of result.stderr.split(/\r?\n/)) {
-      const match = line.match(/^(.*?):(\d+):(\d+):\s+(fatal error|error|warning|note):\s*(.*)$/);
-      if (!match) continue;
-      diagnostics.push({ severity: match[4] === 'warning' ? 'warning' : match[4] === 'note' ? 'info' : 'error', file: match[1], line: Number(match[2]), column: Number(match[3]), message: match[5] });
-    }
-    return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, diagnostics };
-  },
-  /** @param {{source:string,target?:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},language?:'c'|'c++',line:number,column:number}} options */
-  async completeSource(options) {
-    const targetName = options.target ?? 'riscv32';
-    const configs = await loadTargetConfigs();
-    const config = Object.values(configs).find((item) => item.build.target === targetName);
-    const args = config ? buildArgs(config.build) : buildArgs({ target: 'riscv32', targetOptions: {} });
-    const result = await runBrowserClang([...args, `-Xclang`, `-code-completion-at=main.c:${options.line}:${options.column}`], options.source, options.language);
-    const candidates = [];
-    for (const line of (result.stderr || result.stdout).split(/\r?\n/)) {
-      const match = line.match(/^COMPLETION:\s*([^\s]+)(?:\s+:\s*(.*))?$/);
-      if (match) candidates.push({ label: match[1], detail: match[2] ?? '' });
-    }
-    return { exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr, candidates };
-  },
-  /** @returns {Promise<never>} */
-  async runLanguageTool() {
-    throw new Error('Clang-Tidy/Clang-Format WASM entry points are unavailable');
+const FALLBACK_EXAMPLE = {
+  id: 'esp32-c3-supermini/blink',
+  board: 'esp32-c3-supermini',
+  name: 'blink',
+  framework: 'arduino',
+  files: {
+    'main/main.ino': `void setup() {\n    Serial.begin(115200);\n    pinMode(8, OUTPUT);\n    Serial.println("WICRO_SERIAL_READY");\n}\n\nvoid loop() {\n    digitalWrite(8, LOW);\n    Serial.println("LED ON");\n    delay(500);\n\n    digitalWrite(8, HIGH);\n    Serial.println("LED OFF");\n    delay(500);\n}\n`,
+    'wicro.json': JSON.stringify({
+      name: 'esp32-c3-supermini-blink',
+      board: 'esp32-c3-supermini',
+      framework: 'arduino',
+      toolchain: 'llvm-wasm',
+      build: { sources: ['main/main.ino'] }
+    }, null, 2)
   }
 };
 
-const languageService = new WicroLanguageService({ host: 'browser', toolchain: /** @type {any} */ (browserLanguageToolchain), configuration: { target: 'riscv32' } });
-const documentUri = 'file:///main.ino';
-languageService.openDocument({ uri: documentUri, languageId: 'cpp', text: editor.getValue(), version: 1 });
+/** @param {string} filename @param {Uint8Array} bytes */
+const triggerDownload = (filename, bytes) => {
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  const blob = new Blob([copy], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
 
-monaco.languages.registerCompletionItemProvider('cpp', {
-  /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position */
-  async provideCompletionItems(model, position) {
-    languageService.updateDocument(documentUri, model.getValue(), 1);
+const bootstrap = async () => {
+  const root = /** @type {HTMLElement | null} */ (document.querySelector('#app'));
+  if (!root) throw new Error('Wicro app root (#app) not found');
+
+  const store = new IdeStore();
+  const buildClient = new WicroBuildClient();
+
+  const deviceService = new IdeDeviceService({
+    onSerialLine: (line) => store.appendSerialLine(line),
+    onDeviceStatus: (status) => {
+      store.deviceConnected = status.connected;
+      store.deviceState = status.state;
+      store.deviceLabel = status.label;
+      store.emit('device');
+    },
+    onLog: (line) => store.appendCompilerLog(`[Flash] ${line}`)
+  });
+
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let diagnoseTimer = null;
+  const scheduleDiagnostics = () => {
+    if (diagnoseTimer) clearTimeout(diagnoseTimer);
+    diagnoseTimer = setTimeout(async () => {
+      if (store.buildStatus === 'building') return;
+      try {
+        const res = await buildClient.diagnose({
+          boardId: store.boardId,
+          projectFiles: store.snapshotFiles(),
+          activeFile: store.activeFile
+        });
+        if (Array.isArray(res?.diagnostics)) {
+          store.diagnostics = res.diagnostics;
+          editorHost.setDiagnostics(res.diagnostics);
+          store.emit('diagnostics');
+        }
+      } catch {
+        // Live diagnostics are best-effort until the compiler is loaded.
+      }
+    }, 650);
+  };
+
+  const refreshCacheStatus = async () => {
     try {
-      const items = await languageService.completion(documentUri, { line: position.lineNumber - 1, character: position.column - 1 });
-      const word = model.getWordUntilPosition(position);
-      const range = {
-        startLineNumber: position.lineNumber,
-        endLineNumber: position.lineNumber,
-        startColumn: word.startColumn,
-        endColumn: word.endColumn
-      };
-      return { suggestions: items.map((item) => ({ label: item.label, insertText: item.label, detail: item.detail, kind: monaco.languages.CompletionItemKind.Text, range })) };
+      store.cacheInfo = await buildClient.cacheStatus();
+      store.emit('cache');
     } catch {
-      return { suggestions: [] };
+      // Ignore transient worker errors.
     }
-  }
-});
+  };
 
-monaco.languages.registerHoverProvider('cpp', {
-  /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position */
-  provideHover(model, position) {
-    languageService.updateDocument(documentUri, model.getValue(), 1);
-    const hover = languageService.hover(documentUri, { line: position.lineNumber - 1, character: position.column - 1 });
-    if (!hover) return null;
-    return { range: undefined, contents: [{ value: hover.contents.value }] };
-  }
-});
+  const runBuild = async (/** @type {{clean?:boolean}} */ options = {}) => {
+    if (store.buildStatus === 'building') return null;
+    store.buildStatus = 'building';
+    store.buildProgress = { stage: 'start', message: 'Starting WASM build…', percent: 2 };
+    store.clearCompilerLogs();
+    store.appendCompilerLog(`[Wicro] Building ${store.exampleId || 'project'} for ${store.boardId} (${store.framework})${store.offline ? ' [OFFLINE]' : ''}…`);
+    store.emit('build');
+    shell.setActiveBottomTab('output');
 
-monaco.languages.registerDefinitionProvider('cpp', {
-  /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position */
-  provideDefinition(model, position) {
-    languageService.updateDocument(documentUri, model.getValue(), 1);
-    return languageService.definition(documentUri, { line: position.lineNumber - 1, character: position.column - 1 }).map((location) => ({ uri: monaco.Uri.parse(location.uri), range: {
-      startLineNumber: location.range.start.line + 1,
-      startColumn: location.range.start.character + 1,
-      endLineNumber: location.range.end.line + 1,
-      endColumn: location.range.end.character + 1
-    } }));
-  }
-});
+    try {
+      const result = await buildClient.build(
+        {
+          boardId: store.boardId,
+          framework: store.framework,
+          projectFiles: store.snapshotFiles(),
+          offline: store.offline,
+          clean: options.clean
+        },
+        (progress) => {
+          store.buildProgress = {
+            stage: progress.stage,
+            message: progress.message,
+            percent: progress.percent ?? store.buildProgress.percent
+          };
+          store.appendCompilerLog(`[${progress.stage}] ${progress.message}`);
+          store.emit('build');
+        }
+      );
 
-monaco.languages.registerReferenceProvider('cpp', {
-  /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position */
-  provideReferences(model, position) {
-    languageService.updateDocument(documentUri, model.getValue(), 1);
-    return languageService.references(documentUri, { line: position.lineNumber - 1, character: position.column - 1 }).map((location) => ({ uri: monaco.Uri.parse(location.uri), range: {
-      startLineNumber: location.range.start.line + 1,
-      startColumn: location.range.start.character + 1,
-      endLineNumber: location.range.end.line + 1,
-      endColumn: location.range.end.character + 1
-    } }));
-  }
-});
+      store.lastBuild = result;
+      store.diagnostics = result.parsedDiagnostics ?? [];
+      editorHost.setDiagnostics(store.diagnostics);
+      store.emit('diagnostics');
 
-monaco.languages.registerRenameProvider('cpp', {
-  /** @param {import('monaco-editor').editor.ITextModel} model @param {import('monaco-editor').Position} position @param {string} newName */
-  async provideRenameEdits(model, position, newName) {
-    languageService.updateDocument(documentUri, model.getValue(), 1);
-    const result = await languageService.rename(documentUri, { line: position.lineNumber - 1, character: position.column - 1 }, newName);
-    const edits = Object.entries(result.changes).flatMap(([uri, changeEdits]) => changeEdits.map((edit) => ({ resource: monaco.Uri.parse(uri), textEdit: {
-      range: {
-        startLineNumber: edit.range.start.line + 1,
-        startColumn: edit.range.start.character + 1,
-        endLineNumber: edit.range.end.line + 1,
-        endColumn: edit.range.end.character + 1
-      }, text: edit.newText
-    }, versionId: undefined })));
-    return { edits };
-  }
-});
+      if (result.ok) {
+        store.buildStatus = 'success';
+        const binBytes = result.artifacts?.bin?.byteLength ?? result.artifacts?.object?.byteLength ?? 0;
+        const cacheTag = `compiler=${result.cacheStatus.compiler}, sdk=${result.cacheStatus.sdk}`;
+        store.buildProgress = {
+          stage: 'done',
+          message: `Build succeeded in ${(result.timingMs / 1000).toFixed(2)}s (${binBytes.toLocaleString()} B)`,
+          percent: 100
+        };
+        store.appendCompilerLog(`[Wicro] Build succeeded in ${(result.timingMs / 1000).toFixed(2)}s (${cacheTag})`);
+        if (result.value?.validation) {
+          const v = result.value.validation;
+          store.appendCompilerLog(`[Wicro] Firmware validated: entry=0x${(v.entry ?? 0).toString(16)}, segments=${v.segmentCount}, sha256=${v.sha256Valid ? 'OK' : 'N/A'}`);
+        }
+        if (result.value?.memory) {
+          const m = result.value.memory;
+          store.appendCompilerLog(`[Wicro] Memory: Flash ${m.totalFlashBytes.toLocaleString()} B (text=${m.textBytes}, rodata=${m.rodataBytes}, data=${m.dataBytes}), RAM ${m.totalRamBytes.toLocaleString()} B (bss=${m.bssBytes})`);
+        }
+      } else {
+        store.buildStatus = 'error';
+        const errorText = (result.diagnostics ?? []).map((/** @type {any} */ d) => d.message).join('\n') || 'Build failed';
+        store.buildProgress = { stage: 'error', message: 'Build failed — see Problems / Output', percent: 0 };
+        store.appendCompilerLog(`[Error] ${errorText}`);
+        if (store.diagnostics.length > 0) shell.setActiveBottomTab('diagnostics');
+      }
 
-/** @param {string} text */
-const updateBrowserDiagnostics = async (text) => {
-  languageService.updateDocument(documentUri, text, 1);
-  try {
-    const diagnostics = await languageService.diagnostics(documentUri);
-    const model = editor.getModel();
-    if (!model) return;
-    monaco.editor.setModelMarkers(model, 'wicro', diagnostics.map((diagnostic) => ({
-      severity: diagnostic.severity === 'error' ? monaco.MarkerSeverity.Error : diagnostic.severity === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Info,
-      message: diagnostic.message,
-      startLineNumber: diagnostic.range.start.line + 1,
-      startColumn: diagnostic.range.start.character + 1,
-      endLineNumber: diagnostic.range.end.line + 1,
-      endColumn: diagnostic.range.end.character + 1
-    })));
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : 'Language diagnostics failed');
-  }
-};
-
-editor.onDidChangeModelContent(() => {
-  void updateBrowserDiagnostics(editor.getValue());
-});
-
-/** @type {HTMLElement|null} */
-const status = document.querySelector('#status');
-/** @type {HTMLElement|null} */
-const consoleOutput = document.querySelector('#console');
-/** @type {HTMLButtonElement|null} */
-const uploadButton = document.querySelector('#upload');
-/** @type {HTMLButtonElement|null} */
-const compileButton = document.querySelector('#compile');
-/** @type {HTMLButtonElement|null} */
-const connectButton = document.querySelector('#connect');
-
-/** @type {any} */ let serialPort = null;
-/** @type {any} */ let serialTransport = null;
-/** @typedef {Blob & {name:string,arrayBuffer():Promise<ArrayBuffer>}} FirmwareFile */
-/** @type {FirmwareFile|null} */ let firmwareFile = null;
-
-const targetSelect = /** @type {HTMLSelectElement|null} */ (document.querySelector('#target'));
-const firmwareInput = /** @type {HTMLInputElement|null} */ (document.querySelector('#firmware'));
-
-/** @typedef {{label:string,build:{target:'riscv32'|'xtensa'|'armv7-m'|'armv7e-m'|'armv6m'|'armv8m-mainline'|'avr',targetOptions:{march?:string,mabi?:string,mcpu?:string,mcu?:string}}}} BoardConfig */
-/** @type {Record<string,BoardConfig>|null} */
-let targetConfigs = null;
-
-/** @returns {Promise<Record<string,BoardConfig>>} */
-const loadTargetConfigs = async () => {
-  if (targetConfigs) return targetConfigs;
-  const response = await fetch('/boards.json', { cache: 'no-cache' });
-  if (!response.ok) throw new Error(`Board manifest failed (${response.status})`);
-  targetConfigs = /** @type {Record<string,BoardConfig>} */ (await response.json());
-  return targetConfigs;
-};
-
-/** @param {BoardConfig['build']} build */
-const buildArgs = (build) => resolveArchitectureTargetArgs(build.target, build.targetOptions);
-
-/** @param {string} text */
-const setStatus = (text) => {
-  if (status) status.textContent = text;
-};
-
-targetSelect?.addEventListener('change', async () => {
-  const targetName = targetSelect.value;
-  const targetStatus = document.querySelector('#target-status');
-  try {
-    const configs = await loadTargetConfigs();
-    const targetConfig = configs[targetName];
-    if (targetStatus && targetConfig) targetStatus.textContent = targetConfig.label;
-    if (targetConfig) {
-      languageService.configuration = {
-        target: targetConfig.build.target,
-        targetOptions: targetConfig.build.targetOptions
-      };
-      void updateBrowserDiagnostics(editor.getValue());
+      store.emit('build');
+      await refreshCacheStatus();
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      store.buildStatus = 'error';
+      store.buildProgress = { stage: 'error', message: `Build failed: ${message}`, percent: 0 };
+      store.appendCompilerLog(`[Error] ${message}`);
+      store.emit('build');
+      return null;
     }
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : 'Board manifest failed');
-  }
-});
+  };
 
-compileButton?.addEventListener('click', async () => {
-  setStatus('Loading shared LLVM WASM toolchain…');
+  const runFlash = async () => {
+    const board = store.currentBoard;
+    const firmwareBin = store.lastBuild?.artifacts?.bin;
+    if (!board || !(firmwareBin instanceof Uint8Array) || firmwareBin.byteLength === 0) {
+      store.appendCompilerLog('[Flash] Build firmware first before flashing.');
+      return null;
+    }
+
+    store.flashStatus = 'flashing';
+    store.flashProgress = { stage: 'connect', message: 'Preparing USB flash…', percent: 2 };
+    store.emit('flash');
+    shell.setActiveBottomTab('output');
+
+    try {
+      const result = await deviceService.flashFirmware({
+        board,
+        firmwareBin,
+        verifyReadback: store.verifyReadback,
+        autoMonitor: store.autoMonitorAfterFlash,
+        monitorBaudRate: store.baudRate,
+        onProgress: (progress) => {
+          store.flashProgress = {
+            stage: progress.stage,
+            message: progress.message,
+            percent: progress.percent ?? store.flashProgress.percent
+          };
+          store.appendCompilerLog(`[Flash:${progress.stage}] ${progress.message}`);
+          store.emit('flash');
+        }
+      });
+
+      store.flashStatus = 'success';
+      store.flashProgress = { stage: 'done', message: `Flashed ${result.chip} (${firmwareBin.byteLength.toLocaleString()} B)`, percent: 100 };
+      store.appendCompilerLog(`[Flash] Complete: chip=${result.chip}, mac=${result.mac}${result.readback?.verified ? ', readback=VERIFIED' : ''}`);
+      store.emit('flash');
+      if (store.autoMonitorAfterFlash) shell.setActiveBottomTab('serial');
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      store.flashStatus = 'error';
+      store.flashProgress = { stage: 'error', message: `Flash failed: ${message}`, percent: 0 };
+      store.appendCompilerLog(`[Flash Error] ${message}`);
+      store.emit('flash');
+      return null;
+    }
+  };
+
+  const toggleMonitor = async () => {
+    if (store.deviceConnected) {
+      await deviceService.disconnectMonitor();
+      return;
+    }
+    try {
+      shell.setActiveBottomTab('serial');
+      await deviceService.connectMonitor(store.currentBoard, store.baudRate);
+      store.appendSerialLine({ text: `Connected at ${store.baudRate} baud`, timestamp: Date.now(), direction: 'system' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      store.appendSerialLine({ text: `Connection failed: ${message}`, timestamp: Date.now(), direction: 'system' });
+    }
+  };
+
+  const shell = new IdeShell(root, store, {
+    capabilities: deviceService.capabilities,
+    onSelectBoard: (boardId) => {
+      store.setBoard(boardId);
+      const matchingExample = store.examples.find((ex) => ex.board === boardId);
+      if (matchingExample) {
+        store.loadExample(matchingExample);
+        editorHost.syncFiles(store.files, store.activeFile);
+      }
+    },
+    onSelectFramework: (framework) => store.setFramework(framework),
+    onSelectExample: (exampleId) => {
+      const example = store.examples.find((ex) => ex.id === exampleId);
+      if (example) {
+        store.loadExample(example);
+        editorHost.syncFiles(store.files, store.activeFile);
+      }
+    },
+    onSelectFile: (path) => {
+      store.setActiveFile(path);
+      editorHost.openFile(path);
+    },
+    onAddFile: (path) => {
+      try {
+        store.addFile(path, '');
+        editorHost.syncFiles(store.files, store.activeFile);
+      } catch (error) {
+        store.appendCompilerLog(`[Project] ${error instanceof Error ? error.message : String(error)}`);
+      }
+    },
+    onDeleteFile: (path) => {
+      store.deleteFile(path);
+      editorHost.syncFiles(store.files, store.activeFile);
+    },
+    onBuild: (options) => { void runBuild(options); },
+    onFlash: () => { void runFlash(); },
+    onToggleMonitor: () => { void toggleMonitor(); },
+    onSendSerial: (text) => {
+      void deviceService.sendSerial(text, store.lineEnding).catch((error) => {
+        store.appendSerialLine({ text: `Write failed: ${error instanceof Error ? error.message : String(error)}`, timestamp: Date.now(), direction: 'system' });
+      });
+    },
+    onDownloadArtifact: (kind) => {
+      const data = store.lastBuild?.artifacts?.[kind];
+      if (!(data instanceof Uint8Array)) return;
+      const ext = kind === 'bin' ? 'firmware.bin' : kind === 'elf' ? 'firmware.elf' : 'main.o';
+      triggerDownload(`${store.boardId}-${ext}`, data);
+    },
+    onClearCache: async () => {
+      store.cacheInfo = await buildClient.clearCache();
+      store.emit('cache');
+      store.appendCompilerLog('[Cache] Cleared persistent WASM toolchain and SDK cache.');
+    },
+    onRevealDiagnostic: (file, line, column) => {
+      if (store.files.has(file)) store.setActiveFile(file);
+      editorHost.revealLocation(file, line, column);
+    }
+  });
+
+  const editorHost = new MonacoEditorHost(shell.editorContainer, {
+    theme: store.theme,
+    onChange: (path, value) => {
+      store.setFileContent(path, value);
+      scheduleDiagnostics();
+    }
+  });
+
+  store.subscribe((changed) => {
+    if (changed === 'theme') editorHost.setTheme(store.theme);
+  });
+
+  // Load canonical board catalog and example projects from Vite / static endpoints
   try {
-    const targetName = targetSelect?.value ?? 'esp32-c3';
-    const configs = await loadTargetConfigs();
-    const targetConfig = configs[targetName];
-    if (!targetConfig) throw new Error(`Unknown board target: ${targetName}`);
-
-    const wasm = await loadBrowserWasm();
-
-    const sketchSource = editor.getValue();
-    const useArduino = targetName === 'arduino-uno'
-      || targetName === 'arduino-nano'
-      || targetName === 'arduino-mega'
-      || targetName === 'arduino-leonardo'
-      || targetName === 'esp8266'
-      || targetName === 'esp8266-nodemcu'
-      || targetName === 'esp8266-d1-mini';
-    const compiledSource = useArduino
-      ? preprocessIno({ 'main.ino': sketchSource }).cpp
-      : sketchSource;
-    const extension = useArduino ? 'cpp' : 'c';
-    const root = new PreopenDirectory('.', new Map([
-      [`main.${extension}`, new File(new TextEncoder().encode(compiledSource))]
-    ]));
-    let stdout = '';
-    let stderr = '';
-    const wasi = new WASI([
-      'clang',
-      ...buildArgs(targetConfig.build),
-      '-nostdlib',
-      ...(useArduino ? ['-x', 'c++'] : []),
-      '-c',
-      `main.${extension}`,
-      '-o',
-      'main.o'
-    ], [], [
-      new OpenFile(new File([])),
-      ConsoleStdout.lineBuffered((line) => { stdout += `${line}\n`; }),
-      ConsoleStdout.lineBuffered((line) => { stderr += `${line}\n`; }),
-      root
+    const [boardsResp, examplesResp] = await Promise.all([
+      fetch('/registry/boards.json', { cache: 'no-cache' }),
+      fetch('/examples/index.json', { cache: 'no-cache' })
     ]);
-
-    const instance = await WebAssembly.instantiate(wasm, {
-      wasi_snapshot_preview1: wasi.wasiImport
-    });
-    const exitCode = wasi.start(/** @type {any} */ (instance));
-
-    const output = root.dir.contents.get('main.o');
-    if (exitCode !== 0 || !(output instanceof File) || output.size === 0n) {
-      throw new Error(stderr || stdout || `Compiler exited with status ${exitCode}`);
-    }
-
-    setStatus(`Compiled main.o (${Number(output.size)} bytes) for ${targetConfig.label}`);
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : 'Compile failed');
-  }
-});
-
-connectButton?.addEventListener('click', async () => {
-  if (!('serial' in navigator)) {
-    setStatus('Web Serial is unavailable; use Chrome or Edge');
-    return;
+    if (boardsResp.ok) store.setBoards(await boardsResp.json());
+    if (examplesResp.ok) store.setExamples(await examplesResp.json());
+  } catch {
+    // Offline fallback uses FALLBACK_EXAMPLE below.
   }
 
-  try {
-    if (serialTransport) await serialTransport.disconnect();
-    serialPort = await navigator.serial.requestPort({});
-    serialTransport = new Transport(/** @type {any} */ (serialPort), false);
-    await serialTransport.connect(115200);
-    if (uploadButton) uploadButton.disabled = false;
-    setStatus('Connected serial port');
+  const initialExample = store.examples.find((ex) => ex.id === 'esp32-c3-supermini/blink') ?? store.examples[0] ?? FALLBACK_EXAMPLE;
+  store.loadExample(initialExample);
+  editorHost.syncFiles(store.files, store.activeFile);
+  await refreshCacheStatus();
 
-    const decoder = new TextDecoder();
-    void serialTransport.rawRead((/** @type {Uint8Array} */ data) => {
-      if (consoleOutput) consoleOutput.textContent += decoder.decode(data);
-    }, () => false);
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : 'Serial connection failed');
-  }
-});
+  // Expose a clean debugging/automation API on window for Playwright E2E tests
+  /** @type {any} */ (window).__wicroIde = {
+    store,
+    buildClient,
+    deviceService,
+    editorHost,
+    runBuild,
+    runFlash,
+    refreshCacheStatus
+  };
 
-firmwareInput?.addEventListener('change', () => {
-  firmwareFile = /** @type {FirmwareFile|null} */ (firmwareInput.files?.[0] ?? null);
-  setStatus(firmwareFile ? `Firmware selected: ${firmwareFile.name}` : 'No firmware selected');
-});
+  window.addEventListener('beforeunload', () => {
+    editorHost.dispose();
+    buildClient.dispose();
+    deviceService.dispose();
+  });
+};
 
-uploadButton?.addEventListener('click', async () => {
-  const targetName = targetSelect?.value ?? 'esp32-c3';
-  if (targetName !== 'esp32-c3' && targetName !== 'esp32-original') {
-    setStatus('Browser upload currently supports Espressif ESP32 targets');
-    return;
-  }
-  if (!firmwareFile) {
-    firmwareInput?.click();
-    setStatus('Choose a firmware .bin file');
-    return;
-  }
-  if (!('serial' in navigator)) {
-    setStatus('Web Serial is unavailable; use Chrome or Edge');
-    return;
-  }
-
-  try {
-    if (serialTransport) {
-      await serialTransport.disconnect();
-      serialTransport = null;
-    }
-    serialPort = serialPort ?? await navigator.serial.requestPort({});
-    const transport = new Transport(/** @type {any} */ (serialPort), false);
-    const terminal = {
-      clean: () => {},
-      write: (/** @type {string} */ text) => { if (consoleOutput) consoleOutput.textContent += text; },
-      writeLine: (/** @type {string} */ text) => { if (consoleOutput) consoleOutput.textContent += `${text}\n`; }
-    };
-    const loader = new ESPLoader({
-      transport,
-      baudrate: 115200,
-      romBaudrate: 115200,
-      terminal
-    });
-
-    setStatus('Connecting to Espressif ROM…');
-    await loader.main('default_reset');
-    await loader.writeFlash({
-      fileArray: [{ data: new Uint8Array(await firmwareFile.arrayBuffer()), address: 0x10000 }],
-      flashMode: 'dio',
-      flashFreq: '40m',
-      flashSize: 'detect',
-      eraseAll: false,
-      compress: true,
-      reportProgress: (_fileIndex, written, total) => setStatus(`Flashing: ${Math.round(written / total * 100)}%`)
-    });
-    await transport.disconnect();
-    serialPort = null;
-    setStatus(`Uploaded ${firmwareFile.name}`);
-  } catch (error) {
-    setStatus(error instanceof Error ? error.message : 'Upload failed');
-  }
-});
-
-document.querySelector('#clear')?.addEventListener('click', () => {
-  if (consoleOutput) consoleOutput.textContent = '';
-});
-
-window.addEventListener('beforeunload', () => editor.dispose());
+void bootstrap();

@@ -247,8 +247,8 @@ test('WASM ESP32 encoder converts native ESP32-C3 ELF to a parseable application
     return;
   }
   const toolchain = new LlvmWasmToolchain({ llvmPath: llvmUrl.pathname });
-  const bin = toolchain.elfToEsp32Bin(elf);
-  const validation = validateEsp32Image(bin);
+  const bin = await toolchain.elfToEsp32Bin(elf);
+  const validation = await validateEsp32Image(bin);
   assert.equal(validation.valid, true, validation.errors.join('; '));
   assert.equal(validation.chipId, 5);
   assert.equal(validation.hasAppDesc, true);
@@ -266,7 +266,7 @@ test('WASM ESP32 encoder converts native ESP32-C3 ELF to a parseable application
   // Tampering a byte must fail checksum and SHA-256 validation
   const tampered = new Uint8Array(bin);
   tampered[32] ^= 0xff;
-  const tamperedResult = validateEsp32Image(tampered);
+  const tamperedResult = await validateEsp32Image(tampered);
   assert.equal(tamperedResult.valid, false);
   assert.equal(tamperedResult.sha256Valid, false);
 });

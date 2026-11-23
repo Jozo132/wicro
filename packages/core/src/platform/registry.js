@@ -42,8 +42,8 @@
  * @property {string} id
  * @property {string} extension
  * @property {string} description
- * @property {(elf: Uint8Array, options?: Record<string, unknown>) => Uint8Array} convert
- * @property {(image: Uint8Array, options?: Record<string, unknown>) => FirmwareValidationResult} validate
+ * @property {(elf: Uint8Array, options?: Record<string, unknown>) => Uint8Array|Promise<Uint8Array>} convert
+ * @property {(image: Uint8Array, options?: Record<string, unknown>) => FirmwareValidationResult|Promise<FirmwareValidationResult>} validate
  */
 
 /**

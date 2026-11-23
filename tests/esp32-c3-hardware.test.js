@@ -26,7 +26,7 @@ test('ESP32-C3 Wicro Arduino WASM hardware end-to-end acceptance (60s stability)
 
   // 3. Independent ESP32-C3 image validation (header, 64KB MMU alignment, app_desc, checksum, SHA-256)
   const bin = await readFile(binPath);
-  const imageCheck = validateEsp32Image(bin);
+  const imageCheck = await validateEsp32Image(bin);
   assert.equal(imageCheck.valid, true, `Invalid ESP32-C3 BIN: ${imageCheck.errors.join('; ')}`);
   assert.equal(imageCheck.chipId, 5, 'Expected ESP32-C3 chip_id=5');
   assert.equal(imageCheck.hasAppDesc, true, 'Missing esp_app_desc_t magic in DROM segment');

@@ -1,0 +1,76 @@
+/**
+ * Main-thread RPC client for the Wicro Web Worker WASM build engine.
+ * Keeps all compilation, linking, SHA-256 verification, and SDK extraction off the UI thread.
+ */
+
+export class WicroBuildClient {
+  constructor() {
+    this.worker = new Worker(new URL('../workers/build-worker.js', import.meta.url), { type: 'module' });
+    this.nextId = 1;
+    /** @type {Map<string, {resolve:(value:any)=>void,reject:(error:Error)=>void,onProgress?:(event:{stage:string,message:string,percent?:number})=>void}>} */
+    this.pending = new Map();
+
+    this.worker.addEventListener('message', (event) => {
+      const message = event.data;
+      if (!message || !message.id) return;
+      const entry = this.pending.get(message.id);
+      if (!entry) return;
+      if (message.type === 'progress') {
+        entry.onProgress?.({ stage: message.stage, message: message.message, percent: message.percent });
+        return;
+      }
+      if (message.type === 'result') {
+        this.pending.delete(message.id);
+        if (message.ok) entry.resolve(message.result);
+        else entry.reject(new Error(message.error ?? 'Worker execution failed'));
+      }
+    });
+
+    this.worker.addEventListener('error', (event) => {
+      const error = new Error(event.message || 'Wicro build worker crashed');
+      for (const entry of this.pending.values()) entry.reject(error);
+      this.pending.clear();
+    });
+  }
+
+  /**
+   * @param {string} type
+   * @param {Record<string, unknown>} payload
+   * @param {(event:{stage:string,message:string,percent?:number})=>void} [onProgress]
+   */
+  request(type, payload = {}, onProgress) {
+    const id = `req-${this.nextId++}`;
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, { resolve, reject, onProgress });
+      this.worker.postMessage({ id, type, payload });
+    });
+  }
+
+  /**
+   * @param {{boardId:string,framework?:string,projectFiles:Record<string,string>,offline?:boolean,clean?:boolean,formats?:string[]}} options
+   * @param {(event:{stage:string,message:string,percent?:number})=>void} [onProgress]
+   */
+  build(options, onProgress) {
+    return this.request('build', { ...options, origin: window.location.origin }, onProgress);
+  }
+
+  /**
+   * @param {{boardId:string,projectFiles:Record<string,string>,activeFile:string}} options
+   */
+  diagnose(options) {
+    return this.request('diagnose', { ...options, origin: window.location.origin });
+  }
+
+  cacheStatus() {
+    return this.request('cacheStatus');
+  }
+
+  clearCache() {
+    return this.request('clearCache');
+  }
+
+  dispose() {
+    this.worker.terminate();
+    this.pending.clear();
+  }
+}

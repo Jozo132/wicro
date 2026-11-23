@@ -1,4 +1,4 @@
-import { LlvmWasmToolchain } from '../../runtime/src/index.js';
+import { inspectElfMemoryStats } from '../../runtime/src/elf-utils.js';
 import { WicroPlatformRegistry } from './platform/registry.js';
 import { createDefaultPlatformRegistry, BUILTIN_PROGRAMMERS } from './platform/defaults.js';
 import { BUILTIN_ARCHITECTURES, resolveArchitectureTargetArgs } from './platform/architectures.js';
@@ -63,9 +63,10 @@ export {
  * @property {WicroHostAdapter} host
  * @property {import('../../registry/src/index.js').PackageRegistry} [registry]
  * @property {WicroPlatformRegistry} [platforms]
- * @property {LlvmWasmToolchain} [toolchain]
+ * @property {any} [toolchain]
  * @property {string} [llvmPath]
  * @property {() => Promise<{llvmPath:string,linkerPath?:string}>} [resolveToolchain]
+ * @property {(event: {stage:string,message:string,percent?:number}) => void} [onProgress]
  */
 
 /**
@@ -77,15 +78,17 @@ export const createWicroEngine = (options) => {
 
   const platforms = options.platforms ?? createDefaultPlatformRegistry();
   let toolchain = options.toolchain;
-  /** @returns {Promise<LlvmWasmToolchain>} */
+  /** @returns {Promise<any>} */
   const ensureToolchain = async () => {
     if (toolchain) return toolchain;
     if (options.resolveToolchain) {
       const resolved = await options.resolveToolchain();
+      const { LlvmWasmToolchain } = await import('../../runtime/src/index.js');
       toolchain = new LlvmWasmToolchain({ llvmPath: resolved.llvmPath, linkerPath: resolved.linkerPath });
       return toolchain;
     }
     if (options.llvmPath) {
+      const { LlvmWasmToolchain } = await import('../../runtime/src/index.js');
       toolchain = new LlvmWasmToolchain({ llvmPath: options.llvmPath });
       return toolchain;
     }
@@ -147,7 +150,7 @@ export const createWicroEngine = (options) => {
 
       if (command.command === 'build') {
         try {
-          const result = await buildProject(options.host, toolchain, platforms, command.project, command.board, command.formats);
+          const result = await buildProject(options.host, toolchain, platforms, command.project, command.board, command.formats, options.onProgress);
           return { ok: true, value: result, diagnostics: result.diagnostics.map((/** @type {string} */ message) => ({ severity: /** @type {'warning'} */ ('warning'), message })) };
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
@@ -413,13 +416,16 @@ const normalizeProjectSourcePath = (path) => {
 
 /**
  * @param {WicroHostAdapter} host
- * @param {LlvmWasmToolchain} toolchain
+ * @param {any} toolchain
  * @param {WicroPlatformRegistry} platforms
  * @param {string} project
  * @param {string} [boardName]
  * @param {string[]} [requestedFormats]
+ * @param {(event: {stage:string,message:string,percent?:number}) => void} [onProgress]
  */
-const buildProject = async (host, toolchain, platforms, project, boardName, requestedFormats) => {
+const buildProject = async (host, toolchain, platforms, project, boardName, requestedFormats, onProgress) => {
+  const startedAt = Date.now();
+  onProgress?.({ stage: 'resolve', message: 'Resolving project and board configuration…', percent: 10 });
   // Phase 1: Resolve project manifest
   let board = boardName;
   /** @type {{board?:string,framework?:string,build?:{sources?:string[],sourceDir?:string,flags?:string[],defines?:string[],formats?:string[]},sources?:string[],sourceDir?:string}} */
@@ -533,6 +539,8 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
   let result;
   /** @type {Record<string, string>} */
   const extraArtifacts = {};
+  /** @type {import('./platform/registry.js').FirmwareValidationResult|undefined} */
+  let firmwareValidation;
 
   // Phase 6: Compile & Link
   if (build.kind === 'bare-metal' && !linkerFn) {
@@ -546,6 +554,7 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
       throw new Error(`Firmware sources for '${board}' must be text files`);
     }
     const primaryUnit = units[0];
+    onProgress?.({ stage: 'compile', message: `Compiling ${primaryUnit.path}…`, percent: 40 });
     result = await toolchain.compileAndLinkBareMetal({
       source: primaryUnit.source,
       startupSource: startupValue,
@@ -555,8 +564,15 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
       language: primaryUnit.language === 'c++' ? 'c++' : 'c'
     });
   } else {
+    const totalCompileUnits = units.length + (compileConfig.extraUnits?.length ?? 0);
+    let completedUnits = 0;
     for (let index = 0; index < units.length; index++) {
       const unit = units[index];
+      onProgress?.({
+        stage: 'compile',
+        message: `Compiling ${unit.path} (${completedUnits + 1}/${totalCompileUnits})…`,
+        percent: Math.round(20 + (completedUnits / Math.max(1, totalCompileUnits)) * 40)
+      });
       const compiled = await toolchain.compileSource(unit.source, build.target, build.targetOptions, {
         language: unit.language,
         includeDirs: compileConfig.includeDirs,
@@ -566,12 +582,18 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
         defines: compileConfig.defines,
         cacheDirectory: `${project}/.wicro/cache`
       });
+      completedUnits++;
       compiledObjects.push({ path: unit.path, object: compiled.object, cache: compiled.cache, diagnostics: compiled.diagnostics });
       const key = index === 0 ? 'main.o' : `user-${index}.o`;
       linkObjects[key] = compiled.object;
     }
 
     for (const extraUnit of compileConfig.extraUnits ?? []) {
+      onProgress?.({
+        stage: 'compile',
+        message: `Compiling core unit ${extraUnit.name} (${completedUnits + 1}/${totalCompileUnits})…`,
+        percent: Math.round(20 + (completedUnits / Math.max(1, totalCompileUnits)) * 40)
+      });
       const compiled = await toolchain.compileSource(extraUnit.source, build.target, build.targetOptions, {
         language: extraUnit.language,
         includeDirs: compileConfig.includeDirs,
@@ -581,6 +603,7 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
         defines: compileConfig.defines,
         cacheDirectory: `${project}/.wicro/cache`
       });
+      completedUnits++;
       linkObjects[extraUnit.name] = compiled.object;
     }
 
@@ -588,6 +611,7 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
       if (!platform) throw new Error(`No registered platform adapter for board '${board}' (${build.kind})`);
       if (!linkerFn) throw new Error(`Board '${board}' requires a WASM-native ELF linker`);
 
+      onProgress?.({ stage: 'link', message: `Linking ${board} ELF firmware with WASM ld.lld…`, percent: 68 });
       const linkPlan = await platform.prepareLinkPlan({
         host,
         board: boardDescriptor,
@@ -615,14 +639,16 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
       });
 
       // Phase 7: Generate & validate firmware artifacts via registered FirmwareFormatHandler
+      onProgress?.({ stage: 'image', message: 'Generating and validating firmware binary…', percent: 86 });
       const primaryFormatId = linkPlan.firmwareFormat ?? platform.defaultFirmwareFormat;
       const primaryHandler = platforms.getFirmwareFormat(primaryFormatId);
       const binBytes = (primaryHandler && linked.elf.length >= 52)
-        ? primaryHandler.convert(linked.elf, boardMetadata)
+        ? await primaryHandler.convert(linked.elf, boardMetadata)
         : linked.bin;
 
       if (primaryHandler && binBytes.length > 24) {
-        const validation = primaryHandler.validate(binBytes, boardMetadata);
+        const validation = await primaryHandler.validate(binBytes, boardMetadata);
+        firmwareValidation = validation;
         if (!validation.valid) {
           throw new Error(`Generated ${primaryFormatId} firmware image failed validation: ${validation.errors.join('; ')}`);
         }
@@ -634,8 +660,8 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
         const handler = platforms.getFirmwareFormat(formatId);
         if (!handler) throw new Error(`Unknown firmware format: ${formatId}`);
         if (linked.elf.length < 52) continue;
-        const formatted = handler.convert(linked.elf, boardMetadata);
-        const check = handler.validate(formatted, boardMetadata);
+        const formatted = await handler.convert(linked.elf, boardMetadata);
+        const check = await handler.validate(formatted, boardMetadata);
         if (!check.valid) throw new Error(`Generated ${formatId} artifact failed validation: ${check.errors.join('; ')}`);
         const artifactPath = `${project}/${output}/firmware${handler.extension}`;
         await host.writeFile(artifactPath, formatted);
@@ -659,6 +685,7 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
   }
 
   // Phase 8: Write build outputs & compile_commands.json
+  onProgress?.({ stage: 'write', message: 'Writing firmware artifacts…', percent: 95 });
   const output = build.output ?? '.wicro/build';
   if (generatedCpp) await host.writeFile(`${project}/${output}/sketch.cpp`, generatedCpp);
   for (const compiled of compiledObjects) {
@@ -693,6 +720,10 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
     await host.writeFile(`${project}/${output}/main.o`, result.object);
   }
 
+  const memory = result.elf ? inspectElfMemoryStats(result.elf) : undefined;
+  const timingMs = Date.now() - startedAt;
+  onProgress?.({ stage: 'done', message: `Build completed in ${(timingMs / 1000).toFixed(2)}s`, percent: 100 });
+
   return {
     board,
     platform: platform?.id,
@@ -702,6 +733,12 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
     target: build.target,
     elf: result.elf ? `${project}/${output}/firmware.elf` : undefined,
     bin: result.bin ? `${project}/${output}/firmware.bin` : undefined,
+    elfBytes: result.elf?.byteLength,
+    binBytes: result.bin?.byteLength,
+    objectBytes: result.object?.byteLength,
+    memory,
+    validation: firmwareValidation,
+    timingMs,
     artifacts: Object.keys(extraArtifacts).length > 0 ? extraArtifacts : undefined,
     object: result.object ? `${project}/${output}/main.o` : undefined,
     diagnostics: result.diagnostics,

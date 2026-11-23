@@ -152,9 +152,9 @@ test('Node.js and Browser WASI produce byte-for-byte identical STM32F103CB ELF, 
   assert.equal(Buffer.compare(nodeBin, browserBin), 0, 'Node and Browser BIN outputs must match byte-for-byte');
   assert.equal(Buffer.compare(nodeHex, browserHex), 0, 'Node and Browser HEX outputs must match byte-for-byte');
   assert.equal(Buffer.compare(nodeUf2, browserUf2), 0, 'Node and Browser UF2 outputs must match byte-for-byte');
-  assert.equal(flatBinFormatHandler.validate(nodeBin).valid, true);
-  assert.equal(intelHexFormatHandler.validate(nodeHex).valid, true);
-  assert.equal(uf2FormatHandler.validate(nodeUf2).valid, true);
+  assert.equal((await flatBinFormatHandler.validate(nodeBin)).valid, true);
+  assert.equal((await intelHexFormatHandler.validate(nodeHex)).valid, true);
+  assert.equal((await uf2FormatHandler.validate(nodeUf2)).valid, true);
 });
 
 test('SDK & compiler cache: atomic install, concurrent deduplication, corruption recovery, invalidation and offline reuse', async () => {

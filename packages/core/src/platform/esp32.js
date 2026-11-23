@@ -1,4 +1,4 @@
-import { extractArchiveMember, patchElfSectionFlags } from '../../../runtime/src/index.js';
+import { extractArchiveMember, patchElfSectionFlags } from '../../../runtime/src/elf-utils.js';
 
 /**
  * Versioned, deterministic ESP32-C3 Arduino-ESP32 WASM firmware build recipe.

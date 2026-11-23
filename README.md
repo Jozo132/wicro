@@ -88,7 +88,17 @@ Directory and ZIP project imports use data-only parsing and copy operations. No 
 npm run dev:web
 ```
 
-Open `http://localhost:5173`. The editor supports browser-side RV32IMC compilation with the shared LLVM WASM toolchain. Web Serial is used for device connection; flashing beyond the browser shell should use the Node CLI until browser flashing is complete.
+Open `http://localhost:5173` in a Chromium-based browser (Chrome or Edge for Web Serial support). The browser IDE runs the complete canonical Wicro pipeline in a Web Worker:
+
+- **Project & editor**: multi-file project explorer, Monaco editor, canonical board/framework/example selectors from `registry/` and `examples/`, light/dark themes, and resizable panels.
+- **Browser WASM build**: full `clang` + `ld.lld` compilation and linking via `BrowserLlvmWasmToolchain` and `createWicroEngine`, automatic SHA-256 verified toolchain and SDK acquisition, persistent OPFS caching, incremental object caching, offline rebuilds, structured compiler diagnostics, and Flash/RAM memory statistics.
+- **Browser USB flashing & serial monitor**: `BrowserEsp32Programmer` (`esptool-js` over Web Serial) with application partition validation, optional flash readback verification, automatic hard reset, and coordinated `BrowserSerialMonitor` reconnection with timestamps, baud rate selection, pause/resume, copy/clear, and serial input.
+
+Run browser automation E2E tests with:
+
+```sh
+node --test tests/web-ide.test.js
+```
 
 ## Development
 

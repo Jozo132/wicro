@@ -218,9 +218,8 @@ const decompressBytes = async (bytes, compression) => {
 /** @param {Uint8Array} bytes */
 export const sha256Bytes = async (bytes) => {
   if (!globalThis.crypto?.subtle) throw new Error('SHA-256 support is unavailable in this host');
-  const source = new ArrayBuffer(bytes.length);
-  const view = new Uint8Array(source);
-  for (let index = 0; index < bytes.length; index++) view[index] = bytes[index] ?? 0;
+  const source = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(source).set(bytes);
   const digest = await globalThis.crypto.subtle.digest('SHA-256', source);
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 };
