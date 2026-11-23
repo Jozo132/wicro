@@ -482,21 +482,37 @@ export const inspectElfMemoryStats = (elf) => {
 };
 
 /**
- * Parse Clang/LLD diagnostic lines into structured diagnostic objects.
+ * Parse Clang/LLD diagnostic lines into structured diagnostic objects,
+ * including endColumn extracted from Clang's caret/tilde underline when present.
  * @param {string} text
  */
 export const parseClangDiagnostics = (text) => {
-  /** @type {Array<{severity:'error'|'warning'|'info',file:string,line:number,column:number,message:string}>} */
+  /** @type {Array<{severity:'error'|'warning'|'info',file:string,line:number,column:number,endColumn?:number,message:string}>} */
   const diagnostics = [];
-  for (const line of text.split(/\r?\n/)) {
-    const match = line.match(/^(.*?):(\d+):(\d+):\s+(fatal error|error|warning|note):\s*(.*)$/);
+  const lines = text.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index++) {
+    const match = lines[index].match(/^(.*?):(\d+):(\d+):\s+(fatal error|error|warning|note):\s*(.*)$/);
     if (!match) continue;
     const severity = match[4] === 'warning' ? 'warning' : match[4] === 'note' ? 'info' : 'error';
+    const column = Number(match[3]);
+    /** @type {number | undefined} */
+    let endColumn;
+    // Clang prints: [source line] followed by [spaces + ^~~~ underline]
+    const caretLine = lines[index + 2];
+    if (caretLine && /^\s*[~^]+\s*$/.test(caretLine)) {
+      const spanMatch = caretLine.match(/[~^]+/);
+      if (spanMatch && spanMatch.index !== undefined) {
+        const spanStart = spanMatch.index + 1;
+        const spanEnd = spanStart + spanMatch[0].length;
+        if (spanEnd > column) endColumn = spanEnd;
+      }
+    }
     diagnostics.push({
       severity,
       file: match[1],
       line: Number(match[2]),
-      column: Number(match[3]),
+      column,
+      ...(endColumn ? { endColumn } : {}),
       message: match[5]
     });
   }

@@ -27,6 +27,7 @@
  * @property {string} file
  * @property {number} line
  * @property {number} column
+ * @property {number} [endColumn]
  * @property {string} message
  */
 

@@ -61,6 +61,13 @@ export class WicroBuildClient {
     return this.request('diagnose', { ...options, origin: window.location.origin });
   }
 
+  /**
+   * @param {{boardId:string,projectFiles:Record<string,string>,activeFile:string,line:number,column:number}} options
+   */
+  complete(options) {
+    return this.request('complete', { ...options, origin: window.location.origin });
+  }
+
   cacheStatus() {
     return this.request('cacheStatus');
   }

@@ -284,6 +284,17 @@ const bootstrap = async () => {
     onChange: (path, value) => {
       store.setFileContent(path, value);
       scheduleDiagnostics();
+    },
+    onComplete: async (path, line, column) => {
+      if (store.buildStatus === 'building') return [];
+      const res = await buildClient.complete({
+        boardId: store.boardId,
+        projectFiles: store.snapshotFiles(),
+        activeFile: path,
+        line,
+        column
+      });
+      return Array.isArray(res?.candidates) ? res.candidates : [];
     }
   });
 

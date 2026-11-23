@@ -20,15 +20,19 @@ export class MonacoEditorHost {
    * @param {HTMLElement} container
    * @param {{
    *   theme: 'dark'|'light',
-   *   onChange: (path: string, value: string) => void
+   *   onChange: (path: string, value: string) => void,
+   *   onComplete?: (path: string, line: number, column: number) => Promise<Array<{label:string,detail:string}>>
    * }} options
    */
   constructor(container, options) {
     this.onChange = options.onChange;
+    this.onComplete = options.onComplete;
     /** @type {Map<string, monaco.editor.ITextModel>} */
     this.models = new Map();
     this.activePath = '';
     this.suppressChange = false;
+    /** @type {monaco.IDisposable[]} */
+    this.disposables = [];
 
     this.editor = monaco.editor.create(container, {
       value: '',
@@ -49,6 +53,40 @@ export class MonacoEditorHost {
       if (this.suppressChange || !this.activePath) return;
       this.onChange(this.activePath, this.editor.getValue());
     });
+
+    if (this.onComplete) {
+      for (const lang of ['cpp', 'c']) {
+        this.disposables.push(monaco.languages.registerCompletionItemProvider(lang, {
+          triggerCharacters: ['.', '>', ':'],
+          provideCompletionItems: async (model, position) => {
+            if (!this.onComplete || !this.activePath) return { suggestions: [] };
+            try {
+              const items = await this.onComplete(this.activePath, position.lineNumber, position.column);
+              const word = model.getWordUntilPosition(position);
+              const range = {
+                startLineNumber: position.lineNumber,
+                endLineNumber: position.lineNumber,
+                startColumn: word.startColumn,
+                endColumn: word.endColumn
+              };
+              return {
+                suggestions: items.map((item) => ({
+                  label: item.label,
+                  insertText: item.label,
+                  detail: item.detail,
+                  kind: item.detail.includes('(')
+                    ? monaco.languages.CompletionItemKind.Method
+                    : monaco.languages.CompletionItemKind.Property,
+                  range
+                }))
+              };
+            } catch {
+              return { suggestions: [] };
+            }
+          }
+        }));
+      }
+    }
   }
 
   /**
@@ -117,7 +155,24 @@ export class MonacoEditorHost {
         ? diag.file
         : [...this.models.keys()].find((p) => p.endsWith(`/${diag.file}`) || p === diag.file) ?? this.activePath;
       const list = byFile.get(targetPath);
+      const model = this.models.get(targetPath);
       if (!list) continue;
+
+      const lineNumber = Math.max(1, diag.line);
+      let startColumn = Math.max(1, diag.column);
+      let endColumn = typeof diag.endColumn === 'number' && diag.endColumn > startColumn
+        ? diag.endColumn
+        : startColumn + 1;
+
+      // Expand 1-char caret markers to cover the full identifier/method token at that position.
+      if (model && endColumn <= startColumn + 1 && lineNumber <= model.getLineCount()) {
+        const word = model.getWordAtPosition({ lineNumber, column: startColumn });
+        if (word && word.endColumn > word.startColumn) {
+          startColumn = word.startColumn;
+          endColumn = word.endColumn;
+        }
+      }
+
       list.push({
         severity: diag.severity === 'error'
           ? monaco.MarkerSeverity.Error
@@ -125,10 +180,10 @@ export class MonacoEditorHost {
             ? monaco.MarkerSeverity.Warning
             : monaco.MarkerSeverity.Info,
         message: diag.message,
-        startLineNumber: Math.max(1, diag.line),
-        startColumn: Math.max(1, diag.column),
-        endLineNumber: Math.max(1, diag.line),
-        endColumn: Math.max(1, diag.column + 1)
+        startLineNumber: lineNumber,
+        startColumn,
+        endLineNumber: lineNumber,
+        endColumn
       });
     }
 
@@ -147,6 +202,8 @@ export class MonacoEditorHost {
   }
 
   dispose() {
+    for (const disposable of this.disposables) disposable.dispose();
+    this.disposables = [];
     for (const model of this.models.values()) model.dispose();
     this.models.clear();
     this.editor.dispose();

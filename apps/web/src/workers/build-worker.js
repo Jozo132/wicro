@@ -587,6 +587,67 @@ const handleDiagnose = async (requestId, payload) => {
 };
 
 /**
+ * Run Clang code completion at a 1-based line/column in the Web Worker.
+ * @param {{origin:string,boardId:string,projectFiles:Record<string,string>,activeFile:string,line:number,column:number}} payload
+ */
+const handleComplete = async (payload) => {
+  if (!compiledLlvmModule) return { candidates: [] };
+  const boardManifest = await loadRegistryManifest(payload.origin, payload.boardId, true).catch(() =>
+    loadRegistryManifest(payload.origin, payload.boardId, false)
+  );
+  const build = boardManifest.metadata?.build;
+  if (!build?.target) return { candidates: [] };
+
+  const activeFile = payload.activeFile;
+  const activeSource = payload.projectFiles[activeFile] ?? '';
+  const isIno = /\.(ino|pde)$/i.test(activeFile);
+  const language = /\.(ino|pde|cpp|cxx|cc)$/i.test(activeFile) ? 'c++' : 'c';
+
+  let sourceToCheck = activeSource;
+  let targetLine = payload.line;
+  if (isIno) {
+    const inoTabs = Object.fromEntries(
+      Object.entries(payload.projectFiles).filter(([name]) => /\.(ino|pde)$/i.test(name))
+    );
+    const preprocessed = preprocessIno(inoTabs);
+    sourceToCheck = preprocessed.cpp;
+    const mapped = preprocessed.sourceMap.find((m) => m.source === activeFile && m.sourceLine === payload.line);
+    if (mapped) targetLine = mapped.generatedLine;
+  }
+
+  let sdkLoaded = null;
+  for (const depName of Object.keys(boardManifest.dependencies ?? {})) {
+    if (!depName.endsWith('-sdk')) continue;
+    for (const [key, value] of loadedSdks.entries()) {
+      if (key.startsWith(`${depName}-`)) {
+        sdkLoaded = value;
+        break;
+      }
+    }
+  }
+
+  const isEsp32C3 = boardManifest.metadata?.platform === 'espressif-esp32c3';
+  const toolchain = new BrowserLlvmWasmToolchain({
+    loadModule: async () => /** @type {WebAssembly.Module} */ (compiledLlvmModule),
+    resolvePreopen: async (virtualPath) => (virtualPath === '/sdk' && sdkLoaded ? sdkLoaded.wasiDir : undefined)
+  });
+
+  const res = await toolchain.completeSource({
+    source: sourceToCheck,
+    target: build.target,
+    targetOptions: build.targetOptions ?? {},
+    language,
+    includeDirs: isEsp32C3 && sdkLoaded ? [...ESP32_C3_ARDUINO_RECIPE.includeDirs] : ['.'],
+    defines: isEsp32C3 && sdkLoaded ? [...ESP32_C3_ARDUINO_RECIPE.defines] : [],
+    preopens: sdkLoaded ? { '/sdk': 'loaded' } : undefined,
+    line: targetLine,
+    column: payload.column
+  });
+
+  return { candidates: res.candidates };
+};
+
+/**
  * Inspect persistent cache state in OPFS.
  */
 const handleCacheStatus = async () => {
@@ -637,6 +698,11 @@ self.addEventListener('message', async (event) => {
     }
     if (type === 'diagnose') {
       const result = await handleDiagnose(id, payload);
+      self.postMessage({ type: 'result', id, ok: true, result });
+      return;
+    }
+    if (type === 'complete') {
+      const result = await handleComplete(payload);
       self.postMessage({ type: 'result', id, ok: true, result });
       return;
     }
