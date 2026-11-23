@@ -18,6 +18,10 @@
     "dev:web": "npm run dev --workspace @wicro/web",
     "build:web": "npm run build --workspace @wicro/web",
     "benchmark:llvm": "node scripts/benchmark-llvm-wasm.js",
+    "build:llvm": "node scripts/build-llvm-wasm.js unified",
+    "build:llvm:dry-run": "node scripts/build-llvm-wasm.js unified --dry-run",
+    "build:llvm:cache": "node scripts/build-llvm-wasm.js unified --cache-only",
+    "test:llvm-build": "node --test scripts/build-llvm-wasm.test.js",
     "test:esp32-hardware": "node --test tests/esp32-c3-hardware.test.js"
   },
   "engines": {
