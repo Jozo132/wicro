@@ -135,6 +135,11 @@ test('manifest generation pins URLs, hashes and sizes', async () => {
   assert.match(String(artifacts.clang.url), /releases\/download\/llvm-wasm-v1\.0\.0\/llvm\.wasm$/);
   assert.match(integrity['llvm.wasm'], /^[a-f0-9]{64}$/);
   assert.equal(release.tag, 'llvm-wasm-v1.0.0');
+  const entryPoints = /** @type {Record<string,unknown>} */ (manifest.entryPoints);
+  assert.deepEqual(entryPoints.separateRequired, [
+    'clangd', 'clang-tidy', 'clang-format', 'llvm-ar', 'llvm-objcopy',
+    'llvm-objdump', 'llvm-size', 'llvm-nm', 'llvm-readelf'
+  ]);
 
     const sums = generateSha256Sums(manifest);
     assert.match(sums, /^([a-f0-9]{64}  (llvm|ld)\.wasm\n){2}$/);

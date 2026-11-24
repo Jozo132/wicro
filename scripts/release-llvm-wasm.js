@@ -21,6 +21,17 @@ export const releaseNotesPath = resolve(releasePlanDir, 'RELEASE_NOTES.md');
 
 export const DEFAULT_REPO = 'Jozo132/wicro';
 export const RELEASE_TAG_PREFIX = 'llvm-wasm-v';
+export const SEPARATE_TOOL_ENTRY_POINTS = Object.freeze([
+  'clangd',
+  'clang-tidy',
+  'clang-format',
+  'llvm-ar',
+  'llvm-objcopy',
+  'llvm-objdump',
+  'llvm-size',
+  'llvm-nm',
+  'llvm-readelf'
+]);
 
 /** @param {unknown} value @returns {value is Record<string,unknown>} */
 const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -283,7 +294,7 @@ export const generateManifest = (existing, version, repo, tag, local, compressio
     ...entryPoints,
     combined: ['clang', 'clang++', 'ld.lld', 'ld', 'lld'],
     available: ld?.valid ? ['clang', 'ld'] : ['clang'],
-    separateRequired: ['clangd.wasm', 'clang-tidy.wasm', 'clang-format.wasm', 'llvm-ar.wasm', 'llvm-objcopy.wasm', 'llvm-objdump.wasm', 'llvm-size.wasm', 'llvm-nm.wasm', 'llvm-readelf.wasm']
+    separateRequired: [...SEPARATE_TOOL_ENTRY_POINTS]
   };
   manifest.integrity = {
     'llvm.wasm': llvm.sha256,

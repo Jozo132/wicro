@@ -97,15 +97,15 @@
       "ld"
     ],
     "separateRequired": [
-      "clangd.wasm",
-      "clang-tidy.wasm",
-      "clang-format.wasm",
-      "llvm-ar.wasm",
-      "llvm-objcopy.wasm",
-      "llvm-objdump.wasm",
-      "llvm-size.wasm",
-      "llvm-nm.wasm",
-      "llvm-readelf.wasm"
+      "clangd",
+      "clang-tidy",
+      "clang-format",
+      "llvm-ar",
+      "llvm-objcopy",
+      "llvm-objdump",
+      "llvm-size",
+      "llvm-nm",
+      "llvm-readelf"
     ],
     "lastBuild": "2026-11-24T00:49:31.316Z"
   },

@@ -322,13 +322,13 @@ export const downloadWasiSdk = async (wasiRoot, url, curl) => {
 /** @param {string} output @param {Record<string,unknown>} manifest */
 export const updateUnifiedManifest = async (output, manifest) => {
   const names = /** @type {string[]} */ (await readdir(output).catch(() => []));
-  const desired = ['clangd.wasm', 'clang-tidy.wasm', 'clang-format.wasm', 'llvm-ar.wasm', 'llvm-objcopy.wasm', 'llvm-objdump.wasm', 'llvm-size.wasm', 'llvm-nm.wasm', 'llvm-readelf.wasm'];
+  const desired = ['clangd', 'clang-tidy', 'clang-format', 'llvm-ar', 'llvm-objcopy', 'llvm-objdump', 'llvm-size', 'llvm-nm', 'llvm-readelf'];
   /** @type {string[]} */
   const available = ['clang', 'ld'].filter((name) => names.includes(name === 'clang' ? 'llvm.wasm' : 'ld.wasm'));
   manifest.entryPoints = {
     ...(typeof manifest.entryPoints === 'object' && manifest.entryPoints !== null ? manifest.entryPoints : {}),
     available,
-    separateRequired: desired.filter((name) => !names.includes(name)),
+    separateRequired: desired.filter((name) => !names.includes(`${name}.wasm`)),
     lastBuild: new Date().toISOString()
   };
   const manifestPath = resolve(output, '..', 'manifest.json');
