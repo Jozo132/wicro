@@ -14,6 +14,23 @@
       "type": "object",
       "additionalProperties": { "type": "string", "minLength": 1 }
     },
+    "libraries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["provider", "name"],
+        "properties": {
+          "provider": { "enum": ["arduino", "platformio", "archive"] },
+          "name": { "type": "string", "minLength": 1 },
+          "owner": { "type": "string" },
+          "version": { "type": "string" },
+          "url": { "type": "string", "format": "uri" },
+          "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+          "archiveType": { "enum": ["zip", "tar.gz"] }
+        }
+      }
+    },
     "upload": {
       "type": "object",
       "additionalProperties": false,

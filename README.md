@@ -90,6 +90,7 @@ npm run dev:web
 
 Open `http://localhost:5173` in a Chromium-based browser (Chrome or Edge for Web Serial support). The browser IDE runs the complete canonical Wicro pipeline in a Web Worker:
 
+- **Libraries & packages**: browse Arduino and PlatformIO source libraries, resolve dependencies, inspect package files, and compile/link imported sources with WASM. Exact versions and hashes live in a project lock. See [Third-party libraries](docs/libraries.md), including Python hook compatibility and production download requirements.
 - **Platform setup**: family/model/board filters, framework choices, optimization/debug/warning controls, defines, and conditional programmer/upload/verification settings, synchronized with the JSON editor. See [Visual platform configuration](docs/platform-configuration.md).
 - **Project & editor**: multi-file project explorer, Monaco editor, canonical board/framework/example selectors from `registry/` and `examples/`, light/dark themes, and resizable panels.
 - **Browser WASM build**: full `clang` + `ld.lld` compilation and linking via `BrowserLlvmWasmToolchain` and `createWicroEngine`, automatic SHA-256 verified toolchain and SDK acquisition, persistent OPFS caching, incremental object caching, offline rebuilds, structured compiler diagnostics, and Flash/RAM memory statistics.

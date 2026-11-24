@@ -44,6 +44,9 @@
     "memory": {
       "iram": "0x4037c000",
       "dram": "0x3fc80000"
-    }
+    },
+    "libraryProviders": [
+      "arduino-esp32-buses"
+    ]
   }
 }

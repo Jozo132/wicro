@@ -1,0 +1,48 @@
+{
+  "name": "arduino-esp32-buses",
+  "version": "2.0.17",
+  "kind": "library",
+  "description": "Source-only Wire and SPI providers matching the staged Arduino-ESP32 2.0.17 SDK",
+  "license": "LGPL-2.1-or-later",
+  "repository": "https://github.com/espressif/arduino-esp32",
+  "metadata": {
+    "upstreamCommit": "5e19e086c43d0fa5e5a596497ff8f11a0a43f6c2",
+    "library": {
+      "id": "framework/arduino-esp32-buses",
+      "provider": "files",
+      "name": "Arduino ESP32 Wire and SPI",
+      "version": "2.0.17",
+      "sha256": "2d6fa38d191585e44ec0ca173a7ae1839b92afef44765936ca51801cff45e455",
+      "files": {
+        "src/Wire.cpp": {
+          "url": "https://raw.githubusercontent.com/espressif/arduino-esp32/5e19e086c43d0fa5e5a596497ff8f11a0a43f6c2/libraries/Wire/src/Wire.cpp",
+          "sha256": "5c4e216cf43f954c9f3154bca7f50fadcec2fa196bb9ebcf0328682c658c5320"
+        },
+        "src/Wire.h": {
+          "url": "https://raw.githubusercontent.com/espressif/arduino-esp32/5e19e086c43d0fa5e5a596497ff8f11a0a43f6c2/libraries/Wire/src/Wire.h",
+          "sha256": "dfc29edb128d611aeb95479ccb82b0da8de94645751842a7562e02c3796c331f"
+        },
+        "src/SPI.cpp": {
+          "url": "https://raw.githubusercontent.com/espressif/arduino-esp32/5e19e086c43d0fa5e5a596497ff8f11a0a43f6c2/libraries/SPI/src/SPI.cpp",
+          "sha256": "94d37b33a1e80826f6efc7c05a1c0104d4563ef02d64ddcd3c813cffb5233d4e"
+        },
+        "src/SPI.h": {
+          "url": "https://raw.githubusercontent.com/espressif/arduino-esp32/5e19e086c43d0fa5e5a596497ff8f11a0a43f6c2/libraries/SPI/src/SPI.h",
+          "sha256": "bd4de12ce9638c2db9e11e3876d425484b0dbd528cf1b50a2a0b544b6e9303cf"
+        },
+        "Wire/library.properties": {
+          "url": "https://raw.githubusercontent.com/espressif/arduino-esp32/5e19e086c43d0fa5e5a596497ff8f11a0a43f6c2/libraries/Wire/library.properties",
+          "sha256": "7450636195d36d31b082a103d5f2a68ce4be40a2461f43c3448861b6cfb53386"
+        },
+        "SPI/library.properties": {
+          "url": "https://raw.githubusercontent.com/espressif/arduino-esp32/5e19e086c43d0fa5e5a596497ff8f11a0a43f6c2/libraries/SPI/library.properties",
+          "sha256": "cc719686902cf2b24fdbbd3d52b056b0e850578a33e9dcb854f3ae4dc0925348"
+        },
+        "LICENSE.md": {
+          "url": "https://raw.githubusercontent.com/espressif/arduino-esp32/5e19e086c43d0fa5e5a596497ff8f11a0a43f6c2/LICENSE.md",
+          "sha256": "994ce1902a23c74519b5d118c6bbb657edabce91dd6b7cc825d86bb8f5c9780f"
+        }
+      }
+    }
+  }
+}

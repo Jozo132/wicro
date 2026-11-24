@@ -158,14 +158,20 @@ export const parsePlatformIoIni = (text) => {
   /** @type {Record<string,Record<string,string>>} */
   const sections = {};
   let section = 'default';
+  let lastKey = '';
   sections[section] = {};
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
+    if (/^\s+/.test(rawLine) && lastKey && line && !line.startsWith('#') && !line.startsWith(';') && !/^[A-Za-z_][A-Za-z0-9_.-]*\s*=/.test(line)) {
+      sections[section][lastKey] += `\n${line}`;
+      continue;
+    }
     if (!line || line.startsWith(';') || line.startsWith('#')) continue;
     const sectionMatch = line.match(/^\[([^\]]+)\]$/);
     if (sectionMatch) {
       section = sectionMatch[1] ?? 'default';
+      lastKey = '';
       sections[section] ??= {};
       continue;
     }
@@ -173,7 +179,7 @@ export const parsePlatformIoIni = (text) => {
     if (separator < 0) continue;
     const key = line.slice(0, separator).trim();
     const value = line.slice(separator + 1).trim();
-    if (key) sections[section][key] = value;
+    if (key) { sections[section][key] = value; lastKey = key; }
   }
 
   return sections;
@@ -208,7 +214,7 @@ export const preprocessIno = (tabs) => {
 
   for (const [source, text] of entries) {
     const cleaned = stripCComments(text);
-    for (const match of cleaned.matchAll(/(?:^|[;\n{}])\s*(?!#)(?:(?:template\s*<[^;{}]+>\s*)?)([A-Za-z_]\w*(?:\s+[*&])?(?:[A-Za-z_<>,:\[\]\s*&]*))\s+([A-Za-z_]\w*)\s*\(([^{};]*)\)\s*(?:const\s*)?(?:noexcept(?:\([^{};]*\))?\s*)?(?:->\s*[^{};]+?)?\s*(?:\{|;)/gm)) {
+    for (const match of cleaned.matchAll(/(?:^|[;\n{}])\s*(?!#)(?:(?:template\s*<[^;{}]+>\s*)?)([A-Za-z_]\w*(?:\s+[*&])?(?:[A-Za-z_<>,:\[\]\s*&]*))\s+([A-Za-z_]\w*)\s*\(([^{};]*)\)\s*(?:const\s*)?(?:noexcept(?:\([^{};]*\))?\s*)?(?:->\s*[^{};]+?)?\s*\{/gm)) {
       const declaration = `${match[1]?.trim() ?? ''} ${match[2]?.trim() ?? ''}(${match[3]?.trim() ?? ''})`.trim();
       const name = match[2]?.trim() ?? '';
       if (!name || excludedNames.has(name) || discovered.has(declaration)) continue;

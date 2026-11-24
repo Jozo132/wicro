@@ -1,3 +1,4 @@
+import { LibraryPanel } from './ui/library-panel.js';
 import { IdeStore } from './state/ide-store.js';
 import { WicroBuildClient } from './services/build-client.js';
 import { IdeDeviceService } from './services/device-service.js';
@@ -128,6 +129,9 @@ const bootstrap = async () => {
         store.emit('build');
         return null;
       }
+      for (const [path, content] of Object.entries(result.projectUpdates ?? {})) store.files.set(path, String(content));
+      editorHost.syncFiles(store.files, store.activeFile);
+      store.emit('project');
       store.lastBuild = result;
       store.diagnostics = result.parsedDiagnostics ?? [];
       editorHost.setDiagnostics(store.diagnostics);
@@ -328,6 +332,8 @@ const bootstrap = async () => {
     onEditJson: () => { store.setActiveFile('wicro.json'); editorHost.openFile('wicro.json'); }
   });
 
+  new LibraryPanel(/** @type {HTMLElement} */ (root.querySelector('#wicro-library-panel')), store, buildClient, () => editorHost.syncFiles(store.files, store.activeFile));
+
   // Load canonical board catalog and example projects from Vite / static endpoints
   try {
     const [boardsResp, examplesResp] = await Promise.all([
@@ -341,7 +347,17 @@ const bootstrap = async () => {
   }
 
   const initialExample = store.examples.find((ex) => ex.id === 'esp32-c3-supermini/blink') ?? store.examples[0] ?? FALLBACK_EXAMPLE;
-  store.loadExample(initialExample);
+  let restored = null;
+  try { const saved = localStorage.getItem('wicro-project-v1'); if (saved) restored = JSON.parse(saved); }
+  catch (error) { store.appendCompilerLog(`[Project storage] ${error instanceof Error ? error.message : String(error)}`); }
+  store.loadExample(restored?.files ? { id: restored.exampleId ?? 'saved-project', name: 'Saved project', board: restored.boardId ?? initialExample.board, framework: restored.framework ?? initialExample.framework, files: restored.files } : initialExample);
+  if (restored?.activeFile) store.setActiveFile(restored.activeFile);
+  store.subscribe((changed) => {
+    if (!['configuration', 'file-content', 'project', 'active-file'].includes(changed)) return;
+    try {
+      localStorage.setItem('wicro-project-v1', JSON.stringify({ files: store.snapshotFiles(), exampleId: store.exampleId, boardId: store.boardId, framework: store.framework, activeFile: store.activeFile }));
+    } catch (error) { store.appendCompilerLog(`[Project storage] ${error instanceof Error ? error.message : String(error)}`); }
+  });
   editorHost.syncFiles(store.files, store.activeFile);
   await refreshCacheStatus();
 

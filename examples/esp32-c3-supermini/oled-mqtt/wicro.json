@@ -1,0 +1,11 @@
+{
+  "name": "oled-mqtt-library-import",
+  "board": "esp32-c3-supermini",
+  "framework": "arduino",
+  "toolchain": "llvm-wasm",
+  "build": { "sources": ["main/main.ino"] },
+  "libraries": [
+    { "provider": "arduino", "name": "Adafruit SSD1306", "version": "2.5.17" },
+    { "provider": "platformio", "owner": "knolleary", "name": "PubSubClient", "version": "2.8" }
+  ]
+}

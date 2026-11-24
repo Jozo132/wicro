@@ -124,7 +124,7 @@ export class BrowserLlvmWasmToolchain {
       compilerFlags: options.compilerFlags ?? [],
       defines: options.defines ?? [],
       preopens: options.preopens ?? {},
-      fileNames: Object.keys(options.files ?? {}).sort()
+      files: await Promise.all(Object.entries(options.files ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(async ([name, data]) => [name, typeof data === 'string' ? await hashKey(data) : [...await sha256Digest(data)].map((byte) => byte.toString(16).padStart(2, '0')).join('')]))
     }));
 
     const cached = this.objectCache.get(cacheKey);
@@ -298,13 +298,14 @@ export class BrowserLlvmWasmToolchain {
 
   /**
    * Request Clang code completions at a 1-based line and column.
-   * @param {{source:string,target?:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},language?:'c'|'c++',includeDirs?:string[],defines?:string[],preopens?:Record<string,string>,line:number,column:number}} options
+   * @param {{source:string,target?:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},language?:'c'|'c++',includeDirs?:string[],defines?:string[],files?:Record<string,string|Uint8Array>,preopens?:Record<string,string>,line:number,column:number}} options
    */
   async completeSource(options) {
     const language = options.language ?? 'c++';
     const extension = language === 'c++' ? 'cpp' : 'c';
     const tmpFiles = new Map();
     putVirtualFile(tmpFiles, `main.${extension}`, new TextEncoder().encode(options.source));
+    for (const [path, bytes] of Object.entries(options.files ?? {})) putVirtualFile(tmpFiles, path, typeof bytes === 'string' ? new TextEncoder().encode(bytes) : bytes);
 
     const args = [
       'clang',

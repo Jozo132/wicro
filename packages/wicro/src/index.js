@@ -336,6 +336,8 @@ export const main = async (args = []) => {
       /** @type {import('../../core/src/index.js').WicroHostAdapter} */
       const host = {
         host: 'node',
+        libraryStorage: sdkStorage,
+        offline,
         cacheDirectory,
         sdkCacheDirectory,
         readFile: async (/** @type {string} */ path, /** @type {{encoding?:'utf8'|'binary'}|undefined} */ options) => {

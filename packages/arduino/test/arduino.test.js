@@ -107,3 +107,15 @@ test('discovers libraries and reports missing headers', () => {
   assert.equal(libraries[0].name, 'FastLED');
   assert.deepEqual(findMissingHeaders(files, ['FastLED.h', 'Arduino.h']), ['Missing.h']);
 });
+
+test('Arduino preprocessing preserves global library constructors instead of generating invalid prototypes', () => {
+  const result = preprocessIno({ 'oled.ino': '#include <Adafruit_SSD1306.h>\nAdafruit_SSD1306 display(128, 64, &Wire, -1);\nvoid setup() {}\nvoid loop() {}\n' });
+  assert.ok(!result.prototypes.some((prototype) => prototype.includes('display(')));
+  assert.equal(result.cpp.match(/Adafruit_SSD1306 display/g)?.length, 1);
+});
+
+test('PlatformIO multiline dependency constraints and Python hooks remain visible to importers', () => {
+  const sections = parsePlatformIoIni('[env:oled]\nlib_deps =\n  adafruit/Adafruit SSD1306 @ >=2.5.0\n  knolleary/PubSubClient @ ^2.8\nextra_scripts =\n  pre:generate.py\n  post:sign.py\n');
+  assert.match(sections['env:oled'].lib_deps, /SSD1306 @ >=2.5.0/);
+  assert.match(sections['env:oled'].extra_scripts, /pre:generate.py\npost:sign.py/);
+});

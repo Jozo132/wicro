@@ -10,16 +10,16 @@ export class PlatformIoRegistry {
   /** @param {string} query @param {number} [limit] */
   async search(query, limit = 20) {
     if (!query.trim()) throw new Error('A PlatformIO search query is required');
-    const url = `${this.baseUrl}/search?q=${encodeURIComponent(query)}&page=1&limit=${Math.max(1, limit)}`;
+    const url = `${this.baseUrl}/search?query=${encodeURIComponent(query)}&page=1&limit=${Math.max(1, limit)}`;
     const response = await this.fetch(url, { headers: { accept: 'application/json' } });
     if (!response.ok) throw new Error(`PlatformIO registry search failed (${response.status})`);
     const value = await response.json();
     const items = Array.isArray(value?.items) ? value.items : [];
     return items.map((/** @type {any} */ item) => ({
       name: typeof item.name === 'string' ? item.name : '',
-      owner: typeof item.ownername === 'string' ? item.ownername : '',
+      owner: typeof item.owner?.username === 'string' ? item.owner.username : typeof item.ownername === 'string' ? item.ownername : '',
       type: typeof item.type === 'string' ? item.type : 'library',
-      version: typeof item.version === 'string' ? item.version : '',
+      version: typeof item.version?.name === 'string' ? item.version.name : typeof item.version === 'string' ? item.version : '',
       url: typeof item.url === 'string' ? item.url : undefined
     }));
   }
@@ -34,8 +34,8 @@ export class PlatformIoRegistry {
       name: typeof value.name === 'string' ? value.name : name,
       owner,
       type,
-      version: typeof value.version === 'string' ? value.version : '0.0.0',
-      url: typeof value.url === 'string' ? value.url : undefined
+      version: typeof value.version?.name === 'string' ? value.version.name : typeof value.version === 'string' ? value.version : '0.0.0',
+      url: value.version?.files?.[0]?.download_url ?? (typeof value.url === 'string' ? value.url : undefined)
     });
   }
 }

@@ -13,6 +13,7 @@ Wicro uses Arduino as the default framework for new projects. The implementation
 - `compile_commands.json` is generated for project source entries.
 - `boards.txt`, `platform.txt`, `library.properties`, `library.json` and `platformio.ini` parsing.
 - Library discovery and missing-header reporting.
+- Arduino/PlatformIO library browsing, versioned imports, transitive dependency locks, persistent source caching, and shared WASM compilation/linking of imported library sources. See [Third-party libraries](libraries.md).
 - Directory and ZIP project import.
 - PlatformIO registry search and INI import.
 - Arduino Board/Library Manager URL adapters with browser CORS diagnostics.

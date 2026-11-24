@@ -68,6 +68,11 @@ export class WicroBuildClient {
     return this.request('complete', { ...options, origin: window.location.origin });
   }
 
+  /** @param {string} type @param {Record<string,unknown>} payload */
+  libraries(type, payload) {
+    return this.request(type, { ...payload, origin: window.location.origin });
+  }
+
   cacheStatus() {
     return this.request('cacheStatus');
   }

@@ -128,8 +128,20 @@ export class IdeShell {
     panel.className = 'platform-configuration';
     panel.setAttribute('aria-label', 'Platform configuration');
     body?.appendChild(panel);
+    const libraryPanel = document.createElement('aside');
+    libraryPanel.id = 'wicro-library-panel';
+    libraryPanel.className = 'platform-configuration library-panel';
+    libraryPanel.setAttribute('aria-label', 'Library and package browser');
+    libraryPanel.hidden = true;
+    body?.appendChild(libraryPanel);
+    this.root.querySelector('#wicro-libraries')?.addEventListener('click', () => {
+      libraryPanel.hidden = !libraryPanel.hidden;
+      if (!libraryPanel.hidden) { panel.hidden = true; this.root.querySelector('#wicro-configure')?.setAttribute('aria-expanded', 'false'); }
+      this.root.querySelector('#wicro-libraries')?.setAttribute('aria-expanded', String(!libraryPanel.hidden));
+    });
     this.root.querySelector('#wicro-configure')?.addEventListener('click', () => {
       panel.hidden = !panel.hidden;
+      if (!panel.hidden) { libraryPanel.hidden = true; this.root.querySelector('#wicro-libraries')?.setAttribute('aria-expanded', 'false'); }
       this.root.querySelector('#wicro-configure')?.setAttribute('aria-expanded', String(!panel.hidden));
     });
     this.bindEvents();
@@ -172,6 +184,7 @@ export class IdeShell {
             <input id="wicro-offline" type="checkbox" />
             <span>Offline</span>
           </label>
+          <button id="wicro-libraries" type="button" class="btn btn-secondary" aria-controls="wicro-library-panel" aria-expanded="false">Libraries</button>
           <button id="wicro-configure" type="button" class="btn btn-secondary" aria-controls="wicro-platform-configuration" aria-expanded="true">Configure</button>
           <button id="wicro-build" type="button" class="btn btn-primary">Build</button>
           <button id="wicro-flash" type="button" class="btn btn-accent" disabled>Flash</button>

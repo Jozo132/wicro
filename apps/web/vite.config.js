@@ -1,3 +1,4 @@
+import { resolvePlatformIoDownload } from './platformio-download.js';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { defineConfig } from 'vite';
@@ -127,6 +128,19 @@ export default defineConfig({
     {
       name: 'wicro-canonical-platform-assets',
       configureServer(server) {
+        server.middlewares.use('/api/library-download', async (request, response) => {
+          response.setHeader('Content-Type', 'application/json');
+          try {
+            if (request.method !== 'GET') { response.statusCode = 405; response.end(JSON.stringify({ error: 'GET required' })); return; }
+            const query = new URL(request.url ?? '/', 'http://localhost');
+            const url = await resolvePlatformIoDownload(query.searchParams.get('url') ?? '');
+            response.end(JSON.stringify({ url }));
+          } catch (error) {
+            response.statusCode = 400;
+            response.end(JSON.stringify({ error: error instanceof Error ? error.message : String(error) }));
+          }
+        });
+
         server.middlewares.use('/toolchain/llvm.wasm', async (_request, response, next) => {
           try {
             const wasm = await readFile(llvmPath);

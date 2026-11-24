@@ -1,3 +1,6 @@
+import { createLibraryCompilePlan } from '../../../../packages/core/src/project-libraries.js';
+import { LibraryCatalog } from '../../../../packages/registry/src/library-catalog.js';
+import { LibraryManager, assertNoPlatformIoHooks } from '../../../../packages/registry/src/libraries.js';
 import { unzipSync } from 'fflate';
 import { createWicroEngine, createDefaultPlatformRegistry, ESP32_C3_ARDUINO_RECIPE } from '../../../../packages/core/src/index.js';
 import { BrowserLlvmWasmToolchain, buildWasiDirectoryMap } from '../../../../packages/runtime/src/browser-toolchain.js';
@@ -341,6 +344,9 @@ const handleBuild = async (requestId, payload) => {
   const startedAt = Date.now();
   if (payload.clean) incrementalObjectCache.clear();
 
+  const parsedProject = parseProjectConfiguration(payload.projectFiles['wicro.json'] ?? '{}');
+  if (!parsedProject.value) throw new Error(parsedProject.error ?? 'Invalid project JSON');
+  assertNoPlatformIoHooks(payload.projectFiles, parsedProject.value);
   const boardManifest = await loadRegistryManifest(payload.origin, payload.boardId, Boolean(payload.offline));
   const compiler = await ensureCompilerModule(payload.origin, requestId, Boolean(payload.offline));
   const boardSdk = await resolveBoardSdk(payload.origin, requestId, boardManifest, Boolean(payload.offline));
@@ -348,6 +354,10 @@ const handleBuild = async (requestId, payload) => {
   /** @type {Map<string, string|Uint8Array>} */
   const virtualStore = new Map();
   virtualStore.set(`registry/${payload.boardId}/package.json`, JSON.stringify(boardManifest));
+  for (const provider of boardManifest.metadata?.libraryProviders ?? []) {
+    const manifest = await loadRegistryManifest(payload.origin, provider, Boolean(payload.offline));
+    virtualStore.set(`registry/${provider}/package.json`, JSON.stringify(manifest));
+  }
 
   // Populate project files + synthesized wicro.json if not explicitly present
   for (const [relPath, content] of Object.entries(payload.projectFiles)) {
@@ -369,6 +379,9 @@ const handleBuild = async (requestId, payload) => {
   /** @type {import('../../../../packages/core/src/index.js').WicroHostAdapter} */
   const host = {
     host: 'browser',
+    libraryStorage: await getStorage(),
+    resolveLibraryArtifact: libraryArtifactResolver(payload.origin),
+    offline: Boolean(payload.offline),
     sdkCacheDirectory: sdkPrefix,
     async readFile(path, options) {
       if (sdkPrefix && path.startsWith(`${sdkPrefix}/`) && boardSdk) {
@@ -463,6 +476,7 @@ const handleBuild = async (requestId, payload) => {
 
   return {
     ok: result.ok,
+    projectUpdates: typeof virtualStore.get('project/wicro-libraries.lock.json') === 'string' ? { 'wicro-libraries.lock.json': virtualStore.get('project/wicro-libraries.lock.json') } : {},
     value,
     diagnostics: result.diagnostics ?? [],
     parsedDiagnostics,
@@ -534,15 +548,16 @@ const handleDiagnose = async (requestId, payload) => {
   const configuration = parseProjectConfiguration(payload.projectFiles['wicro.json'] ?? '{}').value;
   const flags = configuration?.build?.flags ?? [];
   const defines = configuration?.build?.defines ?? [];
+  const libraryIncludes = await getLibraryIncludes(payload.projectFiles);
   const res = await toolchain.diagnoseSource({
     source: sourceToCheck,
     target: build.target,
     targetOptions: build.targetOptions ?? {},
     language,
-    includeDirs: isEsp32C3 && sdkLoaded ? [...ESP32_C3_ARDUINO_RECIPE.includeDirs] : ['.'],
+    includeDirs: [...(isEsp32C3 && sdkLoaded ? ESP32_C3_ARDUINO_RECIPE.includeDirs : ['.']), ...libraryIncludes.includeDirs],
     compilerFlags: [...(isEsp32C3 && sdkLoaded ? ESP32_C3_ARDUINO_RECIPE.compilerFlags : []), ...(Array.isArray(flags) ? flags : [])],
     defines: [...(isEsp32C3 && sdkLoaded ? ESP32_C3_ARDUINO_RECIPE.defines : []), ...(Array.isArray(defines) ? defines : [])],
-    files: extraFiles,
+    files: { ...extraFiles, ...libraryIncludes.files },
     preopens: sdkLoaded ? { '/sdk': 'loaded' } : undefined
   });
 
@@ -600,13 +615,15 @@ const handleComplete = async (payload) => {
 
   const configuration = parseProjectConfiguration(payload.projectFiles['wicro.json'] ?? '{}').value;
   const defines = configuration?.build?.defines ?? [];
+  const libraryIncludes = await getLibraryIncludes(payload.projectFiles);
   const res = await toolchain.completeSource({
     source: sourceToCheck,
     target: build.target,
     targetOptions: build.targetOptions ?? {},
     language,
-    includeDirs: isEsp32C3 && sdkLoaded ? [...ESP32_C3_ARDUINO_RECIPE.includeDirs] : ['.'],
+    includeDirs: [...(isEsp32C3 && sdkLoaded ? ESP32_C3_ARDUINO_RECIPE.includeDirs : ['.']), ...libraryIncludes.includeDirs],
     defines: [...(isEsp32C3 && sdkLoaded ? ESP32_C3_ARDUINO_RECIPE.defines : []), ...(Array.isArray(defines) ? defines : [])],
+    files: libraryIncludes.files,
     preopens: sdkLoaded ? { '/sdk': 'loaded' } : undefined,
     line: targetLine,
     column: payload.column
@@ -656,9 +673,78 @@ const handleClearCache = async () => {
   return handleCacheStatus();
 };
 
+/** @param {Record<string,string>} projectFiles */
+const getLibraryIncludes = async (projectFiles) => {
+  if (!projectFiles['wicro-libraries.lock.json']) return createLibraryCompilePlan([]);
+  const lock = JSON.parse(projectFiles['wicro-libraries.lock.json']);
+  const manager = new LibraryManager({ storage: await getStorage(), offline: true });
+  const installed = [];
+  for (const release of lock.libraries ?? []) installed.push({ release, files: await manager.load(release) });
+  return createLibraryCompilePlan(installed);
+};
+
+/** @param {string} origin @param {string} url */
+const resolveLibraryArtifact = async (origin, url) => {
+  const endpoint = import.meta.env.DEV ? `${origin}/api/library-download` : import.meta.env.VITE_WICRO_LIBRARY_METADATA_URL;
+  if (!endpoint) throw new Error('Configure a PlatformIO redirect metadata endpoint for this deployment');
+  const separator = endpoint.includes('?') ? '&' : '?';
+  const response = await fetch(`${endpoint}${separator}url=${encodeURIComponent(url)}`);
+  const value = await response.json();
+  if (!response.ok || !value.url) throw new Error(`PlatformIO redirect metadata lookup failed: ${value.error ?? response.status}`);
+  return String(value.url);
+};
+
+/** @param {string} origin @returns {((url:string)=>Promise<string>)|undefined} */
+const libraryArtifactResolver = (origin) => import.meta.env.DEV || import.meta.env.VITE_WICRO_LIBRARY_METADATA_URL ? (url) => resolveLibraryArtifact(origin, url) : undefined;
+
+/** @type {LibraryCatalog|null} */
+let libraryCatalog = null;
+/** @param {any} payload */
+const getLibraryCatalog = async (payload) => {
+  const storage = await getStorage();
+  if (storageBackend !== 'opfs') throw new Error('Library browsing and installation require persistent OPFS storage in this browser.');
+  libraryCatalog ??= new LibraryCatalog({ storage });
+  libraryCatalog.offline = Boolean(payload.offline);
+  return libraryCatalog;
+};
+
+/** @param {any} payload */
+const handleLibraryInstall = async (payload) => {
+  const catalog = await getLibraryCatalog(payload);
+  const configuration = parseProjectConfiguration(payload.projectFiles['wicro.json'] ?? '{}');
+  if (!configuration.value) throw new Error(configuration.error ?? 'Invalid project JSON');
+  assertNoPlatformIoHooks(payload.projectFiles, configuration.value);
+  const release = await catalog.resolve(payload.request);
+  const request = { ...payload.request, name: release.name, owner: release.owner, version: release.version };
+  const requests = [...(configuration.value.libraries ?? []).filter((/** @type {any} */ entry) => !(entry.provider === request.provider && entry.name === request.name && entry.owner === request.owner)), request];
+  const board = await loadRegistryManifest(payload.origin, payload.boardId, Boolean(payload.offline));
+  const providers = [];
+  for (const name of board.metadata?.libraryProviders ?? []) providers.push((await loadRegistryManifest(payload.origin, name, Boolean(payload.offline))).metadata.library);
+  const mcu = String(board.metadata?.mcu ?? '');
+  const architecture = /^ESP32/i.test(mcu) ? 'esp32' : /^ESP8266/i.test(mcu) ? 'esp8266' : /^STM32/i.test(mcu) ? 'stm32' : /^RP2/i.test(mcu) ? 'rp2040' : board.metadata?.architecture;
+  const manager = new LibraryManager({ storage: await getStorage(), catalog, offline: Boolean(payload.offline), target: payload.boardId, architecture, framework: configuration.value.framework ?? 'arduino', frameworkLibraries: providers, resolveArtifactUrl: libraryArtifactResolver(payload.origin) });
+  const result = await manager.ensureProject(requests);
+  return { requests, lock: result.lock, libraries: result.lock.libraries.map((entry) => ({ name: entry.name, version: entry.version })) };
+};
+
+/** @param {any} payload */
+const handleLibraryFiles = async (payload) => {
+  const manager = new LibraryManager({ storage: await getStorage(), offline: Boolean(payload.offline) });
+  const files = await manager.load(payload.release);
+  if (!payload.path) return { paths: Object.keys(files).sort() };
+  const bytes = files[payload.path];
+  if (!bytes) throw new Error('Library file does not exist');
+  return { text: new TextDecoder().decode(bytes.subarray(0, 256 * 1024)), truncated: bytes.length > 256 * 1024 };
+};
+
 self.addEventListener('message', async (event) => {
   const { id, type, payload } = event.data ?? {};
   try {
+    if (type === 'librarySearch' || type === 'libraryInstall' || type === 'libraryFiles') {
+      const result = type === 'librarySearch' ? await (await getLibraryCatalog(payload)).search(payload.provider, payload.query, Boolean(payload.refresh)) : type === 'libraryInstall' ? await handleLibraryInstall(payload) : await handleLibraryFiles(payload);
+      self.postMessage({ type: 'result', id, ok: true, result });
+      return;
+    }
     if (type === 'build') {
       const result = await handleBuild(id, payload);
       self.postMessage({ type: 'result', id, ok: true, result });

@@ -1,3 +1,5 @@
+import { loadProjectLibraries } from './project-libraries.js';
+
 import { inspectElfMemoryStats } from '../../runtime/src/elf-utils.js';
 import { WicroPlatformRegistry } from './platform/registry.js';
 import { createDefaultPlatformRegistry, BUILTIN_PROGRAMMERS } from './platform/defaults.js';
@@ -54,6 +56,10 @@ export {
  * @property {(path: string, options?: {encoding?: 'utf8'|'binary'}) => Promise<string|Uint8Array>} readFile
  * @property {(path: string) => Promise<string[]>} [readdir]
  * @property {string} [cacheDirectory]
+ * @property {import('../../registry/src/sdk.js').SdkStorage} [libraryStorage]
+ * @property {typeof fetch} [fetch]
+ * @property {(url:string)=>Promise<string>} [resolveLibraryArtifact]
+ * @property {boolean} [offline]
  * @property {string} [sdkCacheDirectory]
  * @property {(path: string, data: string|Uint8Array) => Promise<void>} writeFile
  */
@@ -428,13 +434,14 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
   onProgress?.({ stage: 'resolve', message: 'Resolving project and board configuration…', percent: 10 });
   // Phase 1: Resolve project manifest
   let board = boardName;
-  /** @type {{board?:string,framework?:string,build?:{sources?:string[],sourceDir?:string,flags?:string[],defines?:string[],formats?:string[]},sources?:string[],sourceDir?:string}} */
+  /** @type {{board?:string,framework?:string,libraries?:import('../../registry/src/library-catalog.js').LibraryRequest[],build?:{sources?:string[],sourceDir?:string,flags?:string[],defines?:string[],formats?:string[]},sources?:string[],sourceDir?:string}} */
   let projectManifest = {};
-  try {
-    const manifestValue = await host.readFile(`${project}/wicro.json`, { encoding: 'utf8' });
-    if (typeof manifestValue === 'string') projectManifest = JSON.parse(manifestValue);
-  } catch {
-    // Board must be supplied explicitly or resolved from the project manifest.
+  let manifestValue;
+  try { manifestValue = await host.readFile(`${project}/wicro.json`, { encoding: 'utf8' }); }
+  catch { /* Board may be supplied explicitly when no project manifest exists. */ }
+  if (typeof manifestValue === 'string') {
+    projectManifest = JSON.parse(manifestValue);
+    if (!projectManifest || typeof projectManifest !== 'object' || Array.isArray(projectManifest)) throw new Error('wicro.json must contain a JSON object');
   }
   if (!board) board = projectManifest.board;
   if (!board) throw new Error('No board target was specified');
@@ -516,7 +523,16 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
     board: boardDescriptor,
     projectManifest
   });
-  const { units, generatedCpp, sourceMap } = prepared;
+  const frameworkLibraries = [];
+  if (projectManifest.libraries?.length) {
+    for (const provider of /** @type {string[]} */ (boardMetadata.libraryProviders ?? [])) {
+      const providerManifest = await loadBoardManifest(host, provider);
+      if (providerManifest.metadata?.library) frameworkLibraries.push(/** @type {import('../../registry/src/library-catalog.js').LibraryRelease} */ (providerManifest.metadata.library));
+    }
+  }
+  const libraries = await loadProjectLibraries(host, project, projectManifest, boardDescriptor, frameworkLibraries);
+  const { generatedCpp, sourceMap } = prepared;
+  const units = [...prepared.units.map((unit) => ({ ...unit, includeDirs: /** @type {string[]} */ ([]), compilerFlags: /** @type {string[]} */ ([]) })), ...libraries.units];
   if (units.length === 0) throw new Error(`No compilable sources found for project '${project}'`);
 
   // Phase 5: Resolve platform compile configuration
@@ -530,6 +546,9 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
         files: sdk.files,
         extraUnits: []
       };
+
+  compileConfig.includeDirs = [...new Set([...compileConfig.includeDirs, ...libraries.includeDirs])];
+  compileConfig.files = { ...(compileConfig.files ?? {}), ...libraries.files };
 
   /** @type {{path:string,object:Uint8Array,cache:string,diagnostics:string[]}[]} */
   const compiledObjects = [];
@@ -575,8 +594,8 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
       });
       const compiled = await toolchain.compileSource(unit.source, build.target, build.targetOptions, {
         language: unit.language,
-        includeDirs: compileConfig.includeDirs,
-        compilerFlags: unit.language === 'c++' ? compileConfig.compilerFlags : compileConfig.compilerFlags.filter((flag) => !flag.startsWith('-std=gnu++') && !flag.startsWith('-std=c++') && flag !== '-fno-rtti' && flag !== '-fno-exceptions'),
+        includeDirs: [...compileConfig.includeDirs, ...unit.includeDirs],
+        compilerFlags: unit.language === 'c++' ? [...compileConfig.compilerFlags, ...unit.compilerFlags] : [...compileConfig.compilerFlags, ...unit.compilerFlags].filter((flag) => !flag.startsWith('-std=gnu++') && !flag.startsWith('-std=c++') && flag !== '-fno-rtti' && flag !== '-fno-exceptions'),
         preopens: compileConfig.preopens,
         files: compileConfig.files,
         defines: compileConfig.defines,
@@ -688,29 +707,27 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
   onProgress?.({ stage: 'write', message: 'Writing firmware artifacts…', percent: 95 });
   const output = build.output ?? '.wicro/build';
   if (generatedCpp) await host.writeFile(`${project}/${output}/sketch.cpp`, generatedCpp);
-  for (const compiled of compiledObjects) {
+  for (const [objectIndex, compiled] of compiledObjects.entries()) {
     const objectName = compiled.path.split('/').pop()?.replace(/\.(ino|pde|c|cc|cpp|cxx|s|S|asm)$/i, '') ?? 'main';
-    await host.writeFile(`${project}/${output}/${objectName}.o`, compiled.object);
+    await host.writeFile(`${project}/${output}/${compiled.path.startsWith('libraries/') ? `library-${objectIndex}` : objectName}.o`, compiled.object);
   }
   if (compiledObjects.length > 0) {
     await host.writeFile(`${project}/${output}/main.o`, compiledObjects[0].object);
   }
 
-  const compileCommands = sourcePaths
-    .filter((path) => /\.(ino|pde|c|cc|cpp|cxx|s|S|asm)$/i.test(path))
-    .map((path) => ({
-      directory: `${project}/${output}`,
-      file: `${project}/${path}`,
-      arguments: [
-        'clang++',
-        `--target=${build.target}`,
-        ...compileConfig.includeDirs.flatMap((directoryName) => ['-I', directoryName]),
-        ...compileConfig.defines.flatMap((define) => ['-D', define]),
-        ...compileConfig.compilerFlags,
-        '-c',
-        `${project}/${path}`
-      ]
-    }));
+  const compileCommands = units.map((unit) => ({
+    directory: `${project}/${output}`,
+    file: `${project}/${unit.path}`,
+    arguments: [
+      unit.language === 'c++' ? 'clang++' : 'clang',
+      `--target=${build.target}`,
+      ...[...compileConfig.includeDirs, ...unit.includeDirs].flatMap((directoryName) => ['-I', directoryName]),
+      ...compileConfig.defines.flatMap((define) => ['-D', define]),
+      ...compileConfig.compilerFlags,
+      ...unit.compilerFlags,
+      '-c', `${project}/${unit.path}`
+    ]
+  }));
   await host.writeFile(`${project}/${output}/compile_commands.json`, JSON.stringify(compileCommands, null, 2));
 
   if (result.elf && result.bin) {
@@ -745,6 +762,7 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
     generatedCpp: generatedCpp ? `${project}/${output}/sketch.cpp` : undefined,
     sourceMap,
     sources: sourcePaths,
+    libraries: libraries.libraries,
     compileCommands: `${project}/${output}/compile_commands.json`,
     objects: compiledObjects.map((item) => ({ path: item.path, cache: item.cache }))
   };

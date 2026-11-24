@@ -68,6 +68,7 @@ export const validatePlatformConfiguration = (config, boards) => {
     }
     if (config.build.clockHz !== undefined) issues.push('CPU clock overrides have no implemented clock-control recipe; remove build.clockHz.');
   }
+  if (config.libraries !== undefined && (!Array.isArray(config.libraries) || config.libraries.some((/** @type {any} */ library) => !isConfigurationObject(library) || !['arduino', 'platformio', 'archive'].includes(library.provider) || typeof library.name !== 'string' || !library.name.trim()))) issues.push('libraries must be an array of named Arduino, PlatformIO, or archive declarations.');
   if (config.upload !== undefined && !isConfigurationObject(config.upload)) issues.push('upload must be an object.');
   if (isConfigurationObject(config.upload)) {
     const upload = config.upload;
