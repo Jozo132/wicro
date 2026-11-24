@@ -7,6 +7,7 @@ import test from 'node:test';
 
 import {
   buildDefaults,
+  downloadPrebuiltCompilerArtifacts,
   findWindowsSdk,
   parseVsDevShellOutput,
   toGitBashPath,
@@ -33,6 +34,51 @@ test('WASI SDK asset mapping covers native Windows, Linux, and macOS', () => {
   assert.equal(wasiSdkAsset('darwin', 'x64'), 'wasi-sdk-34.0-x86_64-macos.tar.gz');
   assert.equal(wasiSdkAsset('darwin', 'arm64'), 'wasi-sdk-34.0-arm64-macos.tar.gz');
   assert.equal(wasiSdkAsset('aix', 'x64'), null);
+});
+
+test('GitHub release fallback downloads and verifies prebuilt llvm.wasm and ld.wasm', async () => {
+  const cache = await mkdtemp(join(tmpdir(), 'wicro-release-fallback-'));
+  try {
+    const llvm = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+    const ld = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+    const fallbackManifest = structuredClone(manifest);
+    fallbackManifest.integrity['llvm.wasm'] = createHash('sha256').update(llvm).digest('hex');
+    fallbackManifest.integrity['ld.wasm'] = createHash('sha256').update(ld).digest('hex');
+    fallbackManifest.artifacts.clang.url = 'https://example.invalid/llvm.wasm';
+    fallbackManifest.artifacts.clang.filename = 'llvm.wasm';
+    fallbackManifest.artifacts.clang.uncompressedSha256 = fallbackManifest.integrity['llvm.wasm'];
+    fallbackManifest.artifacts.ld.url = 'https://example.invalid/ld.wasm';
+    fallbackManifest.artifacts.ld.filename = 'ld.wasm';
+    fallbackManifest.artifacts.ld.uncompressedSha256 = fallbackManifest.integrity['ld.wasm'];
+
+    const fetchImpl = async (url) => {
+      const bytes = String(url).endsWith('ld.wasm') ? ld : llvm;
+      return new Response(bytes, { status: 200, headers: { 'content-length': String(bytes.byteLength) } });
+    };
+    const result = await downloadPrebuiltCompilerArtifacts(cache, fallbackManifest, { fetchImpl });
+    assert.equal(result.downloaded, true);
+    assert.equal(result.sha256, fallbackManifest.integrity['llvm.wasm']);
+    assert.equal(result.ldSha256, fallbackManifest.integrity['ld.wasm']);
+  } finally {
+    await rm(cache, { recursive: true, force: true });
+  }
+});
+
+test('GitHub release fallback rejects SHA-256 mismatch without caching artifacts', async () => {
+  const cache = await mkdtemp(join(tmpdir(), 'wicro-release-mismatch-'));
+  try {
+    const llvm = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+    const fallbackManifest = structuredClone(manifest);
+    fallbackManifest.integrity['llvm.wasm'] = '0'.repeat(64);
+    fallbackManifest.artifacts.clang.uncompressedSha256 = '0'.repeat(64);
+    fallbackManifest.artifacts.ld = null;
+    const fetchImpl = async () => new Response(llvm, { status: 200 });
+    const result = await downloadPrebuiltCompilerArtifacts(cache, fallbackManifest, { fetchImpl });
+    assert.equal(result.downloaded, false);
+    assert.match(result.diagnostics[0], /SHA-256 mismatch/);
+  } finally {
+    await rm(cache, { recursive: true, force: true });
+  }
 });
 
 test('cache verifies the manifest SHA-256 and distinguishes mismatches', async () => {

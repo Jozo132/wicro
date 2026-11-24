@@ -48,6 +48,82 @@ export const shellQuote = (value) => `'${value.replaceAll("'", `'"'"'`)}'`;
 /** @param {string} bytesPath */
 export const sha256File = async (bytesPath) => createHash('sha256').update(await readFile(bytesPath)).digest('hex');
 
+/** @param {Uint8Array} bytes */
+export const sha256Bytes = (bytes) => createHash('sha256').update(bytes).digest('hex');
+
+/**
+ * Download and SHA-256 verify prebuilt LLVM WASM artifacts from the pinned release manifest.
+ * @param {string} output
+ * @param {Record<string,unknown>} manifest
+ * @param {{fetchImpl?:typeof fetch}} [options]
+ */
+export const downloadPrebuiltCompilerArtifacts = async (output, manifest, options = {}) => {
+  const artifacts = typeof manifest.artifacts === 'object' && manifest.artifacts !== null
+    ? /** @type {Record<string,Record<string,unknown>>} */ (manifest.artifacts)
+    : {};
+  const integrity = typeof manifest.integrity === 'object' && manifest.integrity !== null
+    ? /** @type {Record<string,string>} */ (manifest.integrity)
+    : {};
+  const clang = artifacts.clang;
+  if (!clang || typeof clang.url !== 'string' || clang.url.length === 0) {
+    return { downloaded: false, llvmPath: join(output, 'llvm.wasm'), ldPath: join(output, 'ld.wasm'), sha256: null, ldSha256: null, diagnostics: ['The manifest has no llvm.wasm release URL.'] };
+  }
+
+  await mkdir(output, { recursive: true });
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch;
+  if (typeof fetchImpl !== 'function') {
+    return { downloaded: false, llvmPath: join(output, 'llvm.wasm'), ldPath: join(output, 'ld.wasm'), sha256: null, ldSha256: null, diagnostics: ['This Node.js runtime has no fetch implementation for the GitHub release fallback.'] };
+  }
+
+  /** @param {string} name @param {Record<string,unknown>} artifact */
+  const downloadOne = async (name, artifact) => {
+    const url = typeof artifact.url === 'string' ? artifact.url : '';
+    if (!url) return null;
+    const response = await fetchImpl(url);
+    if (!response.ok) throw new Error(`Failed to download ${name} (${response.status}) from ${url}`);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    const sha256 = sha256Bytes(bytes);
+    const expected = typeof artifact.uncompressedSha256 === 'string' && artifact.uncompressedSha256.length > 0
+      ? artifact.uncompressedSha256
+      : integrity[typeof artifact.filename === 'string' ? artifact.filename : name];
+    if (typeof expected === 'string' && sha256 !== expected) {
+      throw new Error(`${name} SHA-256 mismatch: actual=${sha256}, expected=${expected}`);
+    }
+    return { bytes, sha256, filename: typeof artifact.filename === 'string' ? artifact.filename : name };
+  };
+
+  try {
+    const clangDownload = await downloadOne('llvm.wasm', clang);
+    if (!clangDownload) throw new Error('llvm.wasm release artifact is unavailable.');
+
+    const ld = artifacts.ld;
+    const ldDownload = ld ? await downloadOne('ld.wasm', ld) : null;
+
+    await writeFile(join(output, clangDownload.filename), clangDownload.bytes);
+    if (ldDownload) await writeFile(join(output, ldDownload.filename), ldDownload.bytes);
+    const llvmValidation = await validateWasmArtifact(output, manifest);
+    if (!llvmValidation.valid) throw new Error(llvmValidation.diagnostics.join(' '));
+
+    return {
+      downloaded: true,
+      llvmPath: join(output, clangDownload.filename),
+      ldPath: ldDownload ? join(output, ldDownload.filename) : join(output, 'ld.wasm'),
+      sha256: clangDownload.sha256,
+      ldSha256: ldDownload?.sha256 ?? null,
+      diagnostics: []
+    };
+  } catch (error) {
+    return {
+      downloaded: false,
+      llvmPath: join(output, 'llvm.wasm'),
+      ldPath: join(output, 'ld.wasm'),
+      sha256: null,
+      ldSha256: null,
+      diagnostics: [error instanceof Error ? error.message : String(error)]
+    };
+  }
+};
+
 /** @param {string} windowsPath */
 export const toGitBashPath = (windowsPath) => {
   const normalized = windowsPath.replaceAll('\\', '/');
@@ -570,6 +646,7 @@ export const main = async (args = process.argv.slice(2)) => {
         cache: cache.llvmStatus,
         msvc: { available: msvc.available, cl: msvc.cl, link: msvc.link, rc: msvc.rc, windowsSdk: msvc.windowsSdk, vsDevCmd: 'discovered automatically via vswhere for actual builds' },
         tools: { cmake: tools.cmake, ninja: tools.ninja, git: tools.git, curl: tools.curl, tar: tools.tar },
+        releaseFallback: typeof manifest.artifacts?.clang?.url === 'string' ? manifest.artifacts.clang.url : null,
         wasiSdkAsset: wasiSdkAsset(process.platform, process.arch),
         llvmTargets,
         llvmRef: revisions.llvmRef,
@@ -582,13 +659,23 @@ export const main = async (args = process.argv.slice(2)) => {
 
     if (process.platform === 'linux' || process.platform === 'darwin') {
       const tools = detectUnixHostTools();
-      console.log(JSON.stringify({ platform: process.platform, mode: 'dry-run', cache: cache.llvmStatus, tools, wasiSdkAsset: wasiSdkAsset(process.platform, process.arch), llvmTargets, llvmRef: revisions.llvmRef, llvmProjectCommit: revisions.llvmProjectCommit }, null, 2));
+      console.log(JSON.stringify({ platform: process.platform, mode: 'dry-run', cache: cache.llvmStatus, tools, releaseFallback: typeof manifest.artifacts?.clang?.url === 'string' ? manifest.artifacts.clang.url : null, wasiSdkAsset: wasiSdkAsset(process.platform, process.arch), llvmTargets, llvmRef: revisions.llvmRef, llvmProjectCommit: revisions.llvmProjectCommit }, null, 2));
       if (tools.diagnostics.length > 0) console.error(tools.diagnostics.join('\n'));
       return 0;
     }
 
     console.error(`Unsupported platform: ${process.platform}. Supported platforms are Windows, Linux, and macOS.`);
     return 1;
+  }
+
+  if (!options.force && !options.offline) {
+    const released = await downloadPrebuiltCompilerArtifacts(output, manifest);
+    if (released.downloaded) {
+      await updateUnifiedManifest(output, manifest);
+      console.log(JSON.stringify({ cache: 'release-verified', llvmWasm: released.llvmPath, ldWasm: released.ldPath, sha256: released.sha256, ldSha256: released.ldSha256, source: 'github-release', url: manifest.artifacts?.clang?.url }, null, 2));
+      return 0;
+    }
+    console.error(`Prebuilt LLVM WASM release fallback failed: ${released.diagnostics.join(' ')}. Falling back to local source build.`);
   }
 
   /** @type {NodeJS.ProcessEnv} */

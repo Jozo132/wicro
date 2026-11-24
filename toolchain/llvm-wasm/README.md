@@ -14,7 +14,7 @@ The Node orchestrator verifies prerequisites without installing privileged softw
 
 WSL and Docker are never used. The Node orchestrator configures MSVC-hosted LLVM TableGen utilities on Windows, then cross-compiles pinned Espressif LLVM source to `wasm32-wasip1` with the platform-matched WASI SDK. Linux and macOS use native host C/C++ tools and the matching WASI SDK archive.
 
-A SHA-256-verified `cache/llvm.wasm` entry is reused before host prerequisite checks. `--cache-only` reports an error unless the cache matches the manifest. `--force` intentionally ignores a verified cache and rebuilds it.
+A SHA-256-verified `cache/llvm.wasm` entry is reused before host prerequisite checks. If the cache is missing or mismatched, the pinned GitHub release assets are downloaded and independently SHA-256-verified before source compilation is considered. `--cache-only` reports an error unless the cache matches the manifest and never uses the release fallback. `--offline` also disables network fallback and requires local cache or source prerequisites. `--force` deliberately ignores a verified cache and starts the native source-build path.
 
 You can override build settings in the environment:
 
@@ -29,6 +29,8 @@ $env:JOBS = '24'
 $env:LLVM_TARGETS = 'ARM;AVR;RISCV'
 npm run build:llvm
 ```
+
+The release fallback points to `llvm-wasm-v1.0.0` assets in the Wicro GitHub repository and must match the `sha256`/`uncompressedSha256` fields in `manifest.json`. Downloaded prebuilt assets are written only after verification.
 
 Prerequisite-only diagnostics are available without rebuilding:
 
