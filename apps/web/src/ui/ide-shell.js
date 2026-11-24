@@ -1,3 +1,5 @@
+import { getTargetConfiguration } from '../../../../packages/core/src/platform/configuration.js';
+
 /**
  * Modular, responsive vanilla-ESM UI shell for the Wicro browser embedded IDE.
  * Renders toolbar, resizable file explorer, Monaco editor host, tabbed compiler/diagnostics/serial dock,
@@ -120,6 +122,16 @@ export class IdeShell {
     attachSplitter(splitterV, this.root, '--sidebar-width', 'horizontal', 180, 420);
     attachSplitter(splitterH, this.root, '--dock-height', 'vertical', 140, 520);
 
+    const body = this.root.querySelector('.ide-body');
+    const panel = document.createElement('aside');
+    panel.id = 'wicro-platform-configuration';
+    panel.className = 'platform-configuration';
+    panel.setAttribute('aria-label', 'Platform configuration');
+    body?.appendChild(panel);
+    this.root.querySelector('#wicro-configure')?.addEventListener('click', () => {
+      panel.hidden = !panel.hidden;
+      this.root.querySelector('#wicro-configure')?.setAttribute('aria-expanded', String(!panel.hidden));
+    });
     this.bindEvents();
     this.store.subscribe((changed) => this.sync(changed));
     this.sync('all');
@@ -160,6 +172,7 @@ export class IdeShell {
             <input id="wicro-offline" type="checkbox" />
             <span>Offline</span>
           </label>
+          <button id="wicro-configure" type="button" class="btn btn-secondary" aria-controls="wicro-platform-configuration" aria-expanded="true">Configure</button>
           <button id="wicro-build" type="button" class="btn btn-primary">Build</button>
           <button id="wicro-flash" type="button" class="btn btn-accent" disabled>Flash</button>
           <button id="wicro-monitor-btn" type="button" class="btn btn-secondary">Monitor</button>
@@ -310,14 +323,14 @@ export class IdeShell {
     }
 
     this.baudSelect.addEventListener('change', () => {
-      this.store.baudRate = Number(this.baudSelect.value) || 115200;
+      this.store.updateUploadConfiguration({ monitorBaudRate: Number(this.baudSelect.value) || 115200 });
     });
 
     const verifyInput = /** @type {HTMLInputElement} */ (this.root.querySelector('#wicro-verify-flash'));
-    verifyInput?.addEventListener('change', () => { this.store.verifyReadback = verifyInput.checked; });
+    verifyInput?.addEventListener('change', () => { this.store.updateUploadConfiguration({ verify: verifyInput.checked ? 'readback' : 'none' }); });
 
     const autoMonInput = /** @type {HTMLInputElement} */ (this.root.querySelector('#wicro-auto-monitor'));
-    autoMonInput?.addEventListener('change', () => { this.store.autoMonitorAfterFlash = autoMonInput.checked; });
+    autoMonInput?.addEventListener('change', () => { this.store.updateUploadConfiguration({ autoMonitor: autoMonInput.checked }); });
 
     const tsInput = /** @type {HTMLInputElement} */ (this.root.querySelector('#wicro-serial-ts'));
     tsInput?.addEventListener('change', () => {
@@ -373,6 +386,7 @@ export class IdeShell {
 
   /** @param {string} changed */
   sync(changed) {
+    if (changed === 'configuration' || changed === 'file-content') changed = 'project';
     if (changed === 'all' || changed === 'theme') {
       this.root.dataset.theme = this.store.theme;
     }
@@ -399,9 +413,24 @@ export class IdeShell {
     }
     if (changed === 'all' || changed === 'board' || changed === 'framework' || changed === 'project') {
       this.boardSelect.value = this.store.boardId;
+      this.frameworkSelect.replaceChildren();
+      const frameworks = getTargetConfiguration(this.store.currentBoard).frameworks;
+      for (const framework of new Set([...frameworks, this.store.framework])) {
+        this.frameworkSelect.add(new Option(framework + (frameworks.includes(framework) ? '' : ' (unsupported)'), framework));
+      }
       this.frameworkSelect.value = this.store.framework;
       this.exampleSelect.value = this.store.exampleId;
+      if (![...this.baudSelect.options].some((option) => option.value === String(this.store.baudRate))) {
+        this.baudSelect.add(new Option(String(this.store.baudRate), String(this.store.baudRate)));
+      }
       this.baudSelect.value = String(this.store.baudRate);
+      const verify = /** @type {HTMLInputElement} */ (this.root.querySelector('#wicro-verify-flash'));
+      const autoMonitor = /** @type {HTMLInputElement} */ (this.root.querySelector('#wicro-auto-monitor'));
+      verify.disabled = Boolean(this.store.configurationError);
+      autoMonitor.disabled = Boolean(this.store.configurationError);
+      this.baudSelect.disabled = Boolean(this.store.configurationError);
+      verify.checked = this.store.verifyReadback;
+      autoMonitor.checked = this.store.autoMonitorAfterFlash;
       const board = this.store.currentBoard;
       const arch = board?.metadata?.architecture ?? board?.metadata?.build?.target ?? '';
       this.statusBoard.textContent = board ? `${board.id} · ${arch} · ${this.store.framework}` : this.store.boardId;
@@ -409,7 +438,7 @@ export class IdeShell {
     if (changed === 'all' || changed === 'project' || changed === 'active-file') {
       this.renderFilesAndTabs();
     }
-    if (changed === 'all' || changed === 'build' || changed === 'flash' || changed === 'board') {
+    if (changed === 'all' || changed === 'build' || changed === 'flash' || changed === 'board' || changed === 'project' || changed === 'device') {
       this.renderBuildAndFlashState();
     }
     if (changed === 'all' || changed === 'compiler-logs') {
@@ -475,11 +504,17 @@ export class IdeShell {
 
   renderBuildAndFlashState() {
     const busy = this.store.buildStatus === 'building' || this.store.flashStatus === 'flashing';
-    this.buildBtn.disabled = busy;
+    const invalid = this.store.configurationIssues.length > 0;
+    this.boardSelect.disabled = busy || Boolean(this.store.configurationError);
+    this.frameworkSelect.disabled = busy || Boolean(this.store.configurationError);
+    this.exampleSelect.disabled = busy;
+    this.buildBtn.disabled = busy || invalid;
+    this.monitorBtn.disabled = !this.store.deviceConnected && (busy || invalid || !this.actions.capabilities.webSerial);
     this.buildBtn.textContent = this.store.buildStatus === 'building' ? 'Building…' : 'Build';
 
     const hasBin = Boolean(this.store.lastBuild?.artifacts?.bin instanceof Uint8Array);
-    this.flashBtn.disabled = busy || !hasBin || !this.actions.capabilities.webSerial;
+    const target = getTargetConfiguration(this.store.currentBoard);
+    this.flashBtn.disabled = busy || invalid || !hasBin || !this.actions.capabilities.webSerial || !target.browserUpload || this.store.uploadSettings.programmer === 'none';
     this.flashBtn.textContent = this.store.flashStatus === 'flashing' ? 'Flashing…' : 'Flash';
 
     const activeProgress = this.store.flashStatus === 'flashing'

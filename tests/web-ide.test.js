@@ -225,6 +225,30 @@ test('Browser IDE: UI, project explorer, Monaco editor, WASM ESP32-C3 build, dia
     assert.equal(offlineBuild.binLen, browserBin.byteLength, 'Offline rebuild must produce identical BIN size');
     assert.equal(offlineBuild.cacheStatus?.compiler, 'cache-hit');
     assert.equal(offlineBuild.cacheStatus?.sdk, 'cache-hit');
+    // Prove visual settings reach the real compiler, including offline cache reuse.
+    await page.selectOption('#config-optimization', '-O2');
+    await page.fill('#config-defines', 'WICRO_CONFIGURATION_TEST=37');
+    await page.locator('#config-defines').blur();
+    const configuredBuild = await page.evaluate(async () => {
+      const ide = /** @type {any} */ (window).__wicroIde;
+      const source = ide.store.files.get('main/main.ino');
+      ide.store.setFileContent('main/main.ino', '#if WICRO_CONFIGURATION_TEST != 37\n#error Configuration define did not reach the compiler\n#endif\n' + source);
+      const result = await ide.runBuild();
+      return { ok: result?.ok, binSize: result?.artifacts?.bin?.byteLength, diagnostics: result?.diagnostics };
+    });
+    assert.equal(configuredBuild.ok, true, JSON.stringify(configuredBuild.diagnostics));
+    assert.ok(configuredBuild.binSize > 50_000);
+    const changedDuringBuild = await page.evaluate(async () => {
+      const ide = /** @type {any} */ (window).__wicroIde;
+      const pending = ide.runBuild();
+      ide.store.setFileContent('main/main.ino', ide.store.files.get('main/main.ino') + '\n// Edited during compilation\n');
+      const result = await pending;
+      return { result, hasArtifacts: Boolean(ide.store.lastBuild), message: ide.store.buildProgress.message };
+    });
+    assert.equal(changedDuringBuild.result, null);
+    assert.equal(changedDuringBuild.hasArtifacts, false);
+    assert.match(changedDuringBuild.message, /Project changed during build/);
+
     assert.deepEqual(pageErrors, [], `Unexpected page errors: ${pageErrors.join('; ')}`);
   } finally {
     if (browser) await browser.close();

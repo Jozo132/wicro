@@ -2,6 +2,7 @@ import { IdeStore } from './state/ide-store.js';
 import { WicroBuildClient } from './services/build-client.js';
 import { IdeDeviceService } from './services/device-service.js';
 import { MonacoEditorHost } from './editor/monaco-host.js';
+import { PlatformConfigurationPanel } from './ui/platform-configuration.js';
 import { IdeShell } from './ui/ide-shell.js';
 import './style.css';
 
@@ -58,7 +59,7 @@ const bootstrap = async () => {
   const scheduleDiagnostics = () => {
     if (diagnoseTimer) clearTimeout(diagnoseTimer);
     diagnoseTimer = setTimeout(async () => {
-      if (store.buildStatus === 'building') return;
+      if (store.buildStatus === 'building' || store.configurationIssues.length) return;
       try {
         const res = await buildClient.diagnose({
           boardId: store.boardId,
@@ -87,6 +88,11 @@ const bootstrap = async () => {
 
   const runBuild = async (/** @type {{clean?:boolean}} */ options = {}) => {
     if (store.buildStatus === 'building') return null;
+    if (store.configurationIssues.length) {
+      store.appendCompilerLog(`[Configuration] ${store.configurationIssues.join(' ')}`);
+      return null;
+    }
+    const buildSnapshot = JSON.stringify(store.snapshotFiles());
     store.buildStatus = 'building';
     store.buildProgress = { stage: 'start', message: 'Starting WASM build…', percent: 2 };
     store.clearCompilerLogs();
@@ -114,6 +120,14 @@ const bootstrap = async () => {
         }
       );
 
+      if (buildSnapshot !== JSON.stringify(store.snapshotFiles())) {
+        store.lastBuild = null;
+        store.buildStatus = 'idle';
+        store.buildProgress = { stage: 'idle', message: 'Project changed during build; rebuild to use the latest configuration.', percent: 0 };
+        store.appendCompilerLog('[Wicro] Discarded build artifacts because the project changed during compilation.');
+        store.emit('build');
+        return null;
+      }
       store.lastBuild = result;
       store.diagnostics = result.parsedDiagnostics ?? [];
       editorHost.setDiagnostics(store.diagnostics);
@@ -159,7 +173,11 @@ const bootstrap = async () => {
   };
 
   const runFlash = async () => {
-    const board = store.currentBoard;
+    if (store.configurationIssues.length || store.uploadSettings.programmer === 'none') {
+      store.appendCompilerLog('[Flash] Select a valid programmer and platform configuration first.');
+      return null;
+    }
+    const board = store.currentBoard ? { ...store.currentBoard, metadata: { ...store.currentBoard.metadata, uploadBaud: store.uploadSettings.baudRate } } : null;
     const firmwareBin = store.lastBuild?.artifacts?.bin;
     if (!board || !(firmwareBin instanceof Uint8Array) || firmwareBin.byteLength === 0) {
       store.appendCompilerLog('[Flash] Build firmware first before flashing.');
@@ -210,6 +228,10 @@ const bootstrap = async () => {
       await deviceService.disconnectMonitor();
       return;
     }
+    if (store.configurationIssues.length) {
+      store.appendCompilerLog('[Monitor] Correct the platform configuration first.');
+      return;
+    }
     try {
       shell.setActiveBottomTab('serial');
       await deviceService.connectMonitor(store.currentBoard, store.baudRate);
@@ -224,11 +246,6 @@ const bootstrap = async () => {
     capabilities: deviceService.capabilities,
     onSelectBoard: (boardId) => {
       store.setBoard(boardId);
-      const matchingExample = store.examples.find((ex) => ex.board === boardId);
-      if (matchingExample) {
-        store.loadExample(matchingExample);
-        editorHost.syncFiles(store.files, store.activeFile);
-      }
     },
     onSelectFramework: (framework) => store.setFramework(framework),
     onSelectExample: (exampleId) => {
@@ -286,7 +303,7 @@ const bootstrap = async () => {
       scheduleDiagnostics();
     },
     onComplete: async (path, line, column) => {
-      if (store.buildStatus === 'building') return [];
+      if (store.buildStatus === 'building' || store.configurationIssues.length) return [];
       const res = await buildClient.complete({
         boardId: store.boardId,
         projectFiles: store.snapshotFiles(),
@@ -300,6 +317,15 @@ const bootstrap = async () => {
 
   store.subscribe((changed) => {
     if (changed === 'theme') editorHost.setTheme(store.theme);
+    if (changed === 'configuration') {
+      editorHost.syncFiles(store.files, store.activeFile);
+      scheduleDiagnostics();
+    }
+  });
+
+  new PlatformConfigurationPanel(/** @type {HTMLElement} */ (root.querySelector('#wicro-platform-configuration')), store, {
+    webSerial: deviceService.capabilities.webSerial,
+    onEditJson: () => { store.setActiveFile('wicro.json'); editorHost.openFile('wicro.json'); }
   });
 
   // Load canonical board catalog and example projects from Vite / static endpoints

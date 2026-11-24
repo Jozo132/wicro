@@ -5,6 +5,7 @@ import { parseClangDiagnostics } from '../../../../packages/runtime/src/elf-util
 import { BrowserSdkStorage } from '../../../../packages/registry/src/browser-cache.js';
 import { CompilerAssetManager } from '../../../../packages/registry/src/compiler-assets.js';
 import { safeSdkArchivePath, sha256Bytes } from '../../../../packages/registry/src/sdk.js';
+import { parseProjectConfiguration } from '../../../../packages/core/src/platform/configuration.js';
 import { downloadBytes } from '../../../../packages/registry/src/download.js';
 import { preprocessIno } from '../../../../packages/arduino/src/index.js';
 
@@ -356,7 +357,8 @@ const handleBuild = async (requestId, payload) => {
   /** @type {Record<string, any>} */
   let projectManifest = {};
   if (existingManifest) {
-    try { projectManifest = JSON.parse(existingManifest); } catch { projectManifest = {}; }
+    projectManifest = JSON.parse(existingManifest);
+    if (!projectManifest || typeof projectManifest !== 'object' || Array.isArray(projectManifest)) throw new Error('wicro.json must contain a JSON object');
   }
   projectManifest.board = payload.boardId;
   if (payload.framework) projectManifest.framework = payload.framework;
@@ -529,14 +531,17 @@ const handleDiagnose = async (requestId, payload) => {
     resolvePreopen: async (virtualPath) => (virtualPath === '/sdk' && sdkLoaded ? sdkLoaded.wasiDir : undefined)
   });
 
+  const configuration = parseProjectConfiguration(payload.projectFiles['wicro.json'] ?? '{}').value;
+  const flags = configuration?.build?.flags ?? [];
+  const defines = configuration?.build?.defines ?? [];
   const res = await toolchain.diagnoseSource({
     source: sourceToCheck,
     target: build.target,
     targetOptions: build.targetOptions ?? {},
     language,
     includeDirs: isEsp32C3 && sdkLoaded ? [...ESP32_C3_ARDUINO_RECIPE.includeDirs] : ['.'],
-    compilerFlags: isEsp32C3 && sdkLoaded ? [...ESP32_C3_ARDUINO_RECIPE.compilerFlags] : [],
-    defines: isEsp32C3 && sdkLoaded ? [...ESP32_C3_ARDUINO_RECIPE.defines] : [],
+    compilerFlags: [...(isEsp32C3 && sdkLoaded ? ESP32_C3_ARDUINO_RECIPE.compilerFlags : []), ...(Array.isArray(flags) ? flags : [])],
+    defines: [...(isEsp32C3 && sdkLoaded ? ESP32_C3_ARDUINO_RECIPE.defines : []), ...(Array.isArray(defines) ? defines : [])],
     files: extraFiles,
     preopens: sdkLoaded ? { '/sdk': 'loaded' } : undefined
   });
@@ -593,13 +598,15 @@ const handleComplete = async (payload) => {
     resolvePreopen: async (virtualPath) => (virtualPath === '/sdk' && sdkLoaded ? sdkLoaded.wasiDir : undefined)
   });
 
+  const configuration = parseProjectConfiguration(payload.projectFiles['wicro.json'] ?? '{}').value;
+  const defines = configuration?.build?.defines ?? [];
   const res = await toolchain.completeSource({
     source: sourceToCheck,
     target: build.target,
     targetOptions: build.targetOptions ?? {},
     language,
     includeDirs: isEsp32C3 && sdkLoaded ? [...ESP32_C3_ARDUINO_RECIPE.includeDirs] : ['.'],
-    defines: isEsp32C3 && sdkLoaded ? [...ESP32_C3_ARDUINO_RECIPE.defines] : [],
+    defines: [...(isEsp32C3 && sdkLoaded ? ESP32_C3_ARDUINO_RECIPE.defines : []), ...(Array.isArray(defines) ? defines : [])],
     preopens: sdkLoaded ? { '/sdk': 'loaded' } : undefined,
     line: targetLine,
     column: payload.column

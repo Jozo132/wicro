@@ -1,3 +1,11 @@
+import { getTargetConfiguration, isConfigurationObject, parseProjectConfiguration, validatePlatformConfiguration } from '../../../../packages/core/src/platform/configuration.js';
+
+/** @param {Record<string,any>} configuration */
+const buildIdentity = (configuration) => {
+  const { upload, ...buildConfiguration } = configuration;
+  return JSON.stringify(buildConfiguration);
+};
+
 /**
  * Reactive state store for the Wicro browser IDE.
  * Keeps UI components decoupled from build execution, editor instances, and device I/O.
@@ -56,6 +64,10 @@ export class IdeStore {
     this.files = new Map();
     this.activeFile = 'main/main.ino';
 
+    /** @type {Record<string,any>} */
+    this.configuration = {};
+    /** @type {string|null} */
+    this.configurationError = null;
     this.offline = false;
     this.verifyReadback = true;
     this.autoMonitorAfterFlash = true;
@@ -131,22 +143,76 @@ export class IdeStore {
 
   /** @param {string} boardId */
   setBoard(boardId) {
-    this.boardId = boardId;
-    const board = this.currentBoard;
-    if (board?.metadata?.framework) {
-      this.framework = String(board.metadata.framework);
-    }
-    if (board?.metadata?.monitorBaud) {
-      this.baudRate = Number(board.metadata.monitorBaud) || 115200;
-    }
-    this.lastBuild = null;
-    this.emit('board');
+    const board = this.boards.find((entry) => entry.id === boardId);
+    if (!board) return;
+    const frameworks = getTargetConfiguration(board).frameworks;
+    this.updateConfiguration({
+      board: boardId,
+      framework: frameworks.includes(this.framework) ? this.framework : frameworks[0],
+      upload: undefined
+    });
   }
 
   /** @param {string} framework */
   setFramework(framework) {
-    this.framework = framework;
-    this.emit('framework');
+    this.updateConfiguration({ framework });
+  }
+
+  get configurationIssues() {
+    if (this.configurationError) return [this.configurationError];
+    const issues = validatePlatformConfiguration(this.configuration, this.boards);
+    const sources = Array.isArray(this.configuration.build?.sources) && this.configuration.build.sources.length ? this.configuration.build.sources : [...this.files.keys()];
+    if (this.framework !== 'arduino' && sources.some((/** @type {unknown} */ path) => typeof path === 'string' && /\.(ino|pde)$/i.test(path))) issues.push('Arduino sketch sources require the Arduino framework. Select Arduino or update the project sources to C/C++.');
+    return issues;
+  }
+
+  get uploadSettings() {
+    const target = getTargetConfiguration(this.currentBoard);
+    const upload = isConfigurationObject(this.configuration.upload) ? this.configuration.upload : {};
+    return {
+      programmer: upload.programmer ?? (target.browserUpload ? target.programmer?.id : 'none'),
+      protocol: upload.protocol ?? target.protocol,
+      baudRate: upload.baudRate ?? this.currentBoard?.metadata.uploadBaud ?? 460800,
+      monitorBaudRate: upload.monitorBaudRate ?? this.currentBoard?.metadata.monitorBaud ?? 115200,
+      verify: upload.verify ?? 'readback',
+      autoMonitor: upload.autoMonitor ?? true
+    };
+  }
+
+  /** Parse without rewriting the JSON editor, including during incomplete edits. */
+  readConfiguration() {
+    const parsed = parseProjectConfiguration(this.files.get('wicro.json') ?? '{}');
+    this.configurationError = parsed.error;
+    if (!parsed.value) { this.lastBuild = null; return; }
+    const previous = buildIdentity(this.configuration);
+    this.configuration = parsed.value;
+    if (typeof parsed.value.board === 'string') this.boardId = parsed.value.board;
+    if (typeof parsed.value.framework === 'string') this.framework = parsed.value.framework;
+    else this.framework = getTargetConfiguration(this.currentBoard).frameworks[0];
+    const next = buildIdentity(this.configuration);
+    if (previous !== next) this.lastBuild = null;
+    const upload = this.uploadSettings;
+    this.verifyReadback = upload.verify === 'readback';
+    this.autoMonitorAfterFlash = upload.autoMonitor;
+    this.baudRate = upload.monitorBaudRate;
+  }
+
+  /** Preserve unedited JSON keys, including custom build fields. @param {Record<string,any>} patch */
+  updateConfiguration(patch) {
+    if (this.configurationError) return;
+    this.files.set('wicro.json', JSON.stringify({ ...this.configuration, ...patch }, null, 2));
+    this.readConfiguration();
+    this.emit('configuration');
+  }
+
+  /** @param {Record<string,any>} patch */
+  updateBuildConfiguration(patch) {
+    this.updateConfiguration({ build: { ...(isConfigurationObject(this.configuration.build) ? this.configuration.build : {}), ...patch } });
+  }
+
+  /** @param {Record<string,any>} patch */
+  updateUploadConfiguration(patch) {
+    this.updateConfiguration({ upload: { ...(isConfigurationObject(this.configuration.upload) ? this.configuration.upload : {}), ...patch } });
   }
 
   /** @param {ExampleEntry} example */
@@ -158,18 +224,22 @@ export class IdeStore {
     for (const [path, content] of Object.entries(example.files)) {
       this.files.set(path, content);
     }
+    if (!this.files.has('wicro.json')) this.files.set('wicro.json', JSON.stringify({ name: example.name, board: example.board, framework: example.framework, toolchain: 'llvm-wasm' }, null, 2));
     const preferred = Object.keys(example.files).find((f) => /\.(ino|pde|c|cpp)$/i.test(f))
       ?? Object.keys(example.files)[0]
       ?? 'main/main.ino';
     this.activeFile = preferred;
     this.lastBuild = null;
     this.diagnostics = [];
+    this.readConfiguration();
     this.emit('project');
   }
 
   /** @param {string} path @param {string} content */
   setFileContent(path, content) {
     this.files.set(path, content);
+    if (path === 'wicro.json') this.readConfiguration();
+    else this.lastBuild = null;
     this.emit('file-content');
   }
 
@@ -178,6 +248,7 @@ export class IdeStore {
     const clean = path.replace(/\\/g, '/').replace(/^\/+/, '');
     if (!clean || clean.includes('..')) throw new Error(`Invalid file path: ${path}`);
     this.files.set(clean, content);
+    this.lastBuild = null;
     this.activeFile = clean;
     this.emit('project');
   }
@@ -186,6 +257,7 @@ export class IdeStore {
   deleteFile(path) {
     if (this.files.size <= 1) return;
     this.files.delete(path);
+    this.lastBuild = null;
     if (this.activeFile === path) {
       this.activeFile = [...this.files.keys()][0] ?? '';
     }

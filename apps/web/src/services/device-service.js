@@ -54,7 +54,7 @@ export class IdeDeviceService {
     return {
       id: programmerId,
       descriptor,
-      supportedInBrowser: programmerId === 'esp32-c3-usb-jtag'
+      supportedInBrowser: Boolean(descriptor?.browserProtocols?.length)
     };
   }
 

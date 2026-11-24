@@ -11,6 +11,7 @@ export const BUILTIN_PROGRAMMERS = Object.freeze([
     id: 'esp32-c3-usb-jtag',
     name: 'ESP32-C3 USB Serial/JTAG (esptool-js + CDC reset)',
     protocols: Object.freeze(['esptool-slip', 'usb-jtag-cdc']),
+    browserProtocols: Object.freeze(['esptool-slip']),
     platforms: Object.freeze(['espressif-esp32c3'])
   }),
   Object.freeze({

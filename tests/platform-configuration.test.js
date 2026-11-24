@@ -1,0 +1,113 @@
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { resolve } from 'node:path';
+import test from 'node:test';
+import { chromium } from 'playwright';
+
+test('platform setup: dependent fields and two-way Monaco JSON synchronization', async () => {
+  const port = 5200 + Math.floor(Math.random() * 1000);
+  const proc = spawn(process.execPath, [resolve('node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(port), '--strictPort'], { cwd: resolve('apps/web'), stdio: 'ignore' });
+  /** @type {import('playwright').Browser|undefined} */
+  let browser;
+  try {
+    const origin = `http://127.0.0.1:${port}`;
+    let ready = false;
+    for (let attempt = 0; attempt < 100; attempt++) {
+      if (proc.exitCode !== null) throw new Error(`Vite exited: ${proc.exitCode}`);
+      try { if ((await fetch(origin)).ok) { ready = true; break; } } catch { /* Startup polling. */ }
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.ok(ready, 'Vite must start');
+    browser = await chromium.launch({ headless: true, channel: 'chrome' });
+    const page = await browser.newPage({ viewport: { width: 1512, height: 982 } });
+    /** @type {string[]} */
+    const errors = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    await page.goto(origin);
+    await page.waitForFunction(() => /** @type {any} */ (window).__wicroIde?.store.boards.length > 0);
+    /** @returns {Promise<any>} */
+    const json = () => page.evaluate(() => JSON.parse(/** @type {any} */ (window).__wicroIde.store.files.get('wicro.json')));
+    await page.selectOption('#config-optimization', '-Oz');
+    await page.check('#config-debug');
+    await page.check('#config-warnings');
+    await page.fill('#config-defines', 'FEATURE_ENABLED=1\nLOG_LEVEL=2');
+    await page.locator('#config-defines').blur();
+    let config = await json();
+    assert.ok(config.build.flags.includes('-Oz'));
+    assert.ok(config.build.flags.includes('-g'));
+    assert.ok(config.build.flags.includes('-Wall'));
+    assert.deepEqual(config.build.defines, ['FEATURE_ENABLED=1', 'LOG_LEVEL=2']);
+    assert.deepEqual(config.build.sources, ['main/main.ino']);
+    assert.equal(await page.locator('#config-clock').isDisabled(), true);
+
+    await page.uncheck('#config-verify');
+    assert.equal(await page.locator('#config-verification-fields').isVisible(), false);
+    await page.uncheck('#config-auto-monitor');
+    assert.equal(await page.locator('#config-monitor-fields').isVisible(), false);
+    assert.equal((await json()).upload.verify, 'none');
+    await page.selectOption('#config-programmer', 'none');
+    assert.equal(await page.locator('#config-upload-fields').isVisible(), false);
+    await page.selectOption('#config-programmer', 'esp32-c3-usb-jtag');
+    assert.equal(await page.locator('#config-upload-fields').isVisible(), true);
+    await page.fill('#config-upload-baud', '230400');
+    await page.locator('#config-upload-baud').blur();
+    assert.equal((await json()).upload.baudRate, 230400);
+
+    await page.click('#config-edit-json');
+    config = await json();
+    config.board = 'stm32f103cb';
+    config.framework = 'bare-metal';
+    config.upload = { programmer: 'none' };
+    config.build.flags = ['-O2'];
+    config.packages = { 'custom-library': '^1.2.3' };
+    /** @param {string} text */
+    const editJson = async (text) => page.evaluate((value) => {
+      const ide = /** @type {any} */ (window).__wicroIde;
+      ide.store.setActiveFile('wicro.json');
+      ide.editorHost.openFile('wicro.json');
+      ide.editorHost.editor.getModel().setValue(value);
+    }, text);
+    await editJson(JSON.stringify(config, null, 2));
+    assert.equal(await page.locator('#config-family').inputValue(), 'STM32');
+    assert.equal(await page.locator('#config-model').inputValue(), 'STM32F103CB');
+    assert.equal(await page.locator('#config-board').inputValue(), 'stm32f103cb');
+    assert.equal(await page.locator('#wicro-board').inputValue(), 'stm32f103cb');
+    assert.equal(await page.locator('#config-optimization').inputValue(), '-O2');
+    assert.equal(await page.locator('#config-debug').isChecked(), false);
+    assert.equal(await page.locator('#wicro-build').isDisabled(), true);
+    assert.match(await page.locator('#config-errors').innerText(), /Arduino sketch sources/);
+    assert.equal(await page.locator('#config-upload-fields').isVisible(), false);
+    await page.selectOption('#config-optimization', '-Os');
+    const modelText = await page.evaluate(() => /** @type {any} */ (window).__wicroIde.editorHost.models.get('wicro.json').getValue());
+    assert.equal(JSON.parse(modelText).build.flags[0], '-Os');
+    assert.equal(JSON.parse(modelText).packages['custom-library'], '^1.2.3');
+
+    await editJson('{ "board":');
+    assert.equal(await page.locator('#config-family').isDisabled(), true);
+    assert.equal(await page.locator('#wicro-build').isDisabled(), true);
+    assert.equal(await page.locator('#config-errors').isVisible(), true);
+    await editJson(modelText);
+    assert.equal(await page.locator('#config-family').isDisabled(), false);
+
+    await page.selectOption('#config-family', 'RP2350');
+    assert.ok((await page.locator('#config-model option').allTextContents()).every((name) => name.includes('RP2350')));
+    assert.equal((await json()).board, await page.locator('#config-board').inputValue());
+    assert.ok((await json()).build.sources.includes('main/main.ino'), 'target selection must preserve source configuration');
+    await page.selectOption('#wicro-board', 'esp32-c3-supermini');
+    assert.equal(await page.locator('#config-family').inputValue(), 'ESP32');
+    assert.deepEqual(errors, []);
+    await page.locator('#wicro-platform-configuration').evaluate((element) => { element.scrollTop = 0; });
+    await page.screenshot({ path: '/tmp/wicro-platform-configuration-desktop.png', fullPage: true });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: '/tmp/wicro-platform-configuration-mobile.png', fullPage: true });
+    const bounds = await page.locator('#wicro-platform-configuration').boundingBox();
+    assert.ok(bounds && bounds.x >= 0 && bounds.x + bounds.width <= 391);
+    await page.click('#config-close');
+    assert.equal(await page.locator('#wicro-platform-configuration').isVisible(), false);
+    await page.click('#wicro-configure');
+    assert.equal(await page.locator('#wicro-platform-configuration').isVisible(), true);
+  } finally {
+    await browser?.close();
+    proc.kill('SIGKILL');
+  }
+});

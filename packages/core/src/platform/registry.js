@@ -92,6 +92,7 @@
  * @typedef {object} ProgrammerDescriptor
  * @property {string} id
  * @property {string} name
+ * @property {readonly string[]} [browserProtocols]
  * @property {readonly string[]} protocols
  * @property {readonly string[]} [platforms]
  * @property {(options?: Record<string, unknown>) => unknown} [create]
