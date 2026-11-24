@@ -7,7 +7,7 @@
   "dependencies": {
     "arduino-esp32": "^1.0.0",
     "esp-idf": "^6.1.0",
-    "llvm-wasm": "^20.1.1"
+    "llvm-wasm": "^1.0.0"
   },
   "metadata": {
     "manufacturer": "Espressif",
@@ -17,14 +17,19 @@
     "build": {
       "kind": "object",
       "target": "xtensa",
-      "targetOptions": { "mcpu": "esp32" },
+      "targetOptions": {
+        "mcpu": "esp32"
+      },
       "source": "main/main.c",
       "output": ".wicro/build"
     },
     "cpu": "xtensa-lx6",
     "flashCapacityBytes": 4194304,
     "sramCapacityBytes": 520192,
-    "led": { "pin": 2, "activeLow": false },
+    "led": {
+      "pin": 2,
+      "activeLow": false
+    },
     "bootPin": 0,
     "uploadBaud": 460800,
     "monitorBaud": 115200

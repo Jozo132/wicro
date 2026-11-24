@@ -1,5 +1,38 @@
 {
-  "name": "arduino-mega", "version": "1.0.0", "kind": "board", "description": "Arduino Mega 2560 preset", "license": "MIT",
-  "dependencies": { "arduino-avr-core": "^1.0.0", "llvm-wasm": "^20.1.1" },
-  "metadata": { "manufacturer": "Arduino", "mcu": "ATmega2560", "architecture": "avr", "framework": "arduino", "cpu": "avr6", "clockHz": 16000000, "flashCapacityBytes": 253952, "sramCapacityBytes": 8192, "eepromCapacityBytes": 4096, "build": { "kind": "object", "target": "avr", "targetOptions": { "mcu": "atmega2560" }, "source": "main.ino", "output": ".wicro/build" }, "menus": { "cpu": { "atmega2560": "ATmega2560" } }, "status": "preset", "firmwareLinking": "pending-sdk-distribution" }
+  "name": "arduino-mega",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "Arduino Mega 2560 preset",
+  "license": "MIT",
+  "dependencies": {
+    "arduino-avr-core": "^1.0.0",
+    "llvm-wasm": "^1.0.0"
+  },
+  "metadata": {
+    "manufacturer": "Arduino",
+    "mcu": "ATmega2560",
+    "architecture": "avr",
+    "framework": "arduino",
+    "cpu": "avr6",
+    "clockHz": 16000000,
+    "flashCapacityBytes": 253952,
+    "sramCapacityBytes": 8192,
+    "eepromCapacityBytes": 4096,
+    "build": {
+      "kind": "object",
+      "target": "avr",
+      "targetOptions": {
+        "mcu": "atmega2560"
+      },
+      "source": "main.ino",
+      "output": ".wicro/build"
+    },
+    "menus": {
+      "cpu": {
+        "atmega2560": "ATmega2560"
+      }
+    },
+    "status": "preset",
+    "firmwareLinking": "pending-sdk-distribution"
+  }
 }

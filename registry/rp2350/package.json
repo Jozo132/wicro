@@ -6,7 +6,7 @@
   "license": "MIT",
   "dependencies": {
     "arduino-pico": "^1.0.0",
-    "llvm-wasm": "^20.1.1",
+    "llvm-wasm": "^1.0.0",
     "pico-sdk": "^2.1.0"
   },
   "metadata": {
@@ -17,7 +17,9 @@
     "build": {
       "kind": "object",
       "target": "armv8m-mainline",
-      "targetOptions": { "mcpu": "cortex-m33" },
+      "targetOptions": {
+        "mcpu": "cortex-m33"
+      },
       "source": "main.c",
       "output": ".wicro/build"
     },
@@ -27,6 +29,9 @@
     "clockHz": 150000000,
     "flashAddress": "0x10000000",
     "sramAddress": "0x20000000",
-    "led": { "pin": 25, "activeLow": false }
+    "led": {
+      "pin": 25,
+      "activeLow": false
+    }
   }
 }

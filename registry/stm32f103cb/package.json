@@ -5,7 +5,7 @@
   "description": "STM32F103CB Blue Pill compatible board package",
   "license": "MIT",
   "dependencies": {
-    "llvm-wasm": "^20.1.1",
+    "llvm-wasm": "^1.0.0",
     "cmsis-stm32f1": "^1.0.0"
   },
   "metadata": {
@@ -18,7 +18,9 @@
     "build": {
       "kind": "bare-metal",
       "target": "armv7-m",
-      "targetOptions": { "mcpu": "cortex-m3" },
+      "targetOptions": {
+        "mcpu": "cortex-m3"
+      },
       "source": "main.c",
       "startupSource": "startup.c",
       "linkerScript": "stm32f103cb.ld",
@@ -29,6 +31,10 @@
     "clockHz": 72000000,
     "flashAddress": "0x08000000",
     "sramAddress": "0x20000000",
-    "led": { "port": "C", "pin": 13, "activeLow": true }
+    "led": {
+      "port": "C",
+      "pin": 13,
+      "activeLow": true
+    }
   }
 }

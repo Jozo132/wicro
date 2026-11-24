@@ -6,7 +6,7 @@
   "license": "MIT",
   "dependencies": {
     "arduino-avr-core": "^1.0.0",
-    "llvm-wasm": "^20.1.1"
+    "llvm-wasm": "^1.0.0"
   },
   "metadata": {
     "manufacturer": "Arduino",
@@ -18,7 +18,9 @@
     "build": {
       "kind": "object",
       "target": "avr",
-      "targetOptions": { "mcu": "atmega328p" },
+      "targetOptions": {
+        "mcu": "atmega328p"
+      },
       "source": "src/main.ino",
       "output": ".wicro/build"
     },
@@ -27,6 +29,10 @@
     "sramCapacityBytes": 2048,
     "eepromCapacityBytes": 1024,
     "flashAddress": "0x0000",
-    "led": { "port": "B", "pin": 5, "activeLow": false }
+    "led": {
+      "port": "B",
+      "pin": 5,
+      "activeLow": false
+    }
   }
 }

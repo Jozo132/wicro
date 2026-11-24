@@ -1,5 +1,36 @@
 {
-  "name": "stm32-nucleo-f401re", "version": "1.0.0", "kind": "board", "description": "STM32 Nucleo-F401RE Arduino preset", "license": "MIT",
-  "dependencies": { "arduino-stm32-core": "^1.0.0", "llvm-wasm": "^20.1.1" },
-  "metadata": { "manufacturer": "STMicroelectronics", "mcu": "STM32F401RE", "architecture": "armv7e-m", "cpu": "cortex-m4", "framework": "arduino", "clockHz": 84000000, "flashCapacityBytes": 524288, "sramCapacityBytes": 98304, "flashAddress": "0x08000000", "sramAddress": "0x20000000", "build": { "kind": "bare-metal", "target": "armv7e-m", "targetOptions": { "mcpu": "cortex-m4" }, "source": "main.ino", "startupSource": "startup.c", "linkerScript": "stm32f401re.ld", "output": ".wicro/build" }, "status": "preset", "firmwareLinking": "pending-sdk-distribution" }
+  "name": "stm32-nucleo-f401re",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "STM32 Nucleo-F401RE Arduino preset",
+  "license": "MIT",
+  "dependencies": {
+    "arduino-stm32-core": "^1.0.0",
+    "llvm-wasm": "^1.0.0"
+  },
+  "metadata": {
+    "manufacturer": "STMicroelectronics",
+    "mcu": "STM32F401RE",
+    "architecture": "armv7e-m",
+    "cpu": "cortex-m4",
+    "framework": "arduino",
+    "clockHz": 84000000,
+    "flashCapacityBytes": 524288,
+    "sramCapacityBytes": 98304,
+    "flashAddress": "0x08000000",
+    "sramAddress": "0x20000000",
+    "build": {
+      "kind": "bare-metal",
+      "target": "armv7e-m",
+      "targetOptions": {
+        "mcpu": "cortex-m4"
+      },
+      "source": "main.ino",
+      "startupSource": "startup.c",
+      "linkerScript": "stm32f401re.ld",
+      "output": ".wicro/build"
+    },
+    "status": "preset",
+    "firmwareLinking": "pending-sdk-distribution"
+  }
 }

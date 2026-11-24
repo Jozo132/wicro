@@ -6,15 +6,30 @@
   "license": "LGPL-2.1",
   "repository": "https://github.com/stm32duino/Arduino_Core_STM32",
   "dependencies": {
-    "llvm-wasm": "^20.1.1"
+    "llvm-wasm": "^1.0.0"
   },
   "metadata": {
     "upstreamCommit": "8c9c3758cf4a732fef6cdc07c5da337e381312e5",
-    "targets": ["stm32-blue-pill", "stm32-black-pill", "stm32-nucleo-f401re", "stm32-generic"],
-    "architectures": ["armv7-m", "armv7e-m"],
+    "targets": [
+      "stm32-blue-pill",
+      "stm32-black-pill",
+      "stm32-nucleo-f401re",
+      "stm32-generic"
+    ],
+    "architectures": [
+      "armv7-m",
+      "armv7e-m"
+    ],
     "source": "external",
     "status": "download-on-demand",
-    "distribution": { "url": "https://codeload.github.com/stm32duino/Arduino_Core_STM32/zip/8c9c3758cf4a732fef6cdc07c5da337e381312e5", "mirrors": ["https://github.com/stm32duino/Arduino_Core_STM32/archive/8c9c3758cf4a732fef6cdc07c5da337e381312e5.zip"], "archiveType": "zip", "sha256": "856598ee02fdd75515fc759468577ad6856f47c99ddf135630126ca37ea9a949" },
+    "distribution": {
+      "url": "https://codeload.github.com/stm32duino/Arduino_Core_STM32/zip/8c9c3758cf4a732fef6cdc07c5da337e381312e5",
+      "mirrors": [
+        "https://github.com/stm32duino/Arduino_Core_STM32/archive/8c9c3758cf4a732fef6cdc07c5da337e381312e5.zip"
+      ],
+      "archiveType": "zip",
+      "sha256": "856598ee02fdd75515fc759468577ad6856f47c99ddf135630126ca37ea9a949"
+    },
     "firmwareLinking": "pending-sdk-distribution"
   }
 }

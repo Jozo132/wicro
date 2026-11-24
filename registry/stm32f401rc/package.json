@@ -5,7 +5,7 @@
   "description": "STM32F401RC board package with an inverted red LED on PC13",
   "license": "MIT",
   "dependencies": {
-    "llvm-wasm": "^20.1.1",
+    "llvm-wasm": "^1.0.0",
     "cmsis-stm32f4": "^1.0.0"
   },
   "metadata": {
@@ -17,7 +17,9 @@
     "build": {
       "kind": "bare-metal",
       "target": "armv7e-m",
-      "targetOptions": { "mcpu": "cortex-m4" },
+      "targetOptions": {
+        "mcpu": "cortex-m4"
+      },
       "source": "main.c",
       "startupSource": "startup.c",
       "linkerScript": "stm32f401rc.ld",
@@ -30,7 +32,11 @@
     "flashAddress": "0x08000000",
     "sramAddress": "0x20000000",
     "leds": {
-      "red": { "port": "C", "pin": 13, "activeLow": true }
+      "red": {
+        "port": "C",
+        "pin": 13,
+        "activeLow": true
+      }
     }
   }
 }

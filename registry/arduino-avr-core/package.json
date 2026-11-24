@@ -6,16 +6,30 @@
   "license": "LGPL-2.1",
   "repository": "https://github.com/arduino/ArduinoCore-avr",
   "dependencies": {
-    "llvm-wasm": "^20.1.1"
+    "llvm-wasm": "^1.0.0"
   },
   "metadata": {
     "upstreamCommit": "11b9130371e8447920edb65a75706a6c951e51fc",
     "upstreamVersion": "1.8.8",
-    "targets": ["arduino-uno-original", "arduino-nano", "arduino-mega", "arduino-leonardo"],
-    "architectures": ["avr"],
+    "targets": [
+      "arduino-uno-original",
+      "arduino-nano",
+      "arduino-mega",
+      "arduino-leonardo"
+    ],
+    "architectures": [
+      "avr"
+    ],
     "source": "external",
     "status": "download-on-demand",
-    "distribution": { "url": "https://codeload.github.com/arduino/ArduinoCore-avr/zip/11b9130371e8447920edb65a75706a6c951e51fc", "mirrors": ["https://github.com/arduino/ArduinoCore-avr/archive/11b9130371e8447920edb65a75706a6c951e51fc.zip"], "archiveType": "zip", "sha256": "6b54749a5e53ccbe5d179dcc5c37ffa5610518556ca944cc528c6ee94766dce7" },
+    "distribution": {
+      "url": "https://codeload.github.com/arduino/ArduinoCore-avr/zip/11b9130371e8447920edb65a75706a6c951e51fc",
+      "mirrors": [
+        "https://github.com/arduino/ArduinoCore-avr/archive/11b9130371e8447920edb65a75706a6c951e51fc.zip"
+      ],
+      "archiveType": "zip",
+      "sha256": "6b54749a5e53ccbe5d179dcc5c37ffa5610518556ca944cc528c6ee94766dce7"
+    },
     "firmwareLinking": "pending-sdk-distribution"
   }
 }

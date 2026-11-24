@@ -1,5 +1,36 @@
 {
-  "name": "stm32-black-pill", "version": "1.0.0", "kind": "board", "description": "STM32 Black Pill STM32F411CE Arduino preset", "license": "MIT",
-  "dependencies": { "arduino-stm32-core": "^1.0.0", "llvm-wasm": "^20.1.1" },
-  "metadata": { "manufacturer": "STMicroelectronics", "mcu": "STM32F411CE", "architecture": "armv7e-m", "cpu": "cortex-m4", "framework": "arduino", "clockHz": 100000000, "flashCapacityBytes": 524288, "sramCapacityBytes": 131072, "flashAddress": "0x08000000", "sramAddress": "0x20000000", "build": { "kind": "bare-metal", "target": "armv7e-m", "targetOptions": { "mcpu": "cortex-m4" }, "source": "main.ino", "startupSource": "startup.c", "linkerScript": "stm32f411ce.ld", "output": ".wicro/build" }, "status": "preset", "firmwareLinking": "pending-sdk-distribution" }
+  "name": "stm32-black-pill",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "STM32 Black Pill STM32F411CE Arduino preset",
+  "license": "MIT",
+  "dependencies": {
+    "arduino-stm32-core": "^1.0.0",
+    "llvm-wasm": "^1.0.0"
+  },
+  "metadata": {
+    "manufacturer": "STMicroelectronics",
+    "mcu": "STM32F411CE",
+    "architecture": "armv7e-m",
+    "cpu": "cortex-m4",
+    "framework": "arduino",
+    "clockHz": 100000000,
+    "flashCapacityBytes": 524288,
+    "sramCapacityBytes": 131072,
+    "flashAddress": "0x08000000",
+    "sramAddress": "0x20000000",
+    "build": {
+      "kind": "bare-metal",
+      "target": "armv7e-m",
+      "targetOptions": {
+        "mcpu": "cortex-m4"
+      },
+      "source": "main.ino",
+      "startupSource": "startup.c",
+      "linkerScript": "stm32f411ce.ld",
+      "output": ".wicro/build"
+    },
+    "status": "preset",
+    "firmwareLinking": "pending-sdk-distribution"
+  }
 }

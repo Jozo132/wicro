@@ -5,7 +5,7 @@
   "description": "STM32H723VG board package",
   "license": "MIT",
   "dependencies": {
-    "llvm-wasm": "^20.1.1",
+    "llvm-wasm": "^1.0.0",
     "cmsis-stm32h7": "^1.0.0"
   },
   "metadata": {
@@ -17,7 +17,9 @@
     "build": {
       "kind": "bare-metal",
       "target": "armv7e-m",
-      "targetOptions": { "mcpu": "cortex-m7" },
+      "targetOptions": {
+        "mcpu": "cortex-m7"
+      },
       "source": "main.c",
       "startupSource": "startup.c",
       "linkerScript": "stm32h723vg.ld",
@@ -29,6 +31,10 @@
     "clockHz": 550000000,
     "flashAddress": "0x08000000",
     "sramAddress": "0x24000000",
-    "led": { "port": "E", "pin": 3, "activeLow": true }
+    "led": {
+      "port": "E",
+      "pin": 3,
+      "activeLow": true
+    }
   }
 }

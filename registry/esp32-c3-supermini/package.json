@@ -8,7 +8,7 @@
     "arduino-esp32": "^1.0.0",
     "esp-idf": "^6.1.0",
     "esp32-c3-sdk": "^4.20017.0",
-    "llvm-wasm": "^20.1.1"
+    "llvm-wasm": "^1.0.0"
   },
   "metadata": {
     "manufacturer": "Espressif",
@@ -19,15 +19,24 @@
     "build": {
       "kind": "firmware",
       "target": "riscv32",
-      "targetOptions": { "march": "rv32imc_zicsr_zifencei", "mabi": "ilp32" },
+      "targetOptions": {
+        "march": "rv32imc_zicsr_zifencei",
+        "mabi": "ilp32"
+      },
       "firmwareFormat": "esp32-c3-bin",
       "source": "main/main.ino",
       "output": ".wicro/build"
     },
     "flashAutoDetect": true,
-    "led": { "pin": 8, "activeLow": true },
+    "led": {
+      "pin": 8,
+      "activeLow": true
+    },
     "bootPin": 9,
-    "nativeUsbPins": [18, 19],
+    "nativeUsbPins": [
+      18,
+      19
+    ],
     "usbVendorId": "303a",
     "usbProductId": "1001",
     "uploadBaud": 460800,

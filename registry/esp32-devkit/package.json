@@ -1,5 +1,43 @@
 {
-  "name": "esp32-devkit", "version": "1.0.0", "kind": "board", "description": "ESP32 DevKit Arduino preset", "license": "MIT",
-  "dependencies": { "arduino-esp32": "^1.0.0", "llvm-wasm": "^20.1.1" },
-  "metadata": { "manufacturer": "Espressif", "mcu": "ESP32", "architecture": "xtensa", "cpu": "xtensa-lx6", "framework": "arduino", "clockHz": 240000000, "flashCapacityBytes": 4194304, "sramCapacityBytes": 520192, "uploadBaud": 460800, "monitorBaud": 115200, "build": { "kind": "object", "target": "xtensa", "targetOptions": { "mcpu": "esp32" }, "source": "main.ino", "output": ".wicro/build" }, "menus": { "flashSize": { "4MB": "4 MB" }, "usbMode": { "hwcdc": "USB CDC", "otg": "USB OTG" } }, "status": "preset", "firmwareLinking": "pending-sdk-distribution" }
+  "name": "esp32-devkit",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "ESP32 DevKit Arduino preset",
+  "license": "MIT",
+  "dependencies": {
+    "arduino-esp32": "^1.0.0",
+    "llvm-wasm": "^1.0.0"
+  },
+  "metadata": {
+    "manufacturer": "Espressif",
+    "mcu": "ESP32",
+    "architecture": "xtensa",
+    "cpu": "xtensa-lx6",
+    "framework": "arduino",
+    "clockHz": 240000000,
+    "flashCapacityBytes": 4194304,
+    "sramCapacityBytes": 520192,
+    "uploadBaud": 460800,
+    "monitorBaud": 115200,
+    "build": {
+      "kind": "object",
+      "target": "xtensa",
+      "targetOptions": {
+        "mcpu": "esp32"
+      },
+      "source": "main.ino",
+      "output": ".wicro/build"
+    },
+    "menus": {
+      "flashSize": {
+        "4MB": "4 MB"
+      },
+      "usbMode": {
+        "hwcdc": "USB CDC",
+        "otg": "USB OTG"
+      }
+    },
+    "status": "preset",
+    "firmwareLinking": "pending-sdk-distribution"
+  }
 }

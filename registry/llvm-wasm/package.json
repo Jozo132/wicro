@@ -1,19 +1,128 @@
 {
   "name": "llvm-wasm",
-  "version": "20.1.1",
+  "version": "1.0.0",
   "kind": "toolchain",
-  "description": "Shared ARM, AVR, RISC-V and Xtensa LLVM/LD WebAssembly toolchain",
+  "description": "Shared Espressif LLVM/LLD WebAssembly toolchain",
   "license": "Apache-2.0 WITH LLVM-exception",
-  "repository": "https://github.com/lemio/esp-wasm",
+  "repository": "https://github.com/Jozo132/wicro",
   "metadata": {
     "runtime": "wasi-preview1",
     "compiler": "toolchain/llvm-wasm/cache/llvm.wasm",
     "linker": "toolchain/llvm-wasm/cache/ld.wasm",
-    "targets": ["armv6m", "armv7-m", "armv7e-m", "armv8m-mainline", "avr", "riscv32", "riscv64", "xtensa"],
-    "availableEntryPoints": ["clang", "clang++", "ld.lld", "ld"],
-    "requestedEntryPoints": ["clangd", "clang-tidy", "clang-format", "llvm-ar", "llvm-objcopy", "llvm-objdump", "llvm-size", "llvm-nm", "llvm-readelf"],
+    "targets": [
+      "armv6m",
+      "armv7-m",
+      "armv7e-m",
+      "armv8m-mainline",
+      "avr",
+      "riscv32",
+      "riscv64",
+      "xtensa"
+    ],
+    "availableEntryPoints": [
+      "clang",
+      "ld"
+    ],
+    "requestedEntryPoints": [
+      "clangd",
+      "clang-tidy",
+      "clang-format",
+      "llvm-ar",
+      "llvm-objcopy",
+      "llvm-objdump",
+      "llvm-size",
+      "llvm-nm",
+      "llvm-readelf"
+    ],
     "offlineCache": "toolchain/llvm-wasm/cache",
     "threadSupport": false,
-    "threadCompatibility": "Pinned upstream WASI recipe disables LLVM threads"
+    "threadCompatibility": "The pinned upstream WASI recipe disables LLVM threads for WASM/WASI preview1 compatibility.",
+    "distributionRelease": {
+      "repository": "Jozo132/wicro",
+      "tag": "llvm-wasm-v1.0.0",
+      "publishedUrl": "https://github.com/Jozo132/wicro/releases/tag/llvm-wasm-v1.0.0",
+      "createdAt": "2026-11-24T01:27:48.164Z"
+    },
+    "revisions": {
+      "esp-wasm": "dceb9e3126898359bff8ab9e44bec5b65d87b5d3",
+      "llvm-project": "esp-20.1.1_20250829",
+      "llvm-project-commit": "50f388758bdf0b0d99018a6f2b1d3402bdb51002",
+      "wasi-sdk": "34.0"
+    }
+  },
+  "artifacts": {
+    "clang": {
+      "url": "https://github.com/Jozo132/wicro/releases/download/llvm-wasm-v1.0.0/llvm.wasm",
+      "mirrors": [],
+      "compression": null,
+      "sha256": "32a1fb128050002a4e2c8797c4730fbd08bdb6c6991c204645d92aec85b212d4",
+      "uncompressedSha256": "32a1fb128050002a4e2c8797c4730fbd08bdb6c6991c204645d92aec85b212d4",
+      "filename": "llvm.wasm",
+      "distributionFilename": "llvm.wasm",
+      "size": 59663950,
+      "uncompressedSize": 59663950
+    },
+    "ld": {
+      "url": "https://github.com/Jozo132/wicro/releases/download/llvm-wasm-v1.0.0/ld.wasm",
+      "mirrors": [],
+      "compression": null,
+      "sha256": "cb8d0a223ca28c5eefc134399d7a54313b95ab5c7f1cbf84edccb23080f58c32",
+      "uncompressedSha256": "cb8d0a223ca28c5eefc134399d7a54313b95ab5c7f1cbf84edccb23080f58c32",
+      "filename": "ld.wasm",
+      "distributionFilename": "ld.wasm",
+      "size": 1657054,
+      "uncompressedSize": 1657054
+    }
+  },
+  "tools": {
+    "clang": {
+      "url": "llvm.wasm",
+      "argv0": "clang"
+    },
+    "ld": {
+      "url": "ld.wasm",
+      "argv0": "ld"
+    }
+  },
+  "entryPoints": {
+    "combined": [
+      "clang",
+      "clang++",
+      "ld.lld",
+      "ld",
+      "lld"
+    ],
+    "available": [
+      "clang",
+      "ld"
+    ],
+    "separateRequired": [
+      "clangd.wasm",
+      "clang-tidy.wasm",
+      "clang-format.wasm",
+      "llvm-ar.wasm",
+      "llvm-objcopy.wasm",
+      "llvm-objdump.wasm",
+      "llvm-size.wasm",
+      "llvm-nm.wasm",
+      "llvm-readelf.wasm"
+    ],
+    "lastBuild": "2026-11-24T00:49:31.316Z"
+  },
+  "revisions": {
+    "esp-wasm": "dceb9e3126898359bff8ab9e44bec5b65d87b5d3",
+    "llvm-project": "esp-20.1.1_20250829",
+    "llvm-project-commit": "50f388758bdf0b0d99018a6f2b1d3402bdb51002",
+    "wasi-sdk": "34.0"
+  },
+  "integrity": {
+    "llvm.wasm": "32a1fb128050002a4e2c8797c4730fbd08bdb6c6991c204645d92aec85b212d4",
+    "ld.wasm": "cb8d0a223ca28c5eefc134399d7a54313b95ab5c7f1cbf84edccb23080f58c32"
+  },
+  "release": {
+    "repository": "Jozo132/wicro",
+    "tag": "llvm-wasm-v1.0.0",
+    "publishedUrl": "https://github.com/Jozo132/wicro/releases/tag/llvm-wasm-v1.0.0",
+    "createdAt": "2026-11-24T01:27:48.164Z"
   }
 }

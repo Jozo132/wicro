@@ -479,15 +479,24 @@ export const publishPreparedRelease = async (options) => {
   /** @type {{id:number,url:string,assets:string[],changedFiles:string[]}} */
   let draft = { id: 0, url: '', assets: [], changedFiles: [] };
   try {
-    const bodyPath = resolve(work, 'release.json');
-    await atomicWriteJson(bodyPath, {
-      tag_name: tag,
-      name: `LLVM WASM ${String(options.manifest.version)}`,
-      body: generateReleaseNotes(options.manifest, String(options.manifest.version), options.repo, tag),
-      draft: true,
-      prerelease: false
-    });
-    draft = /** @type {any} */ (runGhJson(['api', '--method', 'POST', `repos/${options.repo}/releases`, '--input', bodyPath]));
+    const existingReleases = runGhJson(['api', `repos/${options.repo}/releases?per_page=100`]);
+    const resumableDraft = Array.isArray(existingReleases)
+      ? existingReleases.find((release) => release?.draft === true && release?.tag_name === tag)
+      : null;
+
+    if (resumableDraft) {
+      draft = /** @type {any} */ (resumableDraft);
+    } else {
+      const bodyPath = resolve(work, 'release.json');
+      await atomicWriteJson(bodyPath, {
+        tag_name: tag,
+        name: `LLVM WASM ${String(options.manifest.version)}`,
+        body: generateReleaseNotes(options.manifest, String(options.manifest.version), options.repo, tag),
+        draft: true,
+        prerelease: false
+      });
+      draft = /** @type {any} */ (runGhJson(['api', '--method', 'POST', `repos/${options.repo}/releases`, '--input', bodyPath]));
+    }
     const draftId = Number(draft.id);
     if (!draftId) throw new Error('GitHub did not return a draft release ID.');
 
@@ -509,18 +518,24 @@ export const publishPreparedRelease = async (options) => {
     await writeFile(resolve(work, 'RELEASE_NOTES.md'), generateReleaseNotes(options.manifest, String(options.manifest.version), options.repo, tag), 'utf8');
     uploadPaths.push(resolve(work, 'manifest.json'), resolve(work, 'SHA256SUMS'), resolve(work, 'RELEASE_NOTES.md'));
 
-    const uploadArgs = ['release', 'upload', tag, ...uploadPaths, '--repo', options.repo];
-    runGh(uploadArgs);
+    let existingDraftRelease = runGhJson(['api', `repos/${options.repo}/releases/${draftId}`]);
+    /** @type {{name:string,size?:number,browser_download_url:string,url?:string}[]} */
+    let publicAssets = Array.isArray(existingDraftRelease.assets) ? existingDraftRelease.assets : [];
+    const existingAssetNames = publicAssets.map((asset) => String(asset.name));
+    const missingUploadPaths = uploadPaths.filter((path) => !existingAssetNames.includes(basename(path)));
+    if (missingUploadPaths.length > 0) {
+      const uploadArgs = ['release', 'upload', tag, ...missingUploadPaths, '--repo', options.repo];
+      runGh(uploadArgs);
+      existingDraftRelease = runGhJson(['api', `repos/${options.repo}/releases/${draftId}`]);
+      publicAssets = Array.isArray(existingDraftRelease.assets) ? existingDraftRelease.assets : [];
+    }
 
-    const publicRelease = runGhJson(['api', `repos/${options.repo}/releases/tags/${encodeURIComponent(tag)}`]);
-    /** @type {{name:string,size?:number,browser_download_url:string}[]} */
-    const publicAssets = Array.isArray(publicRelease.assets) ? publicRelease.assets : [];
     const assetNames = publicAssets.map((asset) => String(asset.name));
     const expectedNames = uploadPaths.map((path) => basename(path));
     const missing = expectedNames.filter((name) => !assetNames.includes(name));
     if (missing.length > 0) throw new Error(`Draft verification failed: missing uploaded assets ${missing.join(', ')}. Recovery: gh release view ${tag} --repo ${options.repo}; complete or delete the draft only if no published assets exist.`);
 
-    await verifyDraftAssets(options.repo, tag, options.manifest);
+    await verifyDraftAssets(options.repo, String(draftId), options.manifest);
 
     runGh(['api', '--method', 'PATCH', `repos/${options.repo}/releases/${draftId}`, '-F', 'draft=false']);
 
@@ -538,11 +553,11 @@ export const publishPreparedRelease = async (options) => {
   }
 };
 
-/** @param {string} repo @param {string} tag @param {Record<string,unknown>} manifest */
-export const verifyDraftAssets = async (repo, tag, manifest) => {
-  const release = runGhJson(['api', `repos/${repo}/releases/tags/${encodeURIComponent(tag)}`]);
-  if (!release || release.draft !== true) throw new Error(`Draft release ${tag} was not found before publication.`);
-  /** @type {{name:string,size?:number,browser_download_url:string}[]} */
+/** @param {string} repo @param {string} draftId @param {Record<string,unknown>} manifest */
+export const verifyDraftAssets = async (repo, draftId, manifest) => {
+  const release = runGhJson(['api', `repos/${repo}/releases/${draftId}`]);
+  if (!release || release.draft !== true) throw new Error(`Draft release ${draftId} was not found before publication.`);
+  /** @type {{name:string,size?:number,browser_download_url:string,url?:string}[]} */
   const assets = Array.isArray(release.assets) ? release.assets : [];
   const artifacts = isRecord(manifest.artifacts) ? manifest.artifacts : {};
   const token = await getGhToken();
@@ -555,7 +570,13 @@ export const verifyDraftAssets = async (repo, tag, manifest) => {
     if (typeof apiAsset.size === 'number' && Number(apiAsset.size) !== Number(artifact.size)) {
       throw new Error(`Draft asset ${distributionFilename} has size ${apiAsset.size}, expected ${String(artifact.size)}.`);
     }
-    const response = await fetch(String(apiAsset.browser_download_url), token ? { headers: { authorization: `Bearer ${token}` } } : {});
+    const downloadUrl = typeof apiAsset.url === 'string' ? apiAsset.url : String(apiAsset.browser_download_url);
+    const response = await fetch(downloadUrl, {
+      headers: {
+        accept: 'application/octet-stream',
+        ...(token ? { authorization: `Bearer ${token}` } : {})
+      }
+    });
     if (!response.ok) throw new Error(`Could not download draft asset ${distributionFilename}: HTTP ${response.status}.`);
     const bytes = Buffer.from(await response.arrayBuffer());
     const hash = createHash('sha256').update(bytes).digest('hex');
@@ -574,7 +595,7 @@ export const verifyPublishedAssets = async (repo, tag, manifest) => verifyPublis
 export const verifyPublishedRelease = async (repo, tag, manifest) => {
   const release = runGhJson(['api', `repos/${repo}/releases/tags/${encodeURIComponent(tag)}`]);
   if (!release || release.draft === true) throw new Error(`Published release ${tag} is missing or still a draft.`);
-  /** @type {{name:string,size?:number,browser_download_url:string}[]} */
+  /** @type {{name:string,size?:number,browser_download_url:string,url?:string}[]} */
   const assets = Array.isArray(release.assets) ? release.assets : [];
   const artifacts = isRecord(manifest.artifacts) ? manifest.artifacts : {};
   const verified = [];
@@ -588,7 +609,13 @@ export const verifyPublishedRelease = async (repo, tag, manifest) => {
       throw new Error(`Published asset ${distributionFilename} has size ${apiAsset.size}, expected ${String(artifact.size)}.`);
     }
     const token = await getGhToken();
-    const response = await fetch(String(apiAsset.browser_download_url), token ? { headers: { authorization: `Bearer ${token}` } } : {});
+    const downloadUrl = typeof apiAsset.url === 'string' ? apiAsset.url : String(apiAsset.browser_download_url);
+    const response = await fetch(downloadUrl, {
+      headers: {
+        accept: 'application/octet-stream',
+        ...(token ? { authorization: `Bearer ${token}` } : {})
+      }
+    });
     if (!response.ok) throw new Error(`Could not download published asset ${distributionFilename}: HTTP ${response.status}.`);
     const bytes = Buffer.from(await response.arrayBuffer());
     const hash = createHash('sha256').update(bytes).digest('hex');
@@ -729,7 +756,12 @@ export const main = async (argv = process.argv.slice(2)) => {
   if (!remoteAvailable) throw new Error("Remote verification is unavailable. Recheck GitHub before preparing or publishing this release.");
 
   const conflict = findReleaseConflict({ tag_name: proposedTag }, releases);
-  if (conflict) throw new Error(`Release conflict: ${conflict.state} tag '${conflict.tag}' already exists. Choose another --version/--bump and never overwrite it.`);
+  const conflictIsAllowedForCommand =
+    (options.command === 'publish' && conflict?.state === 'draft') ||
+    (options.command === 'verify' && conflict?.state === 'published');
+  if (conflict && !conflictIsAllowedForCommand) {
+    throw new Error(`Release conflict: ${conflict.state} tag '${conflict.tag}' already exists. Choose another --version/--bump and never overwrite it.`);
+  }
 
   if (options.command === 'prepare' || options.command === 'dry-run') {
     if (!['none', 'br', 'gzip'].includes(options.compression)) throw new Error("Invalid --compression. Use 'none', 'br', or 'gzip'.");
@@ -782,7 +814,9 @@ export const main = async (argv = process.argv.slice(2)) => {
       throw new Error(`Staged plan is for ${String(planManifest.version)} (${String(plannedTag)}), not ${proposedVersion} (${proposedTag}). Re-run prepare with matching options.`);
     }
     const publishedConflict = findReleaseConflict({ tag_name: proposedTag }, releases);
-    if (publishedConflict) throw new Error(`Remote conflict detected: ${publishedConflict.state} tag '${publishedConflict.tag}' already exists. No assets were uploaded.`);
+    if (publishedConflict && publishedConflict.state !== 'draft') {
+      throw new Error(`Remote conflict detected: ${publishedConflict.state} tag '${publishedConflict.tag}' already exists. No assets were uploaded.`);
+    }
 
     const result = await publishPreparedRelease({ repo: options.repo, manifest: planManifest, local, verbose: options.verbose });
     if (options.json) process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);

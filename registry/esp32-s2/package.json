@@ -1,5 +1,34 @@
 {
-  "name": "esp32-s2", "version": "1.0.0", "kind": "board", "description": "ESP32-S2 Arduino preset", "license": "MIT",
-  "dependencies": { "arduino-esp32": "^1.0.0", "llvm-wasm": "^20.1.1" },
-  "metadata": { "manufacturer": "Espressif", "mcu": "ESP32-S2", "architecture": "xtensa", "cpu": "xtensa-lx7", "framework": "arduino", "clockHz": 240000000, "flashCapacityBytes": 4194304, "sramCapacityBytes": 327680, "uploadBaud": 460800, "monitorBaud": 115200, "build": { "kind": "object", "target": "xtensa", "targetOptions": { "mcpu": "esp32s2" }, "source": "main.ino", "output": ".wicro/build" }, "status": "preset", "firmwareLinking": "pending-sdk-distribution" }
+  "name": "esp32-s2",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "ESP32-S2 Arduino preset",
+  "license": "MIT",
+  "dependencies": {
+    "arduino-esp32": "^1.0.0",
+    "llvm-wasm": "^1.0.0"
+  },
+  "metadata": {
+    "manufacturer": "Espressif",
+    "mcu": "ESP32-S2",
+    "architecture": "xtensa",
+    "cpu": "xtensa-lx7",
+    "framework": "arduino",
+    "clockHz": 240000000,
+    "flashCapacityBytes": 4194304,
+    "sramCapacityBytes": 327680,
+    "uploadBaud": 460800,
+    "monitorBaud": 115200,
+    "build": {
+      "kind": "object",
+      "target": "xtensa",
+      "targetOptions": {
+        "mcpu": "esp32s2"
+      },
+      "source": "main.ino",
+      "output": ".wicro/build"
+    },
+    "status": "preset",
+    "firmwareLinking": "pending-sdk-distribution"
+  }
 }

@@ -1,5 +1,38 @@
 {
-  "name": "arduino-nano", "version": "1.0.0", "kind": "board", "description": "Arduino Nano ATmega328P preset", "license": "MIT",
-  "dependencies": { "arduino-avr-core": "^1.0.0", "llvm-wasm": "^20.1.1" },
-  "metadata": { "manufacturer": "Arduino", "mcu": "ATmega328P", "architecture": "avr", "framework": "arduino", "cpu": "avr5", "clockHz": 16000000, "flashCapacityBytes": 30720, "sramCapacityBytes": 2048, "eepromCapacityBytes": 1024, "build": { "kind": "object", "target": "avr", "targetOptions": { "mcu": "atmega328p" }, "source": "main.ino", "output": ".wicro/build" }, "menus": { "cpu": { "atmega328": "ATmega328P" } }, "status": "preset", "firmwareLinking": "pending-sdk-distribution" }
+  "name": "arduino-nano",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "Arduino Nano ATmega328P preset",
+  "license": "MIT",
+  "dependencies": {
+    "arduino-avr-core": "^1.0.0",
+    "llvm-wasm": "^1.0.0"
+  },
+  "metadata": {
+    "manufacturer": "Arduino",
+    "mcu": "ATmega328P",
+    "architecture": "avr",
+    "framework": "arduino",
+    "cpu": "avr5",
+    "clockHz": 16000000,
+    "flashCapacityBytes": 30720,
+    "sramCapacityBytes": 2048,
+    "eepromCapacityBytes": 1024,
+    "build": {
+      "kind": "object",
+      "target": "avr",
+      "targetOptions": {
+        "mcu": "atmega328p"
+      },
+      "source": "main.ino",
+      "output": ".wicro/build"
+    },
+    "menus": {
+      "cpu": {
+        "atmega328": "ATmega328P"
+      }
+    },
+    "status": "preset",
+    "firmwareLinking": "pending-sdk-distribution"
+  }
 }
