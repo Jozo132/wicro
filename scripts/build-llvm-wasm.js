@@ -321,7 +321,7 @@ export const downloadWasiSdk = async (wasiRoot, url, curl) => {
 
 /** @param {string} output @param {Record<string,unknown>} manifest */
 export const updateUnifiedManifest = async (output, manifest) => {
-  const names = await readdir(output).catch(() => []);
+  const names = /** @type {string[]} */ (await readdir(output).catch(() => []));
   const desired = ['clangd.wasm', 'clang-tidy.wasm', 'clang-format.wasm', 'llvm-ar.wasm', 'llvm-objcopy.wasm', 'llvm-objdump.wasm', 'llvm-size.wasm', 'llvm-nm.wasm', 'llvm-readelf.wasm'];
   /** @type {string[]} */
   const available = ['clang', 'ld'].filter((name) => names.includes(name === 'clang' ? 'llvm.wasm' : 'ld.wasm'));

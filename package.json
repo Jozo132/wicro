@@ -22,7 +22,13 @@
     "build:llvm:dry-run": "node scripts/build-llvm-wasm.js unified --dry-run",
     "build:llvm:cache": "node scripts/build-llvm-wasm.js unified --cache-only",
     "test:llvm-build": "node --test scripts/build-llvm-wasm.test.js",
-    "test:esp32-hardware": "node --test tests/esp32-c3-hardware.test.js"
+    "test:llvm-release": "node --test scripts/release-llvm-wasm.test.js",
+    "test:esp32-hardware": "node --test tests/esp32-c3-hardware.test.js",
+    "release:llvm:status": "node scripts/release-llvm-wasm.js status",
+    "release:llvm:prepare": "node scripts/release-llvm-wasm.js prepare",
+    "release:llvm:dry-run": "node scripts/release-llvm-wasm.js dry-run",
+    "release:llvm:publish": "node scripts/release-llvm-wasm.js publish",
+    "release:llvm:verify": "node scripts/release-llvm-wasm.js verify"
   },
   "engines": {
     "node": ">=18"

@@ -33,6 +33,7 @@ sdkconfig.old
 # Downloaded toolchains and framework sources
 registry-cache/
 toolchain/*/cache/
+toolchain/*/.release/
 toolchain/*/esp-idf/
 registry/**/sdk/
 registry/**/vendor/
