@@ -1,3 +1,5 @@
+import { downloadBytes } from './download.js';
+
 /** @typedef {object} SdkStorage
  * @property {(path:string) => Promise<boolean>} exists
  * @property {(path:string) => Promise<string>} readText
@@ -123,22 +125,28 @@ export class SdkLifecycleManager {
     if (typeof localSource === 'string' && localSource.length > 0) urls.push(localSource);
     urls.push(...[distribution.url, ...(distribution.mirrors ?? [])].filter((url) => typeof url === 'string' && url.length > 0));
 
+    if (typeof distribution.sha256 !== 'string' || !/^[a-f0-9]{64}$/i.test(distribution.sha256)) {
+      await this.storage.remove(stagingName);
+      throw new Error(`SDK '${manifest.name}' has no trusted SHA-256 archive identity. Configure a verified immutable distribution before installation.`);
+    }
     let bytes;
     let lastError;
     for (const url of urls) {
       for (let attempt = 1; attempt <= 3; attempt++) {
         try {
           if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, 150 * attempt));
-          if (/^file:\/\//.test(url) || /^\//.test(url) || /^[A-Za-z]:[\\/]/.test(url)) {
+          if (/^file:\/\//.test(url) || (typeof process !== 'undefined' && process.versions?.node && (/^\//.test(url) || /^[A-Za-z]:[\\/]/.test(url)))) {
             const { readFile } = await import('node:fs/promises');
             bytes = new Uint8Array(await readFile(/^file:\/\//.test(url) ? new URL(url) : url));
           } else {
-            const response = await this.fetch(url, { headers: { accept: 'application/zip' } });
-            if (!response.ok) throw new Error(`SDK download failed (${response.status}) for ${manifest.name}: ${url}`);
-            bytes = new Uint8Array(await response.arrayBuffer());
+            bytes = await downloadBytes(url, { fetch: this.fetch, name: manifest.name });
+          }
+          if (await sha256Bytes(bytes) !== distribution.sha256.toLowerCase()) {
+            throw new Error(`SDK SHA-256 mismatch for ${manifest.name} at ${url}`);
           }
           break;
         } catch (error) {
+          bytes = undefined;
           lastError = error;
         }
       }
@@ -149,14 +157,6 @@ export class SdkLifecycleManager {
       throw new Error(`SDK download failed for ${manifest.name} after local-cache, mirror and retry attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
     }
     const sha256 = await sha256Bytes(bytes);
-    if (typeof distribution.sha256 !== 'string' || distribution.sha256.length !== 64) {
-      await this.storage.remove(stagingName);
-      throw new Error(`SDK '${manifest.name}' has no trusted SHA-256 archive identity. Configure a verified immutable distribution before installation.`);
-    }
-    if (distribution.sha256.toLowerCase() !== sha256) {
-      await this.storage.remove(stagingName);
-      throw new Error(`SDK SHA-256 mismatch for ${manifest.name}: expected ${distribution.sha256}, got ${sha256}`);
-    }
 
     let entries;
     try {

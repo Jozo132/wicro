@@ -100,6 +100,8 @@ Run browser automation E2E tests with:
 node --test tests/web-ide.test.js
 ```
 
+Remote browser acquisition has separate real CORS and cache tests: `npm run test:remote-assets`. Use `npm run check:remote-assets` for live upstream GET probes. Production builds reference registry artifact URLs and do not embed SDK/compiler binaries. Current upstream browser access blockers and deployment choices are documented in [Remote SDK and compiler assets](docs/remote-assets.md).
+
 ## Development
 
 ```sh
@@ -119,7 +121,7 @@ SDK and package archives may be staged in `registry-cache/`. The filename conven
 Remaining integration work:
 
 - ESP-IDF/Pico SDK/CMSIS/Arduino SDK distributions must provide their complete headers, submodules, startup artifacts and core archives before full SDK firmware linking can be claimed; pinned AVR, ESP8266, STM32, Pico and Pico SDK archives now have verified SHA-256 identities
-- LLVM WASM release URLs and genuine CDN archive metadata remain deployment-blocked; local assets are used only as explicit local sources and test fixtures
+- Browser remote acquisition remains deployment-blocked: current source archive and LLVM release URLs fail Chromium CORS probes, and the ESP32-C3 SDK URL returns HTTP 404; development assets do not establish remote browser compatibility
 - ESP32-C3 native USB VCP ROM entry is implemented but is not yet successful on the connected unit; physical flash/execution remains unverified
 - Header dependency tracking and incremental relinking need project-wide cache integration
 - ST-LINK, USB DFU/DfuSe, STM32 UART, AVR STK500 and PICOBOOT protocol implementations are public extension surfaces but are not yet hardware-verified

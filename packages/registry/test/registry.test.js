@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { zipSync } from 'fflate';
@@ -82,11 +82,7 @@ test('SDK lifecycle downloads once, persists locks and rejects corruption', asyn
       storage,
       fetch: async () => {
         downloads++;
-        return /** @type {any} */ ({
-          ok: true,
-          status: 200,
-          arrayBuffer: async () => archive.buffer.slice(archive.byteOffset, archive.byteOffset + archive.byteLength)
-        });
+        return new Response(Uint8Array.from(archive));
       }
     });
 
@@ -234,4 +230,16 @@ test('resolves transitive dependencies once', async () => {
 
   const tree = registry.resolveTree('board/demo');
   assert.deepEqual(tree.map((item) => item.name), ['board/demo', 'cmsis/core']);
+});
+
+
+test('all canonical registry manifests validate, including downloadable compiler artifacts', async () => {
+  const root = new URL('../../../registry/', import.meta.url);
+  const validate = await createManifestValidator();
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const manifest = JSON.parse(await readFile(new URL(`${entry.name}/package.json`, root), 'utf8'));
+    const result = validate(manifest);
+    assert.equal(result.ok, true, `${entry.name}: ${JSON.stringify(result.errors)}`);
+  }
 });

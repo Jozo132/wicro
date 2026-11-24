@@ -5,6 +5,7 @@ import { parseClangDiagnostics } from '../../../../packages/runtime/src/elf-util
 import { BrowserSdkStorage } from '../../../../packages/registry/src/browser-cache.js';
 import { CompilerAssetManager } from '../../../../packages/registry/src/compiler-assets.js';
 import { safeSdkArchivePath, sha256Bytes } from '../../../../packages/registry/src/sdk.js';
+import { downloadBytes } from '../../../../packages/registry/src/download.js';
 import { preprocessIno } from '../../../../packages/arduino/src/index.js';
 
 /**
@@ -144,35 +145,10 @@ const ensureCompilerModule = async (origin, requestId, offline) => {
   if (compiledLlvmModule) return { module: compiledLlvmModule, cache: compilerCacheState };
 
   const storage = await getStorage();
-  const manifestCachePath = 'compilers/llvm-wasm-manifest.json';
-  /** @type {any} */
-  let manifest;
-
-  if (offline && await storage.exists(manifestCachePath)) {
-    manifest = JSON.parse(await storage.readText(manifestCachePath));
-  } else {
-    try {
-      const response = await fetch(`${origin}/toolchain/manifest.json`, { cache: 'no-cache' });
-      if (!response.ok) throw new Error(`Toolchain manifest failed (${response.status})`);
-      manifest = await response.json();
-      try { await storage.writeText(manifestCachePath, JSON.stringify(manifest)); } catch { /* Best-effort cache. */ }
-    } catch (error) {
-      if (await storage.exists(manifestCachePath)) {
-        manifest = JSON.parse(await storage.readText(manifestCachePath));
-      } else {
-        throw error;
-      }
-    }
-  }
-
+  const manifest = await loadRegistryManifest(origin, 'llvm-wasm', offline);
   const localManifest = structuredClone(manifest);
-  if (localManifest.artifacts?.clang && !localManifest.artifacts.clang.url) {
-    localManifest.artifacts.clang.url = `${origin}/toolchain/llvm.wasm`;
-  }
-  // `llvm.wasm` contains both `clang` and `ld.lld` entry points; avoid downloading unused separate `ld.wasm` if absent.
-  if (localManifest.artifacts?.ld && !localManifest.artifacts.ld.url) {
-    delete localManifest.artifacts.ld;
-  }
+  // The unified compiler includes ld.lld; the separate linker is unused here.
+  delete localManifest.artifacts.ld;
 
   emitProgress(requestId, { stage: 'toolchain', message: 'Checking cached LLVM WASM toolchain…', percent: 4 });
   const manager = new CompilerAssetManager({
@@ -189,7 +165,7 @@ const ensureCompilerModule = async (origin, requestId, offline) => {
     }
   });
 
-  const resolved = await manager.ensure(localManifest, { offline });
+  const resolved = await manager.ensure(localManifest, { offline, localSources: import.meta.env.DEV ? { clang: `${origin}/toolchain/llvm.wasm` } : undefined });
   compilerCacheState = resolved.cache;
 
   emitProgress(requestId, { stage: 'toolchain', message: 'Compiling LLVM WebAssembly module…', percent: 26 });
@@ -249,49 +225,34 @@ const ensureTargetSdk = async (origin, requestId, sdkManifest, offline) => {
     }
 
     const candidateUrls = [
-      `${origin}/assets/${sdkKey}.zip`,
       ...(typeof distribution.url === 'string' && distribution.url ? [distribution.url] : []),
-      ...(Array.isArray(distribution.mirrors) ? distribution.mirrors : [])
+      ...(Array.isArray(distribution.mirrors) ? distribution.mirrors : []),
+      ...(import.meta.env.DEV ? [`${origin}/assets/${sdkKey}.zip`] : [])
     ];
 
-    let lastError;
+    const errors = [];
     for (const url of candidateUrls) {
       try {
         emitProgress(requestId, { stage: 'sdk', message: `Downloading ${sdkKey}…`, percent: 32 });
-        const response = await fetch(url, { headers: { accept: 'application/zip, application/octet-stream' } });
-        if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`);
-        const total = Number(response.headers.get('content-length') ?? '0') || distribution.bytes || 0;
-        if (response.body?.getReader) {
-          const reader = response.body.getReader();
-          const chunks = [];
-          let received = 0;
-          while (true) {
-            const { value, done } = await reader.read();
-            if (done) break;
-            chunks.push(value);
-            received += value.byteLength;
-            const pct = total > 0 ? Math.min(48, Math.round(32 + (received / total) * 16)) : 40;
-            emitProgress(requestId, {
-              stage: 'sdk',
-              message: `Downloading ${sdkKey} (${(received / (1024 * 1024)).toFixed(1)} / ${(total / (1024 * 1024)).toFixed(1)} MB)…`,
-              percent: pct
-            });
-          }
-          const combined = new Uint8Array(received);
-          let offset = 0;
-          for (const chunk of chunks) { combined.set(chunk, offset); offset += chunk.byteLength; }
-          zipBytes = combined;
-        } else {
-          zipBytes = new Uint8Array(await response.arrayBuffer());
+        const downloaded = await downloadBytes(url, {
+          name: sdkKey,
+          progress: (event) => emitProgress(requestId, {
+            stage: 'sdk', message: `Downloading ${sdkKey} (${(event.received / (1024 * 1024)).toFixed(1)} MB)…`,
+            percent: event.total > 0 ? Math.min(48, Math.round(32 + event.received / event.total * 16)) : 40
+          })
+        });
+        if (await sha256Bytes(downloaded) !== distribution.sha256.toLowerCase()) {
+          throw new Error(`SDK SHA-256 mismatch for ${sdkKey} at ${url}`);
         }
+        zipBytes = downloaded;
         break;
       } catch (error) {
-        lastError = error;
+        errors.push(`${url}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
 
     if (!zipBytes) {
-      throw new Error(`Unable to acquire SDK '${sdkKey}': ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+      throw new Error(`Unable to acquire SDK '${sdkKey}': ${errors.join('; ')}`);
     }
 
     emitProgress(requestId, { stage: 'sdk', message: `Verifying ${sdkKey} SHA-256…`, percent: 50 });

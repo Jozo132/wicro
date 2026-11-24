@@ -221,11 +221,6 @@ export default defineConfig({
         });
       },
       async generateBundle() {
-        this.emitFile({
-          type: 'asset',
-          fileName: 'toolchain/llvm.wasm',
-          source: await readFile(llvmPath)
-        });
         const { packages, boards } = await loadCanonicalRegistry();
         this.emitFile({
           type: 'asset',

@@ -1,3 +1,5 @@
+import { downloadBytes } from './download.js';
+
 /** @typedef {object} CompilerArtifact
  * @property {string|null} [url]
  * @property {string[]} [mirrors]
@@ -141,7 +143,7 @@ export class CompilerAssetManager {
           if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, 150 * attempt));
           const bytes = /^file:\/\//.test(url)
             ? await readLocalFileUrl(url)
-            : await downloadBytes(url, this.fetch, this.progress, name);
+            : await downloadBytes(url, { fetch: this.fetch, progress: this.progress, name });
           let decompressed = bytes;
           if (artifact.compression) {
             decompressed = await decompressBytes(bytes, artifact.compression);
@@ -164,40 +166,6 @@ export class CompilerAssetManager {
     throw new Error(`Compiler artifact '${name}' could not be installed after mirror and retry attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
   }
 }
-
-/** @param {string} url @param {typeof fetch} fetchImpl @param {((event:{name:string,status:string,received:number,total:number})=>void)|undefined} progress @param {string} name */
-const downloadBytes = async (url, fetchImpl, progress, name) => {
-  let response;
-  try {
-    response = await fetchImpl(url, { headers: { accept: 'application/octet-stream' } });
-  } catch (error) {
-    throw new Error(`Download failed for compiler '${name}' at ${url}: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  if (!response.ok) throw new Error(`Download failed (${response.status}) for compiler '${name}' at ${url}`);
-
-  const total = Number(response.headers.get('content-length') ?? '0') || 0;
-  if (response.body?.getReader) {
-    const reader = response.body.getReader();
-    const chunks = [];
-    let received = 0;
-    while (true) {
-      const result = await reader.read();
-      if (result.done) break;
-      chunks.push(result.value);
-      received += result.value.byteLength;
-      progress?.({ name, status: 'downloading', received, total });
-    }
-    const bytes = new Uint8Array(received);
-    let offset = 0;
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
-    progress?.({ name, status: 'complete', received, total });
-    return bytes;
-  }
-
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  progress?.({ name, status: 'complete', received: bytes.byteLength, total: total || bytes.byteLength });
-  return bytes;
-};
 
 /** @param {string} url */
 const readLocalFileUrl = async (url) => {

@@ -28,7 +28,9 @@
     "release:llvm:prepare": "node scripts/release-llvm-wasm.js prepare",
     "release:llvm:dry-run": "node scripts/release-llvm-wasm.js dry-run",
     "release:llvm:publish": "node scripts/release-llvm-wasm.js publish",
-    "release:llvm:verify": "node scripts/release-llvm-wasm.js verify"
+    "release:llvm:verify": "node scripts/release-llvm-wasm.js verify",
+    "test:remote-assets": "node --test tests/remote-assets.test.js",
+    "check:remote-assets": "node scripts/check-remote-assets.js"
   },
   "engines": {
     "node": ">=18"

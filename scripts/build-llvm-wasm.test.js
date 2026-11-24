@@ -51,7 +51,7 @@ test('GitHub release fallback downloads and verifies prebuilt llvm.wasm and ld.w
     fallbackManifest.artifacts.ld.filename = 'ld.wasm';
     fallbackManifest.artifacts.ld.uncompressedSha256 = fallbackManifest.integrity['ld.wasm'];
 
-    const fetchImpl = async (url) => {
+    const fetchImpl = async (/** @type {string|URL|Request} */ url) => {
       const bytes = String(url).endsWith('ld.wasm') ? ld : llvm;
       return new Response(bytes, { status: 200, headers: { 'content-length': String(bytes.byteLength) } });
     };

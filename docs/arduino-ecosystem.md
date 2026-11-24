@@ -25,6 +25,8 @@ The registry contains AVR, ESP32, ESP8266, STM32 and Pico preset metadata for UN
 
 Framework distributions are declared in immutable package manifests with pinned upstream commits or tags. SDK ZIP archives are downloaded only on first use, extracted into the OS/user cache or browser OPFS/IndexedDB cache, locked with SHA-256 and file hashes, and reused offline. Repository test environments may use `registry-cache/<manifest-name>-<manifest-version>.zip` as a first-source local archive pool. SDK sources, extracted vendor trees, core archives and toolchain binaries are not committed to Git or included in npm archives.
 
+Browser accessibility is validated separately from Node downloads and archive identity. See [Remote SDK and compiler assets](remote-assets.md) for real Chromium CORS tests, live upstream probes, current deployment blockers, and the production policy of referencing remote assets without embedding binaries.
+
 ## Pinned upstream sources
 
 | Core | Repository | Resolved head |

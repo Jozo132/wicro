@@ -173,7 +173,6 @@ test('SDK & compiler cache: atomic install, concurrent deduplication, corruption
       fetchCount++;
       if (String(url).includes('bad-mirror')) throw new Error('Simulated network interruption');
       if (failNext) {
-        failNext = false;
         return new Response(new Uint8Array([0x00, 0x01, 0x02]), { status: 200 }); // Corrupted truncated download
       }
       const body = String(url).includes('v2') ? payloadV2 : payloadV1;
@@ -203,6 +202,7 @@ test('SDK & compiler cache: atomic install, concurrent deduplication, corruption
     assert.equal(afterFailEntries.some((name) => name.includes('.staging-')), false, 'staging directory must be cleaned up on failure');
 
     // 2. Concurrent installation deduplicates network download and commits atomically
+    failNext = false;
     fetchCount = 0;
     const [r1, r2] = await Promise.all([manager.ensure(manifestV1), manager.ensure(manifestV1)]);
     assert.equal(r1.cache, 'downloaded');

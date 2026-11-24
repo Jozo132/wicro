@@ -3,31 +3,233 @@
   "title": "Wicro package manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["name", "version", "kind", "description", "license"],
+  "required": [
+    "name",
+    "version",
+    "kind",
+    "description",
+    "license"
+  ],
   "properties": {
-    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._~-]*(/[a-z0-9][a-z0-9._~-]*)?$" },
-    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._~-]*(/[a-z0-9][a-z0-9._~-]*)?$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
+    },
     "kind": {
       "type": "string",
-      "enum": ["toolchain", "platform", "framework", "cmsis", "microcontroller", "board", "library", "programmer", "tool", "template"]
+      "enum": [
+        "toolchain",
+        "platform",
+        "framework",
+        "cmsis",
+        "microcontroller",
+        "board",
+        "library",
+        "programmer",
+        "tool",
+        "template"
+      ]
     },
-    "description": { "type": "string", "minLength": 1, "maxLength": 500 },
-    "license": { "type": "string", "minLength": 1 },
-    "homepage": { "type": "string", "format": "uri" },
-    "repository": { "type": "string", "format": "uri" },
-    "sha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "license": {
+      "type": "string",
+      "minLength": 1
+    },
+    "homepage": {
+      "type": "string",
+      "format": "uri"
+    },
+    "repository": {
+      "type": "string",
+      "format": "uri"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-fA-F0-9]{64}$"
+    },
     "dependencies": {
       "type": "object",
-      "additionalProperties": { "type": "string", "minLength": 1 }
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
     },
-    "metadata": { "type": "object", "additionalProperties": true },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    },
     "host": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "browser": { "type": "boolean" },
-        "node": { "type": "boolean" },
-        "vscode": { "type": "boolean" }
+        "browser": {
+          "type": "boolean"
+        },
+        "node": {
+          "type": "boolean"
+        },
+        "vscode": {
+          "type": "boolean"
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "filename"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uri"
+          },
+          "mirrors": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri"
+            }
+          },
+          "compression": {
+            "enum": [
+              null,
+              "br",
+              "gzip",
+              "deflate"
+            ]
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-fA-F0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "uncompressedSha256": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-fA-F0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "filename": {
+            "type": "string",
+            "minLength": 1
+          },
+          "distributionFilename": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "uncompressedSize": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "url",
+          "argv0"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "argv0": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "entryPoints": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "combined": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "available": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "separateRequired": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "lastBuild": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "revisions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-fA-F0-9]{64}$"
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": {
+          "type": "string"
+        },
+        "tag": {
+          "type": "string"
+        },
+        "publishedUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
       }
     }
   }

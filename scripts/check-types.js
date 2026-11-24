@@ -21,7 +21,7 @@ const raw = `${result.stdout ?? ''}${result.stderr ?? ''}`;
 const diagnostics = raw
   .split(/\r?\n/)
   .filter((line) => line.length > 0)
-  .filter((line) => !ignoredFragments.some((fragment) => line.includes(fragment)));
+  .filter((line) => !ignoredFragments.some((fragment) => `/${line}`.includes(fragment)));
 
 const visible = diagnostics.slice(0, 100);
 if (visible.length > 0) process.stdout.write(`${visible.join('\n')}\n`);

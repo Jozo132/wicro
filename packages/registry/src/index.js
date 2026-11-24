@@ -16,6 +16,12 @@ import { readFile } from 'node:fs/promises';
  * @property {string} [sha256]
  * @property {Record<string, string>} [dependencies]
  * @property {Record<string, unknown>} [metadata]
+ * @property {Record<string,import('./compiler-assets.js').CompilerArtifact>} [artifacts]
+ * @property {Record<string,{url:string,argv0:string}>} [tools]
+ * @property {{combined?:string[],available?:string[],separateRequired?:string[],lastBuild?:string}} [entryPoints]
+ * @property {Record<string,string>} [revisions]
+ * @property {Record<string,string>} [integrity]
+ * @property {{repository?:string,tag?:string,publishedUrl?:string,createdAt?:string}} [release]
  * @property {{browser?: boolean, node?: boolean, vscode?: boolean}} [host]
  */
 
