@@ -91,9 +91,10 @@ export const patchElfSectionFlags = (objectBytes, sectionName, flagsToSet) => {
  * and IROM segments, RAM segment splitting/zero-padding, app_elf_sha256
  * population, XOR checksum, and appended SHA-256 digest.
  * @param {Uint8Array} elf
+ * @param {{machine?:number,chipId?:number,mappedRanges?:number[][],entryRanges?:number[][]}} [profile]
  * @returns {Promise<Uint8Array>}
  */
-export const elfToEsp32Bin = async (elf) => {
+export const elfToEsp32Bin = async (elf, profile = {}) => {
   const view = new DataView(elf.buffer, elf.byteOffset, elf.byteLength);
   if (elf.length < 52 || view.getUint32(0, true) !== 0x464c457f) {
     throw new Error('Invalid ELF32 image');
@@ -103,7 +104,7 @@ export const elfToEsp32Bin = async (elf) => {
   }
 
   const machine = view.getUint16(18, true);
-  if (machine !== 243) throw new Error(`Expected RISC-V ELF, got e_machine=${machine}`);
+  if (machine !== (profile.machine ?? 243)) throw new Error(`ELF machine does not match target: ${machine}`);
 
   const entry = view.getUint32(24, true);
   const sectionOffset = view.getUint32(32, true);
@@ -178,8 +179,7 @@ export const elfToEsp32Bin = async (elf) => {
 
   /** @param {number} addr */
   const isFlashMapped = (addr) =>
-    (addr >= 0x3c000000 && addr < 0x3c800000) ||
-    (addr >= 0x42000000 && addr < 0x42800000);
+    (profile.mappedRanges ?? [[0x3c000000,0x3c800000],[0x42000000,0x42800000]]).some(([start,end]) => addr >= start && addr < end);
 
   const flashSegments = merged
     .filter((segment) => isFlashMapped(segment.addr))
@@ -188,7 +188,7 @@ export const elfToEsp32Bin = async (elf) => {
     .filter((segment) => !isFlashMapped(segment.addr))
     .map((segment) => ({ addr: segment.addr, data: pad4(segment.data) }));
 
-  const dromSegment = flashSegments.find((segment) => segment.addr >= 0x3c000000 && segment.addr < 0x3c800000);
+  const dromSegment = flashSegments.find((segment) => segment.data.length >= 4 && new DataView(segment.data.buffer, segment.data.byteOffset).getUint32(0, true) === 0xabcd5432);
   if (dromSegment && dromSegment.data.length >= 0xb0) {
     const dromView = new DataView(dromSegment.data.buffer, dromSegment.data.byteOffset, dromSegment.data.byteLength);
     if (dromView.getUint32(0, true) === 0xabcd5432) {
@@ -251,7 +251,7 @@ export const elfToEsp32Bin = async (elf) => {
   header[3] = 0x2f; // 4 MB, 80 MHz
   headerView.setUint32(4, entry, true);
   header[8] = 0xee; // wp_pin disabled
-  headerView.setUint16(12, 5, true); // ESP32-C3 chip_id
+  headerView.setUint16(12, profile.chipId ?? 5, true); // ESP32-C3 chip_id
   header[17] = 0xff; // max_chip_rev_full low byte
   header[18] = 0xff; // max_chip_rev_full high byte
   header[23] = 1; // SHA-256 appended
@@ -355,9 +355,10 @@ export const elfToFlatBin = async (elf) => {
  * Checks magic, chip ID, entry point, segment table, 64 KB MMU alignment of
  * DROM/IROM segments, esp_app_desc_t magic, XOR checksum, and SHA-256 digest.
  * @param {Uint8Array} image
+ * @param {{machine?:number,chipId?:number,mappedRanges?:number[][],entryRanges?:number[][]}} [profile]
  * @returns {Promise<{valid:boolean,errors:string[],entry:number,chipId:number,segmentCount:number,hasAppDesc:boolean,checksum:number,expectedChecksum:number,sha256Valid:boolean,segments:Array<{index:number,loadAddr:number,length:number,fileOffset:number,mapped:boolean}>}>}
  */
-export const validateEsp32Image = async (image) => {
+export const validateEsp32Image = async (image, profile = {}) => {
   /** @type {string[]} */
   const errors = [];
   if (image.length < 24 + 1 + 32) {
@@ -373,8 +374,8 @@ export const validateEsp32Image = async (image) => {
 
   if (magic !== 0xe9) errors.push(`Invalid ESP32 image magic: 0x${magic.toString(16)} (expected 0xe9)`);
   if (segmentCount === 0 || segmentCount > 16) errors.push(`Invalid segment count: ${segmentCount}`);
-  if (chipId !== 5) errors.push(`Unexpected chip_id: ${chipId} (expected 5 for ESP32-C3)`);
-  if (entry < 0x4037c000 || entry >= 0x403e0000) errors.push(`Entry point 0x${entry.toString(16)} is outside ESP32-C3 IRAM`);
+  if (chipId !== (profile.chipId ?? 5)) errors.push(`Unexpected chip_id: ${chipId}`);
+  if (!(profile.entryRanges ?? [[0x4037c000,0x403e0000]]).some(([start,end]) => entry >= start && entry < end)) errors.push(`Entry point 0x${entry.toString(16)} is outside ESP32-C3 IRAM`);
 
   let offset = 24;
   let computedChecksum = 0xef;
@@ -399,14 +400,14 @@ export const validateEsp32Image = async (image) => {
     }
     const isDrom = loadAddr >= 0x3c000000 && loadAddr < 0x3c800000;
     const isIrom = loadAddr >= 0x42000000 && loadAddr < 0x42800000;
-    const mapped = isDrom || isIrom;
+    const mapped = profile.mappedRanges ? profile.mappedRanges.some(([start,end]) => loadAddr >= start && loadAddr < end) : isDrom || isIrom;
     if (mapped && ((dataOffset & 0xffff) !== (loadAddr & 0xffff))) {
       errors.push(
         `Flash-mapped segment ${index} at 0x${loadAddr.toString(16)} has misaligned file offset 0x${dataOffset.toString(16)} ` +
         `((fileOff & 0xffff)=0x${(dataOffset & 0xffff).toString(16)} != (loadAddr & 0xffff)=0x${(loadAddr & 0xffff).toString(16)})`
       );
     }
-    if (isDrom && length >= 4 && view.getUint32(dataOffset, true) === 0xabcd5432) {
+    if ((isDrom || mapped) && length >= 4 && view.getUint32(dataOffset, true) === 0xabcd5432) {
       hasAppDesc = true;
     }
     for (let byteIndex = 0; byteIndex < length; byteIndex++) {

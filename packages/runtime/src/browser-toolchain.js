@@ -1,3 +1,4 @@
+import { assemblyPipeline } from './assembly-pipeline.js';
 import { WASI, OpenFile, File, Directory, PreopenDirectory, ConsoleStdout } from '@bjorn3/browser_wasi_shim';
 import { resolveArchitectureTargetArgs } from '../../core/src/platform/architectures.js';
 import { parseClangDiagnostics, parseCodeCompletion, sha256Digest } from './elf-utils.js';
@@ -160,7 +161,15 @@ export class BrowserLlvmWasmToolchain {
       '/tmp/main.o'
     ];
 
-    const result = await this.runWasi(args, tmpFiles, { preopens: options.preopens });
+    const pipeline = assemblyPipeline(args, language);
+    if (pipeline.preprocess) {
+      const preprocessed = await this.runWasi(pipeline.preprocess, tmpFiles, { preopens: options.preopens });
+      if (preprocessed.exitCode !== 0) throw new Error(preprocessed.stderr || preprocessed.stdout || 'WASM assembly preprocessing failed');
+      const output = preprocessed.tmpDir.dir.contents.get('main.pp.s');
+      if (!(output instanceof File)) throw new Error('WASM preprocessor did not produce assembly');
+      putVirtualFile(tmpFiles, 'main.pp.s', new Uint8Array(output.data));
+    }
+    const result = await this.runWasi(pipeline.compile, tmpFiles, { preopens: options.preopens });
     if (result.exitCode !== 0) {
       throw new Error(result.stderr || result.stdout || `Compiler exited with status ${result.exitCode}`);
     }

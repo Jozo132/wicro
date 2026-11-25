@@ -1,0 +1,133 @@
+{
+  "name": "esp8266-arduino-sdk",
+  "version": "3.1.2",
+  "kind": "platform",
+  "description": "Genuine ESP8266 Arduino 3.1.2, NONOS SDK and Xtensa target C/C++ runtime",
+  "license": "LGPL-2.1-or-later",
+  "metadata": {
+    "composition": {
+      "sources": [
+        {
+          "name": "framework-arduinoespressif8266@3.30102.0",
+          "url": "https://dl.registry.platformio.org/download/platformio/tool/framework-arduinoespressif8266/3.30102.0/framework-arduinoespressif8266-3.30102.0.tar.gz",
+          "sha256": "40d782c013987ec2660a7172eeeb66d19ea486d1eeef00847ea3747365de94b7",
+          "rules": [
+            {
+              "prefix": "cores/",
+              "to": "framework/cores/"
+            },
+            {
+              "prefix": "variants/",
+              "to": "framework/variants/"
+            },
+            {
+              "prefix": "libraries/",
+              "to": "framework/libraries/"
+            },
+            {
+              "prefix": "tools/sdk/",
+              "to": "framework/tools/sdk/"
+            },
+            {
+              "prefix": "bootloaders/eboot/",
+              "to": "framework/bootloaders/eboot/"
+            },
+            {
+              "prefix": "LICENSE",
+              "to": "licenses/framework-LICENSE"
+            }
+          ]
+        },
+        {
+          "name": "toolchain-xtensa@2.100300.220621",
+          "url": "https://dl.registry.platformio.org/download/platformio/tool/toolchain-xtensa/2.100300.220621/toolchain-xtensa-linux_x86_64-2.100300.220621.tar.gz",
+          "sha256": "a3d51bebcfaa2f5cca154956fee3e9270b6d0e9c5d51de6034a86aaa606ea8a5",
+          "rules": [
+            {
+              "prefix": "xtensa-lx106-elf/include/",
+              "to": "sysroot/include/"
+            },
+            {
+              "prefix": "xtensa-lx106-elf/lib/",
+              "to": "lib/",
+              "files": [
+                "libc.a",
+                "libm.a",
+                "libstdc++.a",
+                "libsupc++.a"
+              ]
+            },
+            {
+              "prefix": "lib/gcc/xtensa-lx106-elf/10.3.0/include/",
+              "to": "gcc/include/"
+            },
+            {
+              "prefix": "lib/gcc/xtensa-lx106-elf/10.3.0/",
+              "to": "lib/",
+              "files": [
+                "libgcc.a"
+              ]
+            },
+            {
+              "prefix": "share/doc/",
+              "to": "licenses/runtime/"
+            },
+            {
+              "prefix": "lib/gcc/xtensa-lx106-elf/10.3.0/include-fixed/",
+              "to": "gcc/include-fixed/"
+            },
+            {
+              "prefix": "include/xtensa/",
+              "to": "tool/include/xtensa/"
+            }
+          ]
+        }
+      ],
+      "patches": [
+        {
+          "path": "sysroot/include/sys/pgmspace.h",
+          "find": "pgm_read_dword_with_offset(addr + 4,",
+          "replace": "pgm_read_dword_with_offset((const uint8_t *)addr + 4,",
+          "count": 1
+        },
+        {
+          "path": "framework/cores/esp8266/xtruntime-frames.h",
+          "find": ".pushsection .text; .struct 0",
+          "replace": ".set .Lwicro_struct_offset, 0",
+          "count": 1
+        },
+        {
+          "path": "framework/cores/esp8266/xtruntime-frames.h",
+          "find": "pre##name:\t.space\tsize",
+          "replace": ".set pre##name, .Lwicro_struct_offset; .set .Lwicro_struct_offset, .Lwicro_struct_offset + (size)",
+          "count": 1
+        },
+        {
+          "path": "framework/cores/esp8266/xtruntime-frames.h",
+          "find": "pre##name:\t.if n ; .space\t(size)*(n) ; .endif",
+          "replace": ".set pre##name, .Lwicro_struct_offset; .set .Lwicro_struct_offset, .Lwicro_struct_offset + (size)*(n)",
+          "count": 1
+        },
+        {
+          "path": "framework/cores/esp8266/xtruntime-frames.h",
+          "find": ".balign align ; pre##name:\t.if n ; .space (size)*(n) ; .endif",
+          "replace": ".set .Lwicro_struct_offset, (.Lwicro_struct_offset + (align)-1) & ~((align)-1); .set pre##name, .Lwicro_struct_offset; .set .Lwicro_struct_offset, .Lwicro_struct_offset + (size)*(n)",
+          "count": 1
+        },
+        {
+          "path": "framework/cores/esp8266/xtruntime-frames.h",
+          "find": "sname##Size:; .popsection",
+          "replace": ".set sname##Size, .Lwicro_struct_offset",
+          "count": 1
+        }
+      ]
+    },
+    "distribution": {
+      "url": "",
+      "mirrors": [],
+      "archiveType": "zip",
+      "sha256": "43b574cb1d0415b3e230e6f82ebd6a12ff50bfe516e235ca6c44fb8b124fc81d",
+      "bytes": 45472905
+    }
+  }
+}

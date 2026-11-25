@@ -427,11 +427,14 @@ export class IdeShell {
     }
     if (changed === 'all' || changed === 'examples') {
       this.exampleSelect.innerHTML = '';
-      for (const example of this.store.examples) {
+      const groups = new Map();
+      for (const example of [...this.store.examples].sort((a, b) => Number(b.board === '*') - Number(a.board === '*'))) {
+        const label = example.category ?? `${example.board} / ${example.framework}`;
+        if (!groups.has(label)) { const group = document.createElement('optgroup'); group.label = label; groups.set(label, group); this.exampleSelect.appendChild(group); }
         const opt = document.createElement('option');
         opt.value = example.id;
-        opt.textContent = example.id;
-        this.exampleSelect.appendChild(opt);
+        opt.textContent = example.name;
+        groups.get(label).appendChild(opt);
       }
       this.exampleSelect.value = this.store.exampleId;
     }

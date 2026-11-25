@@ -71,6 +71,7 @@
  * @property {string} [startupSource]
  * @property {string} [linkerScript]
  * @property {string} [output]
+ * @property {Record<string,unknown>} [imageOptions]
  * @property {string} [firmwareFormat]
  */
 
@@ -105,7 +106,7 @@
  * @property {string[]} defines
  * @property {Record<string,string>} [preopens]
  * @property {Record<string,string|Uint8Array>} [files]
- * @property {Array<{name:string,source:string,language:'c'|'c++'|'assembly',includeDirs?:string[]}>} [extraUnits]
+ * @property {Array<{name:string,source:string,language:'c'|'c++'|'assembly',includeDirs?:string[],compilerFlags?:string[]}>} [extraUnits]
  */
 
 /**
@@ -122,6 +123,7 @@
  * @property {string[]} [extraLinkerArgs]
  * @property {string} [entry]
  * @property {Record<string,string>} [preopens]
+ * @property {Record<string,unknown>} [imageOptions]
  * @property {string} firmwareFormat
  */
 

@@ -1,0 +1,183 @@
+{
+  "name": "rp2350-arduino-sdk",
+  "version": "6.4.0",
+  "kind": "platform",
+  "description": "Genuine Arduino-Pico 6.4.0 rp2350 sources, SDK and target runtime",
+  "license": "LGPL-2.1-or-later",
+  "metadata": {
+    "composition": {
+      "sources": [
+        {
+          "name": "arduino-pico@6.4.0",
+          "url": "https://github.com/earlephilhower/arduino-pico/releases/download/6.4.0/rp2040-6.4.0.zip",
+          "sha256": "b466db13618dfabe1935375698dbfb15b00aaa09a111fa52391c926b242a3977",
+          "format": "zip",
+          "rules": [
+            {
+              "prefix": "rp2040-6.4.0/cores/",
+              "to": "framework/cores/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/variants/",
+              "to": "framework/variants/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/include/",
+              "to": "framework/include/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/pico-sdk/src/",
+              "to": "framework/pico-sdk/src/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/pico-sdk/lib/tinyusb/src/",
+              "to": "framework/pico-sdk/lib/tinyusb/src/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/pico-sdk/lib/lwip/src/",
+              "to": "framework/pico-sdk/lib/lwip/src/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/pico-sdk/lib/cyw43-driver/src/",
+              "to": "framework/pico-sdk/lib/cyw43-driver/src/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/pico-sdk/lib/btstack/src/",
+              "to": "framework/pico-sdk/lib/btstack/src/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/pico-sdk/lib/btstack/platform/",
+              "to": "framework/pico-sdk/lib/btstack/platform/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/pico-sdk/lib/mbedtls/include/",
+              "to": "framework/pico-sdk/lib/mbedtls/include/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/libraries/",
+              "to": "framework/libraries/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/lib/tlsf/",
+              "to": "framework/lib/tlsf/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/lib/rp2350/",
+              "to": "framework/lib/rp2350/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/boot2/rp2350/",
+              "to": "framework/boot2/rp2350/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/lib/",
+              "to": "framework/lib/",
+              "files": [
+                "platform_def.txt",
+                "core_inc.txt",
+                "core_wrap.txt"
+              ]
+            },
+            {
+              "prefix": "rp2040-6.4.0/",
+              "to": "licenses/",
+              "files": [
+                "LICENSE",
+                "LICENSE.LGPL",
+                "README.md",
+                "package.json"
+              ]
+            },
+            {
+              "prefix": "rp2040-6.4.0/ArduinoCore-API/",
+              "to": "framework/ArduinoCore-API/"
+            }
+          ]
+        },
+        {
+          "name": "pqt-arm-none-eabi@5.0.0-9576866",
+          "url": "https://github.com/earlephilhower/pico-quick-toolchain/releases/download/5.0.0/x86_64-linux-gnu.arm-none-eabi-78c24be.260719.tar.gz",
+          "sha256": "c61d50abd186f5e222fb6003ac1c3d657f4716a408d2efe4316020709714ff68",
+          "rules": [
+            {
+              "prefix": "arm-none-eabi/arm-none-eabi/include/",
+              "to": "sysroot/include/"
+            },
+            {
+              "prefix": "arm-none-eabi/lib/gcc/arm-none-eabi/16.1.0/include/",
+              "to": "gcc/include/"
+            },
+            {
+              "prefix": "arm-none-eabi/arm-none-eabi/lib/thumb/autofp/v7/fpu/",
+              "to": "lib/",
+              "files": [
+                "libm.a",
+                "libstdc++.a",
+                "libsupc++.a",
+                "libnosys.a"
+              ]
+            },
+            {
+              "prefix": "arm-none-eabi/lib/gcc/arm-none-eabi/16.1.0/thumb/autofp/v7/fpu/",
+              "to": "lib/",
+              "files": [
+                "libgcc.a",
+                "crti.o",
+                "crtn.o"
+              ]
+            },
+            {
+              "prefix": "arm-none-eabi/share/doc/",
+              "to": "licenses/toolchain/"
+            },
+            {
+              "prefix": "arm-none-eabi/arm-none-eabi/lib/thumb/autofp/v7/fpu/libg.a",
+              "to": "lib/libc.a"
+            }
+          ]
+        },
+        {
+          "name": "LLVM arm_acle.h",
+          "url": "https://api.github.com/repos/espressif/llvm-project/git/blobs/b1dc90f84ad36f7bcb08971c29664441ce7f72ea",
+          "format": "github-blob",
+          "output": "clang/include/arm_acle.h",
+          "sha256": "f1ebcac29e960f817f20df029d353d543a97dd08de124036a5978e541b852126"
+        },
+        {
+          "name": "LLVM LICENSE.TXT",
+          "url": "https://api.github.com/repos/espressif/llvm-project/git/blobs/fa6ac540007032cbd0ec772a1c72e6cb5527a4fe",
+          "format": "github-blob",
+          "output": "licenses/clang/LICENSE.TXT",
+          "sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee"
+        }
+      ],
+      "patches": [
+        {
+          "path": "framework/cores/rp2040/USB.h",
+          "find": "(unsigned uint8_t)",
+          "replace": "(uint8_t)",
+          "count": 1
+        },
+        {
+          "path": "framework/cores/rp2040/delay.cpp",
+          "find": "uint32_t millis()",
+          "replace": "unsigned long millis()",
+          "count": 1
+        },
+        {
+          "path": "framework/cores/rp2040/delay.cpp",
+          "find": "uint32_t micros()",
+          "replace": "unsigned long micros()",
+          "count": 1
+        }
+      ]
+    },
+    "distribution": {
+      "url": "",
+      "mirrors": [],
+      "archiveType": "zip",
+      "sha256": "9a012dcf68b5367217b88025b657738d4422e6c0861dc652b85f1931dcb1721b",
+      "bytes": 44603114
+    }
+  }
+}

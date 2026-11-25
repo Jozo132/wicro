@@ -1,3 +1,5 @@
+import { elfToEsp32ArduinoBin, validateEsp32ArduinoImage } from '../../../runtime/src/esp32-arduino-image.js';
+import { elfToEsp8266ArduinoBin, validateEsp8266ArduinoImage } from '../../../runtime/src/esp8266-arduino-image.js';
 import { elfToRp2350Bin, validateRp2350Image, rp2350BinToUf2, rp2350Uf2ToBin } from '../../../runtime/src/rp2350-image.js';
 import { elfToRp2040Bin, validateRp2040Image, rp2040BinToUf2, rp2040Uf2ToBin } from '../../../runtime/src/rp2040-image.js';
 import { elfToEsp32OriginalBin, validateEsp32OriginalImage } from '../../../runtime/src/esp32-original-image.js';
@@ -213,8 +215,8 @@ export const esp8266RomFormatHandler = Object.freeze({
 
 /** @type {import('./registry.js').FirmwareFormatHandler} */
 export const avrBinFormatHandler = Object.freeze({
-  id: 'avr-bin', extension: '.bin', description: 'AVR Nano application flash bytes', convert: (elf) => elfToAvrBin(elf),
-  validate: (image) => ({ valid: image.length >= 4 && image.length <= 30720, errors: image.length >= 4 && image.length <= 30720 ? [] : ['AVR image crosses application bounds'] })
+  id: 'avr-bin', extension: '.bin', description: 'AVR Nano application flash bytes', convert: (elf, options = {}) => elfToAvrBin(elf, Number(options.flashCapacityBytes ?? 30720)),
+  validate: (image, options = {}) => ({ valid: image.length >= 4 && image.length <= Number(options.flashCapacityBytes ?? 30720), errors: image.length >= 4 && image.length <= Number(options.flashCapacityBytes ?? 30720) ? [] : ['AVR image crosses application bounds'] })
 });
 
 /** @type {import('./registry.js').FirmwareFormatHandler} */
@@ -233,7 +235,11 @@ export const esp32OriginalRomFormatHandler = Object.freeze({
 export const rp2350BinFormatHandler = Object.freeze({ id: 'rp2350-bin', extension: '.bin', description: 'RP2350 PICOBIN flash image', convert: (elf) => elfToRp2350Bin(elf), validate: (bytes) => { try { return validateRp2350Image(bytes); } catch (error) { return { valid: false, errors: [String(error)] }; } } });
 /** @type {import('./registry.js').FirmwareFormatHandler} */
 export const rp2350Uf2FormatHandler = Object.freeze({ id: 'rp2350-uf2', extension: '.uf2', description: 'RP2350 architecture-specific UF2', convert: async (elf) => rp2350BinToUf2(await elfToRp2350Bin(elf)), validate: (bytes) => { try { return validateRp2350Image(rp2350Uf2ToBin(bytes)); } catch (error) { return { valid: false, errors: [String(error)] }; } } });
-export const BUILTIN_FIRMWARE_FORMATS = Object.freeze([rp2350BinFormatHandler, rp2350Uf2FormatHandler, esp32OriginalRomFormatHandler, rp2040BinFormatHandler, rp2040Uf2FormatHandler, avrBinFormatHandler, esp8266RomFormatHandler,
+/** @type {import('./registry.js').FirmwareFormatHandler} */
+export const esp8266ArduinoFormatHandler = Object.freeze({ id: 'esp8266-arduino', extension: '.bin', description: 'ESP8266 Arduino eboot/application image', convert: (elf, options = {}) => { if (!(options.eboot instanceof Uint8Array)) throw new Error('ESP8266 eboot ELF required'); return elfToEsp8266ArduinoBin(elf, options.eboot); }, validate: (bytes) => { try { return validateEsp8266ArduinoImage(bytes); } catch (error) { return { valid: false, errors: [String(error)] }; } } });
+/** @type {import('./registry.js').FirmwareFormatHandler} */
+export const esp32ArduinoFormatHandler = Object.freeze({ id: 'esp32-arduino', extension: '.bin', description: 'Espressif architecture/chip-specific Arduino application', convert: (elf, options = {}) => elfToEsp32ArduinoBin(elf, String(/** @type {{chip?:string}} */ (options.esp32Arduino)?.chip)), validate: (bytes, options = {}) => validateEsp32ArduinoImage(bytes, String(/** @type {{chip?:string}} */ (options.esp32Arduino)?.chip)) });
+export const BUILTIN_FIRMWARE_FORMATS = Object.freeze([esp32ArduinoFormatHandler, esp8266ArduinoFormatHandler, rp2350BinFormatHandler, rp2350Uf2FormatHandler, esp32OriginalRomFormatHandler, rp2040BinFormatHandler, rp2040Uf2FormatHandler, avrBinFormatHandler, esp8266RomFormatHandler,
   elfFormatHandler,
   flatBinFormatHandler,
   intelHexFormatHandler,

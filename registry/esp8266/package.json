@@ -32,6 +32,30 @@
     },
     "bootPin": 0,
     "uploadBaud": 115200,
-    "monitorBaud": 115200
+    "monitorBaud": 115200,
+    "frameworkConfigurations": {
+      "arduino": {
+        "replaceDependencies": true,
+        "dependencies": {
+          "llvm-wasm": "^1.0.0",
+          "esp8266-arduino-sdk": "^3.1.2"
+        },
+        "metadata": {
+          "platform": "espressif-esp8266-arduino",
+          "clockHz": 80000000,
+          "esp8266Arduino": {
+            "variant": "generic"
+          },
+          "build": {
+            "kind": "firmware",
+            "source": "main.ino",
+            "firmwareFormat": "esp8266-arduino",
+            "targetOptions": {
+              "mcpu": "esp8266"
+            }
+          }
+        }
+      }
+    }
   }
 }

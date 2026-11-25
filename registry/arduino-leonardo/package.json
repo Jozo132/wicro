@@ -5,8 +5,8 @@
   "description": "Arduino Leonardo ATmega32U4 preset",
   "license": "MIT",
   "dependencies": {
-    "arduino-avr-core": "^1.0.0",
-    "llvm-wasm": "^1.0.0"
+    "llvm-wasm": "^1.0.0",
+    "avr-arduino-sdk": "^1.0.0"
   },
   "metadata": {
     "manufacturer": "Arduino",
@@ -19,15 +19,24 @@
     "sramCapacityBytes": 2560,
     "eepromCapacityBytes": 1024,
     "build": {
-      "kind": "object",
+      "kind": "firmware",
       "target": "avr",
       "targetOptions": {
         "mcu": "atmega32u4"
       },
       "source": "main.ino",
-      "output": ".wicro/build"
+      "output": ".wicro/build",
+      "firmwareFormat": "avr-bin"
     },
-    "status": "preset",
-    "firmwareLinking": "pending-sdk-distribution"
+    "firmwareLinking": "wasm-arduino",
+    "platform": "arduino-avr",
+    "avr": {
+      "mcu": "atmega32u4",
+      "variant": "leonardo",
+      "multilib": "avr5",
+      "ramOrigin": 256,
+      "name": "LEONARDO",
+      "usb": true
+    }
   }
 }

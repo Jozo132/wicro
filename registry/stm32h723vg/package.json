@@ -35,6 +35,38 @@
       "port": "E",
       "pin": 3,
       "activeLow": true
+    },
+    "platform": "st-stm32-bare-metal",
+    "frameworkConfigurations": {
+      "arduino": {
+        "dependencies": {
+          "stm32-h7-arduino-sdk": "^1.0.0",
+          "llvm-wasm": "^1.0.0"
+        },
+        "metadata": {
+          "clockHz": 550000000,
+          "arduino": {
+            "series": "STM32H7xx",
+            "productLine": "STM32H723xx",
+            "variant": "STM32H7xx/H723V(E-G)(H-T)_H730VB(H-T)_H733VG(H-T)",
+            "board": "GENERIC_H723VGTX",
+            "startup": "startup_stm32h723xx.s",
+            "multilib": "v7e-m+dp/hard",
+            "led": "PE3",
+            "usb": true,
+            "fpu": "fpv5-d16",
+            "ramRegion": "RAM_D1",
+            "usbHighSpeedInFullSpeed": true
+          },
+          "build": {
+            "kind": "firmware",
+            "source": "main.ino",
+            "firmwareFormat": "bin"
+          },
+          "sramCapacityBytes": 327680
+        },
+        "replaceDependencies": true
+      }
     }
   }
 }

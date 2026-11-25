@@ -29,6 +29,30 @@
       "output": ".wicro/build"
     },
     "status": "preset",
-    "firmwareLinking": "pending-sdk-distribution"
+    "firmwareLinking": "pending-sdk-distribution",
+    "frameworkConfigurations": {
+      "arduino": {
+        "replaceDependencies": true,
+        "dependencies": {
+          "llvm-wasm": "^1.0.0",
+          "esp8266-arduino-sdk": "^3.1.2"
+        },
+        "metadata": {
+          "platform": "espressif-esp8266-arduino",
+          "clockHz": 80000000,
+          "esp8266Arduino": {
+            "variant": "d1_mini"
+          },
+          "build": {
+            "kind": "firmware",
+            "source": "main.ino",
+            "firmwareFormat": "esp8266-arduino",
+            "targetOptions": {
+              "mcpu": "esp8266"
+            }
+          }
+        }
+      }
+    }
   }
 }

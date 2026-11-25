@@ -32,6 +32,29 @@
     "led": {
       "pin": 25,
       "activeLow": false
+    },
+    "frameworkConfigurations": {
+      "arduino": {
+        "replaceDependencies": true,
+        "dependencies": {
+          "llvm-wasm": "^1.0.0",
+          "rp2040-arduino-sdk": "^6.4.0"
+        },
+        "metadata": {
+          "platform": "raspberrypi-arduino-pico",
+          "clockHz": 125000000,
+          "picoArduino": {
+            "chip": "rp2040",
+            "variant": "rpipico",
+            "wifi": false
+          },
+          "build": {
+            "kind": "firmware",
+            "source": "main.ino",
+            "firmwareFormat": "bin"
+          }
+        }
+      }
     }
   }
 }

@@ -1,3 +1,4 @@
+import { assemblyPipeline } from './assembly-pipeline.js';
 export { elfToEsp8266Bin, validateEsp8266Image } from './esp8266-image.js';
 import { WASI } from 'node:wasi';
 import { closeSync, openSync } from 'node:fs';
@@ -255,8 +256,13 @@ export class LlvmWasmToolchain {
         '/tmp/main.o'
       ];
       const preopens = { '/tmp': directory, ...(options.preopens ?? {}) };
+      const pipeline = assemblyPipeline(args, language);
+      if (pipeline.preprocess) {
+        const preprocessed = await this.runner.run(this.llvmPath, { args: pipeline.preprocess, preopens });
+        if (preprocessed.exitCode !== 0) throw new Error(preprocessed.stderr || preprocessed.stdout || 'WASM assembly preprocessing failed');
+      }
       const result = await this.runner.run(this.llvmPath, {
-        args,
+        args: pipeline.compile,
         preopens
       });
 

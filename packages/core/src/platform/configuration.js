@@ -31,6 +31,28 @@ export const getDeviceFamily = (board) => {
   return board.metadata.architecture === 'avr' ? 'AVR' : String(board.metadata.manufacturer ?? 'Other');
 };
 
+/** Broad MCU platform for the first visual selection step.
+ * @param {ConfigurationBoard} board
+ */
+export const getMcuType = (board) => {
+  if (typeof board.metadata.mcuType === 'string') return board.metadata.mcuType;
+  const family = getDeviceFamily(board);
+  return family === 'RP2040' || family === 'RP2350' ? 'RP2' : family;
+};
+
+/** MCU series within a platform; models remain individual orderable MCUs.
+ * @param {ConfigurationBoard} board
+ */
+export const getMcuFamily = (board) => {
+  if (typeof board.metadata.mcuFamily === 'string') return board.metadata.mcuFamily;
+  const model = String(board.metadata.mcu ?? '').toUpperCase(), type = getMcuType(board);
+  if (type === 'STM32') return model.match(/^STM32[A-Z]\d/)?.[0] ?? type;
+  if (type === 'ESP32') return model.startsWith('ESP32-S') ? 'ESP32-S' : model.startsWith('ESP32-C') ? 'ESP32-C' : model.startsWith('ESP32-H') ? 'ESP32-H' : 'ESP32 classic';
+  if (type === 'RP2') return model;
+  if (type === 'AVR') return model.startsWith('ATMEGA') ? 'ATmega' : 'AVR';
+  return type;
+};
+
 /**
  * Resolve choices from the same platform/programmer registry used by the engine.
  * Clock display describes the recipe; no generic clock override is implemented.
@@ -43,7 +65,7 @@ export const getTargetConfiguration = (board, framework) => {
   const programmer = programmerId ? registry.getProgrammer(programmerId) : undefined;
   const browserUpload = Boolean(programmer?.browserProtocols?.length);
   return {
-    frameworks: [...(platform?.frameworks ?? [String(metadata.framework ?? 'arduino'), 'bare-metal'])].filter((value, index, all) => all.indexOf(value) === index),
+    frameworks: [...(platform?.frameworks ?? [String(metadata.framework ?? 'arduino'), 'bare-metal']), ...Object.keys(metadata.frameworkConfigurations ?? {})].filter((value, index, all) => all.indexOf(value) === index),
     programmer,
     browserUpload,
     protocol: programmer?.browserProtocols?.[0] ?? null,

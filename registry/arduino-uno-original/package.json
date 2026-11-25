@@ -5,8 +5,8 @@
   "description": "Original Arduino UNO board package",
   "license": "MIT",
   "dependencies": {
-    "arduino-avr-core": "^1.0.0",
-    "llvm-wasm": "^1.0.0"
+    "llvm-wasm": "^1.0.0",
+    "avr-arduino-sdk": "^1.0.0"
   },
   "metadata": {
     "manufacturer": "Arduino",
@@ -16,13 +16,14 @@
     "framework": "arduino",
     "cpu": "avr5",
     "build": {
-      "kind": "object",
+      "kind": "firmware",
       "target": "avr",
       "targetOptions": {
         "mcu": "atmega328p"
       },
-      "source": "src/main.ino",
-      "output": ".wicro/build"
+      "source": "main.ino",
+      "output": ".wicro/build",
+      "firmwareFormat": "avr-bin"
     },
     "clockHz": 16000000,
     "flashCapacityBytes": 32256,
@@ -33,6 +34,16 @@
       "port": "B",
       "pin": 5,
       "activeLow": false
-    }
+    },
+    "platform": "arduino-avr",
+    "avr": {
+      "mcu": "atmega328p",
+      "variant": "standard",
+      "multilib": "avr5",
+      "ramOrigin": 256,
+      "name": "UNO-ORIGINAL",
+      "usb": false
+    },
+    "firmwareLinking": "wasm-arduino"
   }
 }

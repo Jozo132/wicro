@@ -1,0 +1,7 @@
+{
+  "name": "heartbeat",
+  "framework": "arduino",
+  "build": {
+    "sources": ["main.ino"]
+  }
+}

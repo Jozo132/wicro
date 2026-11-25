@@ -1,0 +1,94 @@
+{
+  "name": "avr-arduino-sdk",
+  "version": "1.0.0",
+  "kind": "platform",
+  "description": "Genuine Arduino AVR sources and AVR5/AVR6 target runtime for ATmega328P, ATmega32U4 and ATmega2560",
+  "license": "LGPL-2.1-or-later",
+  "metadata": {
+    "composition": {
+      "sources": [
+        {
+          "name": "arduino-avr@5.4.0",
+          "url": "https://dl.registry.platformio.org/download/platformio/tool/framework-arduino-avr/5.4.0/framework-arduino-avr-5.4.0.tar.gz",
+          "sha256": "bf85bcca114bad389fec51fecbf9b66821a233b366bd3f85cdb1cdcba6a28659",
+          "rules": [
+            {
+              "prefix": "cores/arduino/",
+              "to": "core/"
+            },
+            {
+              "prefix": "variants/",
+              "to": "variants/"
+            },
+            {
+              "prefix": "libraries/",
+              "to": "libraries/"
+            },
+            {
+              "prefix": "README.md",
+              "to": "licenses/README.md"
+            }
+          ]
+        },
+        {
+          "name": "atmelavr@1.70300.191015",
+          "url": "https://dl.registry.platformio.org/download/platformio/tool/toolchain-atmelavr/1.70300.191015/toolchain-atmelavr-linux_x86_64-1.70300.191015.tar.gz",
+          "sha256": "664f0b7b08a15e8d6362b87e2fdb5a4dcfd5959ebc5b19d938e7dff6f12f0524",
+          "rules": [
+            {
+              "prefix": "avr/include/",
+              "to": "avr/include/"
+            },
+            {
+              "prefix": "lib/gcc/avr/7.3.0/include/",
+              "to": "gcc/include/"
+            },
+            {
+              "prefix": "avr/lib/avr5/",
+              "to": "lib/avr5/",
+              "files": [
+                "crtatmega328p.o",
+                "crtatmega32u4.o",
+                "libatmega328p.a",
+                "libatmega32u4.a",
+                "libc.a",
+                "libm.a"
+              ]
+            },
+            {
+              "prefix": "avr/lib/avr6/",
+              "to": "lib/avr6/",
+              "files": [
+                "crtatmega2560.o",
+                "libatmega2560.a",
+                "libc.a",
+                "libm.a"
+              ]
+            },
+            {
+              "prefix": "lib/gcc/avr/7.3.0/avr5/",
+              "to": "lib/avr5/",
+              "files": [
+                "libgcc.a"
+              ]
+            },
+            {
+              "prefix": "lib/gcc/avr/7.3.0/avr6/",
+              "to": "lib/avr6/",
+              "files": [
+                "libgcc.a"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "distribution": {
+      "url": "",
+      "mirrors": [],
+      "archiveType": "zip",
+      "sha256": "ae28a2bd8f0cf73ed631abcc20d503a1d1c9771caaaa2172af6b2729b83a55de",
+      "bytes": 6440605
+    }
+  }
+}

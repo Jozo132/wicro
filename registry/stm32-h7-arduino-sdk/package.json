@@ -1,0 +1,150 @@
+{
+  "name": "stm32-h7-arduino-sdk",
+  "version": "1.0.0",
+  "kind": "platform",
+  "description": "Genuine STM32duino 3.0.0 STM32H7xx sources and Cortex-M7 double-precision target runtime",
+  "license": "LGPL-2.1-or-later",
+  "metadata": {
+    "series": "STM32H7xx",
+    "multilib": "v7e-m+dp/hard",
+    "composition": {
+      "sources": [
+        {
+          "name": "framework-arduinoststm32@4.30000.0",
+          "url": "https://dl.registry.platformio.org/download/platformio/tool/framework-arduinoststm32/4.30000.0/framework-arduinoststm32-4.30000.0.tar.gz",
+          "sha256": "ce42fefd75d7a183f3819fa1578de3c5a04db374201d117f5789d4a6a2d5dffe",
+          "rules": [
+            {
+              "prefix": "cores/",
+              "to": "framework/cores/"
+            },
+            {
+              "prefix": "libraries/",
+              "to": "framework/libraries/"
+            },
+            {
+              "prefix": "system/Drivers/STM32H7xx_HAL_Driver/",
+              "to": "framework/system/Drivers/STM32H7xx_HAL_Driver/"
+            },
+            {
+              "prefix": "system/Drivers/CMSIS/Device/ST/STM32H7xx/",
+              "to": "framework/system/Drivers/CMSIS/Device/ST/STM32H7xx/"
+            },
+            {
+              "prefix": "system/STM32H7xx/",
+              "to": "framework/system/STM32H7xx/"
+            },
+            {
+              "prefix": "system/Middlewares/ST/STM32_USB_Device_Library/",
+              "to": "framework/system/Middlewares/ST/STM32_USB_Device_Library/"
+            },
+            {
+              "prefix": "variants/STM32H7xx/",
+              "to": "framework/variants/STM32H7xx/"
+            },
+            {
+              "prefix": "",
+              "to": "framework/",
+              "files": [
+                "License.md",
+                "package.json",
+                "boards.txt",
+                "platform.txt"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "framework-cmsis@2.60300.0",
+          "url": "https://dl.registry.platformio.org/download/platformio/tool/framework-cmsis/2.60300.0/framework-cmsis-2.60300.0.tar.gz",
+          "sha256": "ca77d29356c77c2e45b7a5bb940fe1b431c9c1583d897ddc875b5dfcd9595398",
+          "rules": [
+            {
+              "prefix": "CMSIS/",
+              "to": "cmsis/"
+            },
+            {
+              "prefix": "",
+              "to": "licenses/cmsis/",
+              "files": [
+                "LICENSE.txt",
+                "LICENSE",
+                "package.json"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "toolchain-gccarmnoneeabi@1.120301.0",
+          "url": "https://dl.registry.platformio.org/download/platformio/tool/toolchain-gccarmnoneeabi/1.120301.0/toolchain-gccarmnoneeabi-linux_x86_64-1.120301.0.tar.gz",
+          "sha256": "d61c40c097032ea32c2fd1622e0fab72d2a6dc6ec9b69fa451a629eeb17448ed",
+          "rules": [
+            {
+              "prefix": "arm-none-eabi/include/",
+              "to": "sysroot/include/"
+            },
+            {
+              "prefix": "arm-none-eabi/lib/thumb/v7e-m+dp/hard/",
+              "to": "lib/",
+              "files": [
+                "libc_nano.a",
+                "libm.a",
+                "libstdc++_nano.a"
+              ]
+            },
+            {
+              "prefix": "lib/gcc/arm-none-eabi/12.3.1/include/",
+              "to": "gcc/include/"
+            },
+            {
+              "prefix": "lib/gcc/arm-none-eabi/12.3.1/include-fixed/",
+              "to": "gcc/include-fixed/"
+            },
+            {
+              "prefix": "lib/gcc/arm-none-eabi/12.3.1/thumb/v7e-m+dp/hard/",
+              "to": "lib/",
+              "files": [
+                "libgcc.a",
+                "crti.o",
+                "crtn.o"
+              ]
+            },
+            {
+              "prefix": "distro-info/licenses/",
+              "to": "licenses/arm-runtime/"
+            },
+            {
+              "prefix": "",
+              "to": "licenses/arm-runtime/",
+              "files": [
+                "README.md",
+                "package.json"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "LLVM arm_acle.h",
+          "url": "https://api.github.com/repos/espressif/llvm-project/git/blobs/b1dc90f84ad36f7bcb08971c29664441ce7f72ea",
+          "format": "github-blob",
+          "output": "clang/include/arm_acle.h",
+          "sha256": "f1ebcac29e960f817f20df029d353d543a97dd08de124036a5978e541b852126"
+        },
+        {
+          "name": "LLVM LICENSE.TXT",
+          "url": "https://api.github.com/repos/espressif/llvm-project/git/blobs/fa6ac540007032cbd0ec772a1c72e6cb5527a4fe",
+          "format": "github-blob",
+          "output": "licenses/clang/LICENSE.TXT",
+          "sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee"
+        }
+      ]
+    },
+    "distribution": {
+      "url": "",
+      "mirrors": [],
+      "archiveType": "zip",
+      "sha256": "e3ccd59b4a311ec465a1abbad63e7016ad2cccbdfa022ef4d76bc02f5f4c19f5",
+      "bytes": 16106270
+    }
+  }
+}

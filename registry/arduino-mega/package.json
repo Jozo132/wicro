@@ -5,8 +5,8 @@
   "description": "Arduino Mega 2560 preset",
   "license": "MIT",
   "dependencies": {
-    "arduino-avr-core": "^1.0.0",
-    "llvm-wasm": "^1.0.0"
+    "llvm-wasm": "^1.0.0",
+    "avr-arduino-sdk": "^1.0.0"
   },
   "metadata": {
     "manufacturer": "Arduino",
@@ -19,20 +19,29 @@
     "sramCapacityBytes": 8192,
     "eepromCapacityBytes": 4096,
     "build": {
-      "kind": "object",
+      "kind": "firmware",
       "target": "avr",
       "targetOptions": {
         "mcu": "atmega2560"
       },
       "source": "main.ino",
-      "output": ".wicro/build"
+      "output": ".wicro/build",
+      "firmwareFormat": "avr-bin"
     },
     "menus": {
       "cpu": {
         "atmega2560": "ATmega2560"
       }
     },
-    "status": "preset",
-    "firmwareLinking": "pending-sdk-distribution"
+    "firmwareLinking": "wasm-arduino",
+    "platform": "arduino-avr",
+    "avr": {
+      "mcu": "atmega2560",
+      "variant": "mega",
+      "multilib": "avr6",
+      "ramOrigin": 512,
+      "name": "MEGA",
+      "usb": false
+    }
   }
 }

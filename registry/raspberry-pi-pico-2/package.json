@@ -27,6 +27,29 @@
       "output": ".wicro/build"
     },
     "status": "preset",
-    "firmwareLinking": "pending-sdk-distribution"
+    "firmwareLinking": "pending-sdk-distribution",
+    "frameworkConfigurations": {
+      "arduino": {
+        "replaceDependencies": true,
+        "dependencies": {
+          "llvm-wasm": "^1.0.0",
+          "rp2350-arduino-sdk": "^6.4.0"
+        },
+        "metadata": {
+          "platform": "raspberrypi-arduino-pico",
+          "clockHz": 150000000,
+          "picoArduino": {
+            "chip": "rp2350",
+            "variant": "rpipico2",
+            "wifi": false
+          },
+          "build": {
+            "kind": "firmware",
+            "source": "main.ino",
+            "firmwareFormat": "bin"
+          }
+        }
+      }
+    }
   }
 }

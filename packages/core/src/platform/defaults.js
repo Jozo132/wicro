@@ -1,3 +1,6 @@
+import { esp8266ArduinoPlatformAdapter } from './esp8266-arduino.js';
+import { picoArduinoPlatformAdapter } from './pico-arduino.js';
+import { avrArduinoPlatformAdapter } from './avr-arduino.js';
 import { rp2350PlatformAdapter } from './rp2350.js';
 import { rp2040ZeroPlatformAdapter } from './rp2040.js';
 import { esp32OriginalBareMetalPlatformAdapter } from './esp32-original.js';
@@ -52,10 +55,13 @@ export const createDefaultPlatformRegistry = () => {
   for (const format of BUILTIN_FIRMWARE_FORMATS) registry.registerFirmwareFormat(format);
   registry.registerPlatform(esp32C3PlatformAdapter);
   registry.registerPlatform(nanoArduinoPlatformAdapter);
+  registry.registerPlatform(avrArduinoPlatformAdapter);
   registry.registerPlatform(rp2040ZeroPlatformAdapter);
   registry.registerPlatform(rp2350PlatformAdapter);
+  registry.registerPlatform(picoArduinoPlatformAdapter);
   registry.registerPlatform(esp32OriginalBareMetalPlatformAdapter);
   registry.registerPlatform(esp8266BareMetalPlatformAdapter);
+  registry.registerPlatform(esp8266ArduinoPlatformAdapter);
   registry.registerPlatform(stm32BareMetalPlatformAdapter);
   registry.registerPlatform(stm32F103SwdPlatformAdapter);
   for (const programmer of BUILTIN_PROGRAMMERS) registry.registerProgrammer(programmer);

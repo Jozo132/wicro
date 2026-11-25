@@ -626,7 +626,7 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
       const compiled = await toolchain.compileSource(extraUnit.source, build.target, build.targetOptions, {
         language: extraUnit.language,
         includeDirs: [...compileConfig.includeDirs, ...(extraUnit.includeDirs ?? [])],
-        compilerFlags: extraUnit.language === 'c++' ? compileConfig.compilerFlags : compileConfig.compilerFlags.filter((flag) => !flag.startsWith('-std=gnu++') && !flag.startsWith('-std=c++') && flag !== '-fno-rtti' && flag !== '-fno-exceptions'),
+        compilerFlags: [...(extraUnit.language === 'c++' ? compileConfig.compilerFlags : compileConfig.compilerFlags.filter((flag) => !flag.startsWith('-std=gnu++') && !flag.startsWith('-std=c++') && flag !== '-fno-rtti' && flag !== '-fno-exceptions')), ...(extraUnit.compilerFlags ?? [])],
         preopens: compileConfig.preopens,
         files: compileConfig.files,
         defines: compileConfig.defines,
@@ -670,14 +670,15 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
 
       // Phase 7: Generate & validate firmware artifacts via registered FirmwareFormatHandler
       onProgress?.({ stage: 'image', message: 'Generating and validating firmware binary…', percent: 86 });
+      const imageOptions = { ...boardMetadata, ...(linkPlan.imageOptions ?? {}) };
       const primaryFormatId = linkPlan.firmwareFormat ?? platform.defaultFirmwareFormat;
       const primaryHandler = platforms.getFirmwareFormat(primaryFormatId);
       const binBytes = (primaryHandler && linked.elf.length >= 52)
-        ? await primaryHandler.convert(linked.elf, boardMetadata)
+        ? await primaryHandler.convert(linked.elf, imageOptions)
         : linked.bin;
 
       if (primaryHandler && binBytes.length > 24) {
-        const validation = await primaryHandler.validate(binBytes, boardMetadata);
+        const validation = await primaryHandler.validate(binBytes, imageOptions);
         firmwareValidation = validation;
         if (!validation.valid) {
           throw new Error(`Generated ${primaryFormatId} firmware image failed validation: ${validation.errors.join('; ')}`);
@@ -690,8 +691,8 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
         const handler = platforms.getFirmwareFormat(formatId);
         if (!handler) throw new Error(`Unknown firmware format: ${formatId}`);
         if (linked.elf.length < 52) continue;
-        const formatted = await handler.convert(linked.elf, boardMetadata);
-        const check = await handler.validate(formatted, boardMetadata);
+        const formatted = await handler.convert(linked.elf, imageOptions);
+        const check = await handler.validate(formatted, imageOptions);
         if (!check.valid) throw new Error(`Generated ${formatId} artifact failed validation: ${check.errors.join('; ')}`);
         const artifactPath = `${project}/${output}/firmware${handler.extension}`;
         await host.writeFile(artifactPath, formatted);

@@ -1,3 +1,4 @@
+import { getMcuType, getMcuFamily } from '../../packages/core/src/platform/configuration.js';
 import { relayArtifact } from '../../services/registry-relay/worker.js';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -73,8 +74,9 @@ const readExampleFiles = async (/** @type {string} */ rootDir, /** @type {string
 
 /** Scan `examples/<board>/<example>` and return structured example descriptors. */
 const loadCanonicalExamples = async () => {
-  /** @type {Array<{id:string,board:string,name:string,framework:string,files:Record<string,string>}>} */
+  /** @type {Array<{id:string,board:string,name:string,framework:string,category?:string,files:Record<string,string>}>} */
   const examples = [];
+  const catalog = (await loadCanonicalRegistry()).boards;
   const boardDirs = await readdir(examplesDir, { withFileTypes: true });
   for (const boardDir of boardDirs) {
     if (!boardDir.isDirectory()) continue;
@@ -84,8 +86,8 @@ const loadCanonicalExamples = async () => {
       if (!exampleDir.isDirectory() || IGNORED_DIRS.has(exampleDir.name)) continue;
       const examplePath = join(boardPath, exampleDir.name);
       const files = await readExampleFiles(examplePath);
-      if (Object.keys(files).length === 0) continue;
-      let board = boardDir.name;
+      if (!files['wicro.json']) continue;
+      let board = boardDir.name === 'arduino' ? '*' : boardDir.name;
       let framework = 'arduino';
       if (files['wicro.json']) {
         try {
@@ -103,6 +105,7 @@ const loadCanonicalExamples = async () => {
         board,
         name: exampleDir.name,
         framework,
+        category: board === '*' ? 'Arduino / Basics' : (() => { const target = catalog.find((entry) => entry.id === board); return target ? `${getMcuType(target)} / ${getMcuFamily(target)} / ${framework}` : `${board} / ${framework}`; })(),
         files
       });
     }

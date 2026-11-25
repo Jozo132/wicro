@@ -1,10 +1,10 @@
-import { Gunzip, zipSync } from 'fflate';
+import { Gunzip, zipSync, unzipSync } from 'fflate';
 import { safeLibraryPath } from './library-archive.js';
 import { downloadBytes } from './download.js';
 import { sha256Bytes } from './sdk.js';
 
 /** @typedef {{prefix:string,to:string,files?:string[]}} SelectionRule */
-/** @typedef {{name:string,url:string,sha256:string,rules?:SelectionRule[],format?:'github-blob',output?:string}} CompositionSource */
+/** @typedef {{name:string,url:string,sha256:string,rules?:SelectionRule[],format?:'github-blob'|'zip',output?:string}} CompositionSource */
 
 /** Stream TAR.GZ through a path filter without retaining host compiler executables
  * or the complete uncompressed archive. Selected links are rejected.
@@ -64,7 +64,7 @@ export const selectTarGzip = (archive, rules) => {
       }
       if (output && !['0', '\0', '5'].includes(type)) throw new Error(`Selected SDK member is not a regular file: ${raw}`);
       if (type === '5') output = '';
-      if (metadata && size > 1048576 || output && size > 64 * 1024 * 1024) throw new Error('SDK TAR member exceeds its extraction limit');
+      if (metadata && size > 1048576 || output && size > 96 * 1024 * 1024) throw new Error('SDK TAR member exceeds its extraction limit');
       total += output ? size : 0;
       if (total > 256 * 1024 * 1024) throw new Error('Selected SDK exceeds 256 MiB');
       data = output || metadata ? new Uint8Array(size) : null;
@@ -79,6 +79,27 @@ export const selectTarGzip = (archive, rules) => {
   return files;
 };
 
+/** Filter a trusted upstream ZIP into ordinary VFS files without extracting native tools.
+ * @param {Uint8Array} archive @param {SelectionRule[]} rules
+ */
+export const selectSdkZip = (archive, rules) => {
+  let total = 0;
+  const selected = new Map();
+  const files = unzipSync(archive, { filter: (entry) => {
+    if (entry.name.endsWith('/')) return false;
+    const name = safeLibraryPath(entry.name);
+    const rule = rules.find((rule) => name.startsWith(rule.prefix) && (!rule.files || rule.files.includes(name.slice(rule.prefix.length))));
+    if (!rule) return false;
+    const output = safeLibraryPath(rule.to + name.slice(rule.prefix.length));
+    if (selected.has(output)) throw new Error(`Duplicate SDK ZIP output ${output}`);
+    total += entry.originalSize;
+    if (entry.originalSize > 96 * 1024 * 1024 || total > 256 * 1024 * 1024) throw new Error('Selected SDK ZIP exceeds extraction bounds');
+    selected.set(output, name); return true;
+  } });
+  if (!selected.size) throw new Error('SDK ZIP selection is empty');
+  return Object.fromEntries([...selected].map(([output, name]) => [output, files[name]]));
+};
+
 /** @param {Record<string,Uint8Array>} files */
 export const finishSdkComposition = (files) => {
   const sources = Object.keys(files).filter((name) => /^framework\/(cores\/arduino|libraries\/(SrcWrapper|USBDevice))\/.*\.(c|cpp)$/.test(name)).sort();
@@ -87,7 +108,7 @@ export const finishSdkComposition = (files) => {
   return zipSync(Object.fromEntries(Object.entries(files).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)), { level: 6, mtime: new Date(1980, 0, 1) });
 };
 
-/** @param {{sources:CompositionSource[]}} composition
+/** @param {{sources:CompositionSource[],patches?:{path:string,find:string,replace:string,count:number}[]}} composition
  * @param {{storage:import('./sdk.js').SdkStorage,fetch?:typeof fetch,control?:import('./download.js').DownloadControl,progress?:(event:import('./download.js').DownloadProgress)=>void,resolveUrl?:(url:string)=>string}} options
  */
 export const composeSdkArchive = async (composition, options) => {
@@ -111,11 +132,18 @@ export const composeSdkArchive = async (composition, options) => {
       if (await sha256Bytes(bytes) !== source.sha256) throw new Error(`SDK upstream checksum mismatch: ${source.name}`);
       await options.storage.mkdir('upstreams'); await options.storage.writeBytes(cache, bytes);
     }
-    const selected = source.format === 'github-blob' && source.output ? { [safeLibraryPath(source.output)]: bytes } : selectTarGzip(bytes, source.rules ?? []);
+    const selected = source.format === 'github-blob' && source.output ? { [safeLibraryPath(source.output)]: bytes } : source.format === 'zip' ? selectSdkZip(bytes, source.rules ?? []) : selectTarGzip(bytes, source.rules ?? []);
     for (const [name, value] of Object.entries(selected)) {
       if (files[name]) throw new Error(`SDK composition collision: ${name}`);
       files[name] = value;
     }
+  }
+  for (const patch of composition.patches ?? []) {
+    const path = safeLibraryPath(patch.path), bytes = files[path];
+    if (!bytes || !patch.find) throw new Error(`Missing SDK compatibility patch input ${path}`);
+    const source = new TextDecoder().decode(bytes), pieces = source.split(patch.find);
+    if (pieces.length - 1 !== patch.count) throw new Error(`SDK compatibility patch does not match ${path}`);
+    files[path] = new TextEncoder().encode(pieces.join(patch.replace));
   }
   return finishSdkComposition(files);
 };

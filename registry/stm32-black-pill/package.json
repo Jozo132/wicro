@@ -31,6 +31,33 @@
       "output": ".wicro/build"
     },
     "status": "preset",
-    "firmwareLinking": "pending-sdk-distribution"
+    "platform": "st-stm32-bare-metal",
+    "frameworkConfigurations": {
+      "arduino": {
+        "dependencies": {
+          "stm32-f4-arduino-sdk": "^1.0.0",
+          "llvm-wasm": "^1.0.0"
+        },
+        "metadata": {
+          "clockHz": 100000000,
+          "arduino": {
+            "series": "STM32F4xx",
+            "productLine": "STM32F411xE",
+            "variant": "STM32F4xx/F411C(C-E)(U-Y)",
+            "board": "GENERIC_F411CEUX",
+            "startup": "startup_stm32f411xe.s",
+            "multilib": "v7e-m+fp/hard",
+            "led": "PC13",
+            "usb": true
+          },
+          "build": {
+            "kind": "firmware",
+            "source": "main.ino",
+            "firmwareFormat": "bin"
+          }
+        },
+        "replaceDependencies": true
+      }
+    }
   }
 }

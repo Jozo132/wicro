@@ -1,0 +1,298 @@
+{
+  "name": "esp32-arduino-sdk",
+  "version": "4.0.0",
+  "kind": "platform",
+  "description": "Genuine Arduino-ESP32 4.0.0, per-chip ESP-IDF 6.1.1 SDK and ABI-specific esp32 target runtime",
+  "license": "LGPL-2.1-or-later",
+  "metadata": {
+    "composition": {
+      "sources": [
+        {
+          "name": "arduino-esp32@4.0.0",
+          "url": "https://github.com/espressif/arduino-esp32/releases/download/4.0.0/esp32-core-4.0.0.zip",
+          "sha256": "94529fbcec06457dc84f04ce7e5b374e8a82b51b2bdb23ca9a2a719874350d25",
+          "format": "zip",
+          "rules": [
+            {
+              "prefix": "esp32-core-4.0.0/cores/",
+              "to": "framework/cores/"
+            },
+            {
+              "prefix": "esp32-core-4.0.0/variants/",
+              "to": "framework/variants/"
+            },
+            {
+              "prefix": "esp32-core-4.0.0/libraries/",
+              "to": "framework/libraries/"
+            },
+            {
+              "prefix": "esp32-core-4.0.0/",
+              "to": "licenses/framework/",
+              "files": [
+                "LICENSE",
+                "LICENSE.md",
+                "README.md",
+                "package.json"
+              ]
+            }
+          ]
+        },
+        {
+          "name": "esp32-libs@4.0.0",
+          "url": "https://github.com/espressif/arduino-esp32/releases/download/4.0.0/esp32-libs-4.0.0.zip",
+          "sha256": "2dd193923a6483a00116edfc7026a0789225e345785d4bd7a9871c5e14f8d927",
+          "format": "zip",
+          "rules": [
+            {
+              "prefix": "esp32-libs/include/",
+              "to": "sdk/include/"
+            },
+            {
+              "prefix": "esp32-libs/lib/",
+              "to": "sdk/lib/",
+              "files": [
+                "libapp_update.a",
+                "libble_mesh.a",
+                "libbootloader_support.a",
+                "libbt.a",
+                "libbtdm_app.a",
+                "libchmorgan__esp-libhelix-mp3.a",
+                "libcmock.a",
+                "libcoexist.a",
+                "libconsole.a",
+                "libcore.a",
+                "libcxx.a",
+                "libdriver.a",
+                "libefuse.a",
+                "libesp-tls.a",
+                "libesp_adc.a",
+                "libesp_app_format.a",
+                "libesp_blockdev_util.a",
+                "libesp_bootloader_format.a",
+                "libesp_coex.a",
+                "libesp_common.a",
+                "libesp_driver_cam.a",
+                "libesp_driver_dac.a",
+                "libesp_driver_dma.a",
+                "libesp_driver_gpio.a",
+                "libesp_driver_gptimer.a",
+                "libesp_driver_i2c.a",
+                "libesp_driver_i2s.a",
+                "libesp_driver_ledc.a",
+                "libesp_driver_mcpwm.a",
+                "libesp_driver_pcnt.a",
+                "libesp_driver_rmt.a",
+                "libesp_driver_sd_intf.a",
+                "libesp_driver_sdio.a",
+                "libesp_driver_sdm.a",
+                "libesp_driver_sdmmc.a",
+                "libesp_driver_sdspi.a",
+                "libesp_driver_spi.a",
+                "libesp_driver_touch_sens.a",
+                "libesp_driver_twai.a",
+                "libesp_driver_uart.a",
+                "libesp_eth.a",
+                "libesp_event.a",
+                "libesp_gdbstub.a",
+                "libesp_hal_ana_conv.a",
+                "libesp_hal_clock.a",
+                "libesp_hal_emac.a",
+                "libesp_hal_gpio.a",
+                "libesp_hal_gpspi.a",
+                "libesp_hal_i2c.a",
+                "libesp_hal_i2s.a",
+                "libesp_hal_lcd.a",
+                "libesp_hal_ledc.a",
+                "libesp_hal_mcpwm.a",
+                "libesp_hal_mspi.a",
+                "libesp_hal_pcnt.a",
+                "libesp_hal_pmu.a",
+                "libesp_hal_rmt.a",
+                "libesp_hal_sd.a",
+                "libesp_hal_security.a",
+                "libesp_hal_timg.a",
+                "libesp_hal_touch_sens.a",
+                "libesp_hal_twai.a",
+                "libesp_hal_uart.a",
+                "libesp_hal_wdt.a",
+                "libesp_hid.a",
+                "libesp_http_client.a",
+                "libesp_http_server.a",
+                "libesp_https_ota.a",
+                "libesp_https_server.a",
+                "libesp_hw_support.a",
+                "libesp_lcd.a",
+                "libesp_libc.a",
+                "libesp_local_ctrl.a",
+                "libesp_mm.a",
+                "libesp_netif.a",
+                "libesp_partition.a",
+                "libesp_phy.a",
+                "libesp_pm.a",
+                "libesp_psram.a",
+                "libesp_ringbuf.a",
+                "libesp_rom.a",
+                "libesp_security.a",
+                "libesp_stdio.a",
+                "libesp_system.a",
+                "libesp_timer.a",
+                "libesp_wifi.a",
+                "libespcoredump.a",
+                "libespnow.a",
+                "libespressif__cbor.a",
+                "libespressif__cjson.a",
+                "libespressif__dm9051.a",
+                "libespressif__esp-dsp.a",
+                "libespressif__esp-modbus.a",
+                "libespressif__esp-zigbee-lib.a",
+                "libespressif__esp32-camera.a",
+                "libespressif__esp_daylight.a",
+                "libespressif__esp_delta_ota.a",
+                "libespressif__esp_diag_data_store.a",
+                "libespressif__esp_diagnostics.a",
+                "libespressif__esp_encrypted_img.a",
+                "libespressif__esp_insights.a",
+                "libespressif__esp_jpeg.a",
+                "libespressif__esp_matter.a",
+                "libespressif__esp_modem.a",
+                "libespressif__esp_rainmaker.a",
+                "libespressif__esp_schedule.a",
+                "libespressif__esp_secure_cert_mgr.a",
+                "libespressif__json_generator.a",
+                "libespressif__json_parser.a",
+                "libespressif__ksz8851snl.a",
+                "libespressif__lan867x.a",
+                "libespressif__lan86xx_common.a",
+                "libespressif__libsodium.a",
+                "libespressif__mdns.a",
+                "libespressif__mqtt.a",
+                "libespressif__network_provisioning.a",
+                "libespressif__qrcode.a",
+                "libespressif__rmaker_cmd_resp.a",
+                "libespressif__rmaker_common_2.a",
+                "libespressif__rmaker_common_events.a",
+                "libespressif__rmaker_console.a",
+                "libespressif__rmaker_system_ctrl.a",
+                "libespressif__rmaker_time_sync.a",
+                "libespressif__rmaker_work_queue.a",
+                "libespressif__w5500.a",
+                "libfatfs.a",
+                "libfb_gfx.a",
+                "libfreertos.a",
+                "libhal.a",
+                "libheap.a",
+                "libhttp_parser.a",
+                "libjoltwallet__littlefs.a",
+                "liblog.a",
+                "liblwip.a",
+                "libmbedtls.a",
+                "libmbedtls_2.a",
+                "libmbedx509.a",
+                "libmesh.a",
+                "libmqtt_outbox_lib.a",
+                "libmqtt_utils_lib.a",
+                "libnet80211.a",
+                "libnvs_flash.a",
+                "libnvs_sec_provider.a",
+                "libopenthread.a",
+                "libperfmon.a",
+                "libphy.a",
+                "libpp.a",
+                "libprotobuf-c.a",
+                "libprotocomm.a",
+                "libpthread.a",
+                "librt.a",
+                "librtc.a",
+                "libsdmmc.a",
+                "libsmartconfig.a",
+                "libsoc.a",
+                "libspiffs.a",
+                "libtcp_transport.a",
+                "libtfpsacrypto.a",
+                "libulp.a",
+                "libunity.a",
+                "libvfs.a",
+                "libwapi.a",
+                "libwear_levelling.a",
+                "libwpa_supplicant.a",
+                "libxt_hal.a",
+                "libxtensa.a"
+              ]
+            },
+            {
+              "prefix": "esp32-libs/ld/",
+              "to": "sdk/ld/"
+            },
+            {
+              "prefix": "esp32-libs/flags/",
+              "to": "sdk/flags/"
+            },
+            {
+              "prefix": "esp32-libs/dio_qspi/",
+              "to": "sdk/config/"
+            }
+          ]
+        },
+        {
+          "name": "xtensa-esp-elf@15.2.0_20251204",
+          "url": "https://github.com/espressif/crosstool-NG/releases/download/esp-15.2.0_20251204/xtensa-esp-elf-15.2.0_20251204-x86_64-linux-gnu.tar.gz",
+          "sha256": "25c88f84ec4a6538e370dfb9af11d2d67cb4cc698e1062272412dcab3be19b38",
+          "rules": [
+            {
+              "prefix": "xtensa-esp-elf/xtensa-esp-elf/include/",
+              "to": "sysroot/include/"
+            },
+            {
+              "prefix": "xtensa-esp-elf/lib/gcc/xtensa-esp-elf/15.2.0/include/",
+              "to": "gcc/include/"
+            },
+            {
+              "prefix": "xtensa-esp-elf/lib/gcc/xtensa-esp-elf/15.2.0/include-fixed/",
+              "to": "gcc/include-fixed/"
+            },
+            {
+              "prefix": "xtensa-esp-elf/xtensa-esp-elf/lib/esp32/",
+              "to": "lib/",
+              "files": [
+                "libm.a",
+                "libstdc++.a",
+                "libsupc++.a"
+              ]
+            },
+            {
+              "prefix": "xtensa-esp-elf/xtensa-esp-elf/lib/esp32/libg.a",
+              "to": "lib/libc.a"
+            },
+            {
+              "prefix": "xtensa-esp-elf/lib/gcc/xtensa-esp-elf/15.2.0/esp32/",
+              "to": "lib/",
+              "files": [
+                "libgcc.a",
+                "crti.o",
+                "crtn.o"
+              ]
+            },
+            {
+              "prefix": "xtensa-esp-elf/share/licenses/gcc/",
+              "to": "licenses/runtime/",
+              "files": [
+                "COPYING",
+                "COPYING3",
+                "COPYING3.LIB",
+                "COPYING.RUNTIME",
+                "COPYING.LIB"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "distribution": {
+      "url": "",
+      "mirrors": [],
+      "archiveType": "zip",
+      "sha256": "559513e3eba948c0f6314582cdb6196df5b29ac1c6f0be6eb2c1079cd4939485",
+      "bytes": 71851504
+    }
+  }
+}

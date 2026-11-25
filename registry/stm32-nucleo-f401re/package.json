@@ -31,6 +31,33 @@
       "output": ".wicro/build"
     },
     "status": "preset",
-    "firmwareLinking": "pending-sdk-distribution"
+    "platform": "st-stm32-bare-metal",
+    "frameworkConfigurations": {
+      "arduino": {
+        "dependencies": {
+          "stm32-f4-arduino-sdk": "^1.0.0",
+          "llvm-wasm": "^1.0.0"
+        },
+        "metadata": {
+          "clockHz": 84000000,
+          "arduino": {
+            "series": "STM32F4xx",
+            "productLine": "STM32F401xE",
+            "variant": "STM32F4xx/F401R(B-C-D-E)T",
+            "board": "NUCLEO_F401RE",
+            "startup": "startup_stm32f401xe.s",
+            "multilib": "v7e-m+fp/hard",
+            "led": "PA5",
+            "usb": false
+          },
+          "build": {
+            "kind": "firmware",
+            "source": "main.ino",
+            "firmwareFormat": "bin"
+          }
+        },
+        "replaceDependencies": true
+      }
+    }
   }
 }

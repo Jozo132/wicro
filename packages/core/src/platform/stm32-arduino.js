@@ -1,4 +1,4 @@
-/** @typedef {{series:string,productLine:string,variant:string,board:string,startup:string,multilib:string,usb?:boolean,led?:string}} Stm32ArduinoRecipe */
+/** @typedef {{series:string,productLine:string,variant:string,board:string,startup:string,multilib:string,usb?:boolean,led?:string,fpu?:string,ramRegion?:string,usbHighSpeedInFullSpeed?:boolean}} Stm32ArduinoRecipe */
 
 /** @param {import('../index.js').WicroHostAdapter} host @param {string} root @param {string} path */
 const readText = async (host, root, path) => {
@@ -56,8 +56,8 @@ export const resolveStm32ArduinoCompileConfig = async ({ host, board, project, p
   for (const path of [...new Set(sources)].sort()) extraUnits.push({ name: path.replace(/[^a-zA-Z0-9_.-]/g, '_') + '.o', source: await readText(host, root, path), language: /** @type {'c'|'c++'} */ (path.endsWith('.cpp') ? 'c++' : 'c'), includeDirs: ['/sdk/' + path.split('/').slice(0, -1).join('/')] });
   extraUnits.push({ name: 'stm32-startup.o', source: await readText(host, root, `framework/system/Drivers/CMSIS/Device/ST/${recipe.series}/Source/Templates/gcc/${recipe.startup}`), language: /** @type {'assembly'} */ ('assembly') });
   const usb = recipe.usb !== false;
-  return { compilerFlags: ['-std=gnu++17', '-ffreestanding', '-fno-builtin', '-Os', '-ffunction-sections', '-fdata-sections', '-fno-threadsafe-statics', '-fno-rtti', '-fno-exceptions', '-fno-use-cxa-atexit', '-Wno-unknown-attributes', '-Wno-ignored-attributes', ...(recipe.series === 'STM32F4xx' ? ['-mfpu=fpv4-sp-d16', '-mfloat-abi=hard'] : []), ...(build.flags ?? [])],
-    defines: [recipe.series, recipe.productLine, 'ARDUINO=10808', 'ARDUINO_ARCH_STM32', `ARDUINO_${recipe.board}`, 'VARIANT_H="variant_generic.h"', `BOARD_NAME="Wicro ${board.mcu}"`, `F_CPU=${board.clockHz}L`, 'USE_HAL_DRIVER', 'USE_FULL_LL_DRIVER', 'HAL_UART_MODULE_ENABLED', 'EXTENDED_PIN_MODE', 'NDEBUG', 'GCC_VERSION=120301', ...(recipe.led ? [`LED_BUILTIN=${recipe.led}`] : []), ...(usb ? ['USBCON', 'USBD_USE_CDC', 'PIO_FRAMEWORK_ARDUINO_ENABLE_CDC', 'HAL_PCD_MODULE_ENABLED', 'USB_VID=0x0483', 'USB_PID=0x5740'] : []), ...(build.defines ?? [])], includeDirs, extraUnits, preopens: { '/sdk': root }
+  return { compilerFlags: ['-std=gnu++17', '-ffreestanding', '-fno-builtin', '-Os', '-ffunction-sections', '-fdata-sections', '-fno-threadsafe-statics', '-fno-rtti', '-fno-exceptions', '-fno-use-cxa-atexit', '-Wno-unknown-attributes', '-Wno-ignored-attributes', ...(recipe.fpu || recipe.series === 'STM32F4xx' ? [`-mfpu=${recipe.fpu ?? 'fpv4-sp-d16'}`, '-mfloat-abi=hard'] : []), ...(build.flags ?? [])],
+    defines: [recipe.series, recipe.productLine, 'ARDUINO=10808', 'ARDUINO_ARCH_STM32', `ARDUINO_${recipe.board}`, 'VARIANT_H="variant_generic.h"', `BOARD_NAME="Wicro ${board.mcu}"`, `F_CPU=${board.clockHz}L`, 'USE_HAL_DRIVER', 'USE_FULL_LL_DRIVER', 'HAL_UART_MODULE_ENABLED', 'EXTENDED_PIN_MODE', 'NDEBUG', 'GCC_VERSION=120301', ...(recipe.led ? [`LED_BUILTIN=${recipe.led}`] : []), ...(recipe.usbHighSpeedInFullSpeed ? ['USE_USB_HS', 'USE_USB_HS_IN_FS'] : []), ...(usb ? ['USBCON', 'USBD_USE_CDC', 'PIO_FRAMEWORK_ARDUINO_ENABLE_CDC', 'HAL_PCD_MODULE_ENABLED', 'USB_VID=0x0483', 'USB_PID=0x5740'] : []), ...(build.defines ?? [])], includeDirs, extraUnits, preopens: { '/sdk': root }
   };
 };
 
@@ -69,8 +69,8 @@ export const prepareStm32ArduinoLinkPlan = async ({ host, board, compiledObjects
   let script = await readText(host, root, `framework/variants/${recipe.variant}/ldscript.ld`);
   script = script.replace(/\(READONLY\)/g, '').replace(/\bLD_MAX_DATA_SIZE\b/g, String(board.metadata.sramCapacityBytes)).replace(/\bLD_MAX_SIZE\b/g, String(board.metadata.flashCapacityBytes)).replace(/\bLD_FLASH_OFFSET\b/g, '0');
   const ramBase = Number(board.metadata.sramAddress ?? '0x20000000');
-  script = script.replace(/_estack\s*=\s*ORIGIN\(RAM\)\s*\+\s*LENGTH\(RAM\);/, `_estack = 0x${(ramBase + Number(board.metadata.sramCapacityBytes)).toString(16)};`);
-  script = script.replace(/  \.\_user_heap_stack/, '  .noinit (NOLOAD) : { . = ALIGN(32); *(.noinit .noinit*) . = ALIGN(4); } >RAM\n  ._user_heap_stack');
+  script = script.replace(/_estack\s*=\s*ORIGIN\(\w+\)\s*\+\s*LENGTH\(\w+\);/, `_estack = 0x${(ramBase + Number(board.metadata.sramCapacityBytes)).toString(16)};`);
+  script = script.replace(/  \.\_user_heap_stack/, '  .noinit (NOLOAD) : { . = ALIGN(32); *(.noinit .noinit*) . = ALIGN(4); } >' + (recipe.ramRegion ?? 'RAM') + '\n  ._user_heap_stack');
   script = script.replace(/\.bss\s*:/, '.bss (NOLOAD) :').replace(/\._user_heap_stack\s*:/, '._user_heap_stack (NOLOAD) :');
   const crti = await host.readFile(`${root}/lib/crti.o`, { encoding: 'binary' }), crtn = await host.readFile(`${root}/lib/crtn.o`, { encoding: 'binary' });
   if (!(crti instanceof Uint8Array) || !(crtn instanceof Uint8Array)) throw new Error('STM32 target CRT data is missing');

@@ -26,6 +26,7 @@ const buildIdentity = (configuration) => {
  * @property {string} board
  * @property {string} name
  * @property {string} framework
+ * @property {string} [category]
  * @property {Record<string, string>} files
  */
 
@@ -220,13 +221,17 @@ export class IdeStore {
   /** @param {ExampleEntry} example */
   loadExample(example) {
     this.exampleId = example.id;
-    this.boardId = example.board;
+    this.boardId = example.board === '*' ? this.boardId : example.board;
     this.framework = example.framework;
     this.files.clear();
     for (const [path, content] of Object.entries(example.files)) {
       this.files.set(path, content);
     }
-    if (!this.files.has('wicro.json')) this.files.set('wicro.json', JSON.stringify({ name: example.name, board: example.board, framework: example.framework, toolchain: 'llvm-wasm' }, null, 2));
+    if (!this.files.has('wicro.json')) this.files.set('wicro.json', JSON.stringify({ name: example.name, board: this.boardId, framework: example.framework, toolchain: 'llvm-wasm' }, null, 2));
+    if (example.board === '*') {
+      const config = JSON.parse(this.files.get('wicro.json') ?? '{}');
+      this.files.set('wicro.json', JSON.stringify({ ...config, board: this.boardId }, null, 2));
+    }
     const preferred = Object.keys(example.files).find((f) => /\.(ino|pde|c|cpp)$/i.test(f))
       ?? Object.keys(example.files)[0]
       ?? 'main/main.ino';

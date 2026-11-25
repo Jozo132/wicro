@@ -1,4 +1,4 @@
-import { getDeviceFamily, getTargetConfiguration, OPTIMIZATIONS, setOptimization, toggleBuildFlag } from '../../../../packages/core/src/platform/configuration.js';
+import { getMcuType, getMcuFamily, getTargetConfiguration, OPTIMIZATIONS, setOptimization, toggleBuildFlag } from '../../../../packages/core/src/platform/configuration.js';
 
 /** @param {unknown} value */
 const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char);
@@ -34,10 +34,13 @@ export class PlatformConfigurationPanel {
     const config = this.store.configuration;
     const board = this.store.currentBoard;
     const target = getTargetConfiguration(board, this.store.framework);
-    const family = board ? getDeviceFamily(board) : '';
+    const type = board ? getMcuType(board) : '';
+    const family = board ? getMcuFamily(board) : '';
     const model = String(board?.metadata.mcu ?? '');
-    const families = [...new Set(this.store.boards.map(getDeviceFamily))].sort();
-    const familyBoards = this.store.boards.filter((entry) => getDeviceFamily(entry) === family);
+    const types = [...new Set(this.store.boards.map(getMcuType))].sort();
+    const typeBoards = this.store.boards.filter((entry) => getMcuType(entry) === type);
+    const families = [...new Set(typeBoards.map(getMcuFamily))].sort();
+    const familyBoards = typeBoards.filter((entry) => getMcuFamily(entry) === family);
     const models = [...new Set(familyBoards.map((entry) => String(entry.metadata.mcu ?? entry.id)))].sort();
     const modelBoards = familyBoards.filter((entry) => String(entry.metadata.mcu ?? entry.id) === model);
     const flags = Array.isArray(config.build?.flags) ? config.build.flags.filter((/** @type {unknown} */ value) => typeof value === 'string') : [];
@@ -60,7 +63,8 @@ export class PlatformConfigurationPanel {
       <div id="config-errors" class="config-errors" role="status" ${issues.length ? '' : 'hidden'}>${issues.map((issue) => `<p>${escape(issue)}</p>`).join('')}</div>
       <fieldset class="config-form" ${busy || this.store.configurationError ? 'disabled' : ''}>
         <details id="config-target-section" open><summary>01 <span>Device & framework</span></summary><div class="config-fields">
-          ${field('config-family', 'Device family', select('config-family', choices(families), family))}
+          ${field('config-type', 'MCU type', select('config-type', choices(types), type))}
+          ${field('config-family', 'MCU family', select('config-family', choices(families), family))}
           ${field('config-model', 'MCU model', select('config-model', choices(models), model))}
           ${field('config-board', 'Board preset', select('config-board', modelBoards.map((entry) => ({ value: entry.id, label: entry.id })), this.store.boardId))}
           ${field('config-framework', 'Framework', select('config-framework', choices(target.frameworks), this.store.framework))}
@@ -108,13 +112,19 @@ export class PlatformConfigurationPanel {
     const change = (id, callback) => this.root.querySelector(`#${id}`)?.addEventListener('change', (event) => callback(/** @type {HTMLInputElement} */ (event.target)));
     /** @param {string} text */
     const lines = (text) => text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    change('config-type', (input) => {
+      const board = this.store.boards.find((entry) => getMcuType(entry) === input.value);
+      if (board) this.store.setBoard(board.id);
+    });
     change('config-family', (input) => {
-      const board = this.store.boards.find((entry) => getDeviceFamily(entry) === input.value);
+      const type = this.store.currentBoard ? getMcuType(this.store.currentBoard) : '';
+      const board = this.store.boards.find((entry) => getMcuType(entry) === type && getMcuFamily(entry) === input.value);
       if (board) this.store.setBoard(board.id);
     });
     change('config-model', (input) => {
-      const family = this.store.currentBoard ? getDeviceFamily(this.store.currentBoard) : '';
-      const board = this.store.boards.find((entry) => getDeviceFamily(entry) === family && String(entry.metadata.mcu ?? entry.id) === input.value);
+      const family = this.store.currentBoard ? getMcuFamily(this.store.currentBoard) : '';
+      const type = this.store.currentBoard ? getMcuType(this.store.currentBoard) : '';
+      const board = this.store.boards.find((entry) => getMcuType(entry) === type && getMcuFamily(entry) === family && String(entry.metadata.mcu ?? entry.id) === input.value);
       if (board) this.store.setBoard(board.id);
     });
     change('config-board', (input) => this.store.setBoard(input.value));

@@ -1,0 +1,169 @@
+{
+  "name": "rp2350-riscv-arduino-sdk",
+  "version": "6.4.0",
+  "kind": "platform",
+  "description": "Genuine Arduino-Pico 6.4.0 rp2350-riscv sources, SDK and target runtime",
+  "license": "LGPL-2.1-or-later",
+  "metadata": {
+    "composition": {
+      "sources": [
+        {
+          "name": "arduino-pico@6.4.0",
+          "url": "https://github.com/earlephilhower/arduino-pico/releases/download/6.4.0/rp2040-6.4.0.zip",
+          "sha256": "b466db13618dfabe1935375698dbfb15b00aaa09a111fa52391c926b242a3977",
+          "format": "zip",
+          "rules": [
+            {
+              "prefix": "rp2040-6.4.0/cores/",
+              "to": "framework/cores/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/variants/",
+              "to": "framework/variants/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/include/",
+              "to": "framework/include/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/pico-sdk/src/",
+              "to": "framework/pico-sdk/src/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/pico-sdk/lib/tinyusb/src/",
+              "to": "framework/pico-sdk/lib/tinyusb/src/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/pico-sdk/lib/lwip/src/",
+              "to": "framework/pico-sdk/lib/lwip/src/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/pico-sdk/lib/cyw43-driver/src/",
+              "to": "framework/pico-sdk/lib/cyw43-driver/src/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/pico-sdk/lib/btstack/src/",
+              "to": "framework/pico-sdk/lib/btstack/src/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/pico-sdk/lib/btstack/platform/",
+              "to": "framework/pico-sdk/lib/btstack/platform/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/pico-sdk/lib/mbedtls/include/",
+              "to": "framework/pico-sdk/lib/mbedtls/include/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/libraries/",
+              "to": "framework/libraries/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/lib/tlsf/",
+              "to": "framework/lib/tlsf/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/lib/rp2350-riscv/",
+              "to": "framework/lib/rp2350-riscv/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/boot2/rp2350-riscv/",
+              "to": "framework/boot2/rp2350-riscv/"
+            },
+            {
+              "prefix": "rp2040-6.4.0/lib/",
+              "to": "framework/lib/",
+              "files": [
+                "platform_def.txt",
+                "core_inc.txt",
+                "core_wrap.txt"
+              ]
+            },
+            {
+              "prefix": "rp2040-6.4.0/",
+              "to": "licenses/",
+              "files": [
+                "LICENSE",
+                "LICENSE.LGPL",
+                "README.md",
+                "package.json"
+              ]
+            },
+            {
+              "prefix": "rp2040-6.4.0/ArduinoCore-API/",
+              "to": "framework/ArduinoCore-API/"
+            }
+          ]
+        },
+        {
+          "name": "pqt-riscv32-unknown-elf@5.0.0-9576866",
+          "url": "https://github.com/earlephilhower/pico-quick-toolchain/releases/download/5.0.0/x86_64-linux-gnu.riscv32-unknown-elf-78c24be.260719.tar.gz",
+          "sha256": "efa35f24e7e86909a760b2508165a1886014dbb2bb752b7d19b212cd0941e735",
+          "rules": [
+            {
+              "prefix": "riscv32-unknown-elf/riscv32-unknown-elf/include/",
+              "to": "sysroot/include/"
+            },
+            {
+              "prefix": "riscv32-unknown-elf/lib/gcc/riscv32-unknown-elf/16.1.0/include/",
+              "to": "gcc/include/"
+            },
+            {
+              "prefix": "riscv32-unknown-elf/riscv32-unknown-elf/lib/rv32imac/ilp32/",
+              "to": "lib/",
+              "files": [
+                "libm.a",
+                "libstdc++.a",
+                "libsupc++.a",
+                "libnosys.a"
+              ]
+            },
+            {
+              "prefix": "riscv32-unknown-elf/lib/gcc/riscv32-unknown-elf/16.1.0/rv32imac/ilp32/",
+              "to": "lib/",
+              "files": [
+                "libgcc.a",
+                "crti.o",
+                "crtn.o"
+              ]
+            },
+            {
+              "prefix": "riscv32-unknown-elf/share/doc/",
+              "to": "licenses/toolchain/"
+            },
+            {
+              "prefix": "riscv32-unknown-elf/riscv32-unknown-elf/lib/rv32imac/ilp32/libg.a",
+              "to": "lib/libc.a"
+            }
+          ]
+        }
+      ],
+      "patches": [
+        {
+          "path": "framework/cores/rp2040/USB.h",
+          "find": "(unsigned uint8_t)",
+          "replace": "(uint8_t)",
+          "count": 1
+        },
+        {
+          "path": "framework/cores/rp2040/delay.cpp",
+          "find": "uint32_t millis()",
+          "replace": "unsigned long millis()",
+          "count": 1
+        },
+        {
+          "path": "framework/cores/rp2040/delay.cpp",
+          "find": "uint32_t micros()",
+          "replace": "unsigned long micros()",
+          "count": 1
+        }
+      ]
+    },
+    "distribution": {
+      "url": "",
+      "mirrors": [],
+      "archiveType": "zip",
+      "sha256": "e0450ecda0d620499c4f82a2e575373d1b745332363d94e985434324c0bbab7c",
+      "bytes": 69981860
+    }
+  }
+}
