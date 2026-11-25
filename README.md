@@ -31,6 +31,7 @@ The npm package is `@jozo132/wicro`. Its command-line executable is `wicro`.
 - RP2040-Zero: bare-metal WASM BIN/UF2, verified Node/CLI PICOBOOT readback, 65-second vendor USB communication and automatic ROM re-entry; [details](docs/rp2040-wasm-status.md)
 - Monaco browser IDE shell and Web Serial controls
 - ESP8266 bare-metal WASM firmware, UART auto-reset, verified flash/readback and serial execution; [scope and commands](docs/esp8266-wasm-status.md)
+- Original ESP32 LX6 bare-metal WASM firmware, verified UART upload/readback and 65-second serial stability; [scope and commands](docs/esp32-original-wasm-status.md)
 
 ## Quick start
 

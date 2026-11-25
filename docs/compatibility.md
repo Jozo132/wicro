@@ -57,7 +57,7 @@ Status values:
 | Transitive dependencies | Implemented | SemVer registry resolution returns and detects dependency conflicts in a package tree |
 | PlatformIO registry integration | Implemented | Public PlatformIO search/package lookup adapter uses configurable fetch and HTTP contracts |
 | Programmer extension API | Implemented | `ProgrammerProtocolRegistry` supports custom named protocols; the simulated protocol is automated-tested |
-| Clean npm archive | Verified | The packed CLI dry run is 105.4 kB and contains no `.wasm`, SDK archive or extracted SDK tree; CLI tests exercise its command surfaces |
+| Clean npm archive | Verified | The packed CLI dry run is 106.7 kB and contains no `.wasm`, SDK archive or extracted SDK tree; CLI tests exercise its command surfaces |
 | Real Clang WASI diagnostics | Implemented | Existing LLVM WASM binary executes `-fsyntax-only` and returns parsed Clang diagnostics |
 | Clang WASI code completion | Implemented | Existing LLVM WASM binary executes `-code-completion-at` and returns parsed candidates |
 | `@wicro/language-server` LSP/session | Implemented | LSP initialization, document sync, diagnostics, completion, hover, definition, references, rename and formatting protocol are executable in tests |
@@ -84,7 +84,7 @@ Status values:
 | Target | Native reference | WASM object compile | WASM-native firmware link | Flash & readback | Physical firmware execution |
 |---|---|---|---|---|---|
 | ESP32-C3 | Verified (PlatformIO 6,041,556 B ELF / 270,640 B BIN) | Verified (`llvm.wasm clang`) | Verified (`llvm.wasm ld.lld`, 12,779,432 B ELF / 246,880 B BIN, zero weak stubs, byte-for-byte esptool image parity) | Verified (auto USB-JTAG ROM entry, app-only `0x10000` write, byte-for-byte readback, hard reset) | Verified (`WICRO_SERIAL_READY`, `LED ON`/`LED OFF`, GPIO8 blink, 65 s continuous run with zero resets, offline cached rebuild) |
-| Original ESP32 | Source present | Implemented | Pending | ESPTool implemented | Not physically verified |
+| Original ESP32 / ESP32-D0WDQ6 | Arduino/ESP-IDF source present | Verified Xtensa LX6 WASM | Verified RAM-only bare-metal ELF/BIN; Arduino/ESP-IDF recipe pending | Verified Node/CLI UART auto-reset, 0x1000 boot-image write and complete readback | Verified 65-second UART run with consecutive counters; second core, wireless, GPIO and browser hardware path unverified |
 | ESP8266 | Arduino source present | Verified Xtensa/L106 WASM | Verified RAM-only bare-metal ELF/ROM image; Arduino SDK pending | Verified Node UART auto-reset, offset-0 write and complete readback | Verified UART heartbeat/stability; Wi-Fi and browser hardware path unverified |
 | Arduino Nano / ATmega328P | Genuine Arduino AVR runtime | Verified | Verified Arduino ELF/BIN with WASM LLVM/LLD | Verified STK500v1 at 115200, page readback and preserved bootloader | Verified 65-second serial stability; browser hardware path unverified |
 | Arduino UNO / ATmega328P | Source present | Verified object compiler | SDK recipe not enabled for UNO | Not hardware-verified | Not physically verified |
@@ -100,6 +100,8 @@ Do not report compiler or hardware support as verified until it passes a real ta
 See [F401RC CDC-DFU](stm32-cdc-dfu.md) for physical evidence, browser limitations, hook translation and reproduction commands.
 
 See [ESP8266 WASM hardware status](esp8266-wasm-status.md) for the verified 4 MiB/26 MHz bare-metal profile and its separate Arduino SDK limitations.
+
+See [original ESP32 WASM status](esp32-original-wasm-status.md) for the verified 4 MiB/40 MHz bare-metal LX6 profile, bootloader replacement and separate Arduino/ESP-IDF scope.
 
 See [Nano Arduino WASM status](nano-wasm-status.md) for verified scope and the pending cold production SDK distribution.
 

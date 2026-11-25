@@ -248,6 +248,7 @@ export { NodeCdcDfuProgrammer } from './cdc-dfu-node.js';
 export { STM32F401RC_CDC_DFU_PROFILE, validateCortexMImage } from './cdc-dfu-profile.js';
 export { UsbDfuProgrammer } from './dfu.js';
 export { Esp8266NodeProgrammer } from './esp8266-node.js';
+export { Esp32OriginalNodeProgrammer } from './esp32-original-node.js';
 
 export { NanoNodeProgrammer } from './stk500-node.js';
 export { Stk500Programmer } from './stk500.js';

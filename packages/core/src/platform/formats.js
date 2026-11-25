@@ -1,4 +1,5 @@
 import { elfToRp2040Bin, validateRp2040Image, rp2040BinToUf2, rp2040Uf2ToBin } from '../../../runtime/src/rp2040-image.js';
+import { elfToEsp32OriginalBin, validateEsp32OriginalImage } from '../../../runtime/src/esp32-original-image.js';
 import { elfToAvrBin } from '../../../runtime/src/avr-image.js';
 import { elfToEsp8266Bin, validateEsp8266Image } from '../../../runtime/src/esp8266-image.js';
 import { elfToEsp32Bin, validateEsp32Image } from '../../../runtime/src/elf-utils.js';
@@ -205,7 +206,14 @@ export const rp2040BinFormatHandler = Object.freeze({ id: 'rp2040-bin', extensio
 /** @type {import('./registry.js').FirmwareFormatHandler} */
 export const rp2040Uf2FormatHandler = Object.freeze({ id: 'rp2040-uf2', extension: '.uf2', description: 'RP2040 family UF2', convert: async (elf) => rp2040BinToUf2(await elfToRp2040Bin(elf)), validate: (bytes) => { try { return validateRp2040Image(rp2040Uf2ToBin(bytes)); } catch (error) { return { valid: false, errors: [String(error)] }; } } });
 
-export const BUILTIN_FIRMWARE_FORMATS = Object.freeze([rp2040BinFormatHandler, rp2040Uf2FormatHandler, avrBinFormatHandler, esp8266RomFormatHandler,
+/** @type {import('./registry.js').FirmwareFormatHandler} */
+export const esp32OriginalRomFormatHandler = Object.freeze({
+  id: 'esp32-original-rom', extension: '.bin', description: 'Original ESP32 RAM-only ROM boot image at 0x1000',
+  convert: (elf) => elfToEsp32OriginalBin(elf),
+  validate: (bytes) => { try { return validateEsp32OriginalImage(bytes); } catch (error) { return { valid: false, errors: [String(error)] }; } }
+});
+
+export const BUILTIN_FIRMWARE_FORMATS = Object.freeze([esp32OriginalRomFormatHandler, rp2040BinFormatHandler, rp2040Uf2FormatHandler, avrBinFormatHandler, esp8266RomFormatHandler,
   elfFormatHandler,
   flatBinFormatHandler,
   intelHexFormatHandler,

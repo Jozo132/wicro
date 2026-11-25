@@ -288,6 +288,41 @@ test('RP2040-Zero ELF, boot2 CRC BIN and UF2 match between Node WASI and browser
   assert.deepEqual(decoded.subarray(0, image.length), image);
 });
 
+test('Original ESP32 LX6 firmware matches between Node/browser WASI and parses with esptool-js', async () => {
+  /** @type {[string,string|Uint8Array][]} */
+  const entries = [['registry/esp32-original-bare-metal/package.json', await readFile('registry/esp32-original-bare-metal/package.json', 'utf8')]];
+  for (const name of ['wicro.json', 'main.c', 'startup.s', 'esp32.ld']) entries.push([`project/${name}`, await readFile(`examples/esp32-original/bare-metal-heartbeat/${name}`, 'utf8')]);
+  const nodeStore = new Map(entries), browserStore = new Map(entries);
+  const module = await WebAssembly.compile(await readFile(llvmPath));
+  const engines = [
+    createWicroEngine({ host: { ...createMemoryHost(nodeStore), host: 'node' }, toolchain: new LlvmWasmToolchain({ llvmPath }) }),
+    createWicroEngine({ host: createMemoryHost(browserStore), toolchain: /** @type {any} */ (new BrowserLlvmWasmToolchain({ loadModule: async () => module })) })
+  ];
+  for (const engine of engines) {
+    const result = await engine.execute({ command: 'build', project: 'project' });
+    assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  }
+  for (const extension of ['elf', 'bin']) assert.equal(Buffer.compare(/** @type {Uint8Array} */ (nodeStore.get(`project/.wicro/build/firmware.${extension}`)), /** @type {Uint8Array} */ (browserStore.get(`project/.wicro/build/firmware.${extension}`))), 0);
+  const { validateEsp32OriginalImage } = await import('../packages/runtime/src/esp32-original-image.js');
+  const image = /** @type {Uint8Array} */ (nodeStore.get('project/.wicro/build/firmware.bin'));
+  const info = validateEsp32OriginalImage(image);
+  const { ESP32FirmwareImage } = await import('esptool-js/lib/image/esp32.js');
+  const { ESP32ROM } = await import('esptool-js/lib/targets/esp32.js');
+  const parsed = new ESP32FirmwareImage(new ESP32ROM());
+  await parsed.loadFromFile(image);
+  assert.equal(parsed.entrypoint, info.entry);
+  assert.equal(parsed.segments.length, info.segmentCount);
+  assert.equal(parsed.checksum, info.checksum);
+  assert.equal(parsed.appendDigest, false);
+  assert.equal(parsed.chipId, 0);
+  const bad = image.slice(); bad[bad.length - 1] ^= 1;
+  assert.throws(() => validateEsp32OriginalImage(bad), /checksum/);
+  const other = image.slice(); other[12] = 5;
+  assert.throws(() => validateEsp32OriginalImage(other), /header/);
+  const entry = image.slice(); new DataView(entry.buffer).setUint32(4, 0x40000000, true);
+  assert.throws(() => validateEsp32OriginalImage(entry), /executable IRAM/);
+});
+
 test('ESP8266 bare-metal ELF and ROM image match between Node WASI and browser WASI', async () => {
   const project = resolve('examples/esp8266/bare-metal-heartbeat');
   const board = await readFile('registry/esp8266-bare-metal/package.json', 'utf8');

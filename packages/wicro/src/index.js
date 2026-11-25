@@ -690,6 +690,16 @@ export const main = async (args = []) => {
         emit({ command: 'upload', ...result }, json, `Uploaded and verified Nano firmware on ${path}`);
         return 0;
       }
+      if (uploadBoard === 'esp32-original-bare-metal' || flags.includes('--programmer=esp32-original-uart')) {
+        const path = flags.find((arg) => arg.startsWith('--port='))?.slice('--port='.length);
+        if (!path) throw new Error('Original ESP32 upload requires an explicit --port');
+        const binary = flags.find((arg) => arg.startsWith('--bin='))?.slice('--bin='.length) ?? (uploadProject ? resolve(uploadProject, '.wicro/build/firmware.bin') : undefined);
+        if (!binary) throw new Error('Original ESP32 upload requires --project or --bin');
+        const expectedMac = flags.find((arg) => arg.startsWith('--mac='))?.slice('--mac='.length);
+        const result = await new programmerModule.Esp32OriginalNodeProgrammer({ path, expectedMac, onLog: (/** @type {string} */ message) => { if (!json) console.error(message); } }).writeFlash(new Uint8Array(await readFile(resolve(binary))));
+        emit({ command: 'upload', ...result }, json, `Uploaded and verified ${binary} on original ESP32 (${result.mac})`);
+        return 0;
+      }
       if (uploadBoard === 'esp8266-bare-metal' || flags.includes('--programmer=esp8266-uart')) {
         const path = flags.find((arg) => arg.startsWith('--port='))?.slice('--port='.length);
         if (!path) throw new Error('ESP8266 upload requires an explicit --port');

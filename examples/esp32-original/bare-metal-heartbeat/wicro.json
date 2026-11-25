@@ -1,0 +1,10 @@
+{
+  "name": "esp32-original-usart-heartbeat",
+  "board": "esp32-original-bare-metal",
+  "framework": "bare-metal",
+  "build": {
+    "sources": [
+      "main.c"
+    ]
+  }
+}

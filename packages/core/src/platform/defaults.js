@@ -1,4 +1,5 @@
 import { rp2040ZeroPlatformAdapter } from './rp2040.js';
+import { esp32OriginalBareMetalPlatformAdapter } from './esp32-original.js';
 import { nanoArduinoPlatformAdapter } from './nano.js';
 import { esp8266BareMetalPlatformAdapter } from './esp8266.js';
 import { WicroPlatformRegistry } from './registry.js';
@@ -10,6 +11,7 @@ import { stm32BareMetalPlatformAdapter } from './stm32.js';
 
 /** @type {readonly import('./registry.js').ProgrammerDescriptor[]} */
 export const BUILTIN_PROGRAMMERS = Object.freeze([
+  Object.freeze({ id: 'esp32-original-uart', name: 'Original ESP32 UART', protocols: Object.freeze(['esptool-slip']), browserProtocols: Object.freeze(['esptool-slip']), platforms: Object.freeze(['espressif-esp32-original-bare-metal']) }),
   Object.freeze({ id: 'rp2040-picoboot', name: 'RP2040 ROM PICOBOOT', protocols: Object.freeze(['picoboot']), browserProtocols: Object.freeze(['picoboot']), platforms: Object.freeze(['raspberrypi-rp2040-zero']) }),
   Object.freeze({ id: 'nano-stk500v1', name: 'Arduino Nano UART (STK500v1)', protocols: Object.freeze(['stk500v1']), browserProtocols: Object.freeze(['stk500v1']), platforms: Object.freeze(['arduino-nano-avr']) }),
   Object.freeze({ id: 'esp8266-uart', name: 'ESP8266 UART (esptool-js)', protocols: Object.freeze(['esptool-slip']), browserProtocols: Object.freeze(['esptool-slip']), platforms: Object.freeze(['espressif-esp8266-bare-metal']) }),
@@ -47,6 +49,7 @@ export const createDefaultPlatformRegistry = () => {
   registry.registerPlatform(esp32C3PlatformAdapter);
   registry.registerPlatform(nanoArduinoPlatformAdapter);
   registry.registerPlatform(rp2040ZeroPlatformAdapter);
+  registry.registerPlatform(esp32OriginalBareMetalPlatformAdapter);
   registry.registerPlatform(esp8266BareMetalPlatformAdapter);
   registry.registerPlatform(stm32BareMetalPlatformAdapter);
   for (const programmer of BUILTIN_PROGRAMMERS) registry.registerProgrammer(programmer);

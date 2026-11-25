@@ -5,6 +5,7 @@ import {
   NanoBrowserProgrammer,
   Rp2040BrowserProgrammer,
   flashEsp8266,
+  flashEsp32Original,
   BrowserCdcDfuProgrammer,
   describeWebSerialPort,
   detectBrowserCapabilities
@@ -144,15 +145,17 @@ export class IdeDeviceService {
       } catch (error) { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); throw error; }
     }
 
-    if (options.board.metadata?.platform === 'espressif-esp8266-bare-metal') {
+    if (['espressif-esp8266-bare-metal', 'espressif-esp32-original-bare-metal'].includes(options.board.metadata?.platform)) {
+      const originalEsp32 = options.board.metadata.platform === 'espressif-esp32-original-bare-metal';
       const nav = /** @type {any} */ (navigator);
-      if (!nav.serial) throw new Error('Web Serial is required for ESP8266');
-      const selection = this.coordinator.port ? Promise.resolve(this.coordinator.port) : nav.serial.requestPort({ filters: [{ usbVendorId: 0x1a86, usbProductId: 0x7523 }] });
+      if (!nav.serial) throw new Error('Web Serial is required for UART upload');
+      const selection = this.coordinator.port ? Promise.resolve(this.coordinator.port) : nav.serial.requestPort(originalEsp32 ? {} : { filters: [{ usbVendorId: 0x1a86, usbProductId: 0x7523 }] });
       await this.coordinator.acquireForFlash();
       try {
         const port = await selection;
         this.coordinator.setPort(port);
-        const result = await flashEsp8266(new Transport(port), options.firmwareBin, { onLog: this.callbacks.onLog, onProgress: options.onProgress });
+        const upload = originalEsp32 ? flashEsp32Original : flashEsp8266;
+        const result = await upload(new Transport(port), options.firmwareBin, { onLog: this.callbacks.onLog, onProgress: options.onProgress });
         await this.coordinator.releaseAfterFlash({ reconnectMonitor: Boolean(options.autoMonitor), baudRate: options.monitorBaudRate ?? 115200 });
         return result;
       } catch (error) { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); throw error; }

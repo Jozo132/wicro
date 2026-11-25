@@ -113,6 +113,20 @@ test('platform setup: dependent fields and two-way Monaco JSON synchronization',
     const { validateEsp8266Image } = await import('../packages/runtime/src/esp8266-image.js');
     assert.equal(validateEsp8266Image(Uint8Array.from(espBuild.bin)).segmentCount, 2);
 
+    await page.selectOption('#wicro-example', 'esp32-original/bare-metal-heartbeat');
+    assert.equal(await page.locator('#config-programmer').inputValue(), 'esp32-original-uart');
+    assert.equal(await page.locator('#config-framework').inputValue(), 'bare-metal');
+    assert.equal(await page.locator('#config-upload-baud').isDisabled(), true);
+    assert.equal(await page.locator('#config-verify').count(), 0);
+    const originalBuild = await page.evaluate(async () => {
+      const ide = /** @type {any} */ (window).__wicroIde;
+      const result = await ide.runBuild();
+      return { ok: result?.ok, bin: [...(result?.artifacts?.bin ?? [])], log: ide.store.compilerLog };
+    });
+    assert.equal(originalBuild.ok, true, JSON.stringify(originalBuild.log));
+    const { validateEsp32OriginalImage } = await import('../packages/runtime/src/esp32-original-image.js');
+    assert.equal(validateEsp32OriginalImage(Uint8Array.from(originalBuild.bin)).valid, true);
+
     await page.selectOption('#wicro-example', 'arduino-nano/heartbeat');
     assert.equal(await page.locator('#config-programmer').inputValue(), 'nano-stk500v1');
     assert.equal(await page.locator('#config-protocol').inputValue(), 'stk500v1');
