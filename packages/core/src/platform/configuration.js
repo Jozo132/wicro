@@ -46,8 +46,7 @@ export const getMcuType = (board) => {
 export const getMcuFamily = (board) => {
   if (typeof board.metadata.mcuFamily === 'string') return board.metadata.mcuFamily;
   const model = String(board.metadata.mcu ?? '').toUpperCase(), type = getMcuType(board);
-  if (type === 'STM32') return model.match(/^STM32[A-Z]\d/)?.[0] ?? type;
-  if (type === 'ESP32') return model.startsWith('ESP32-S') ? 'ESP32-S' : model.startsWith('ESP32-C') ? 'ESP32-C' : model.startsWith('ESP32-H') ? 'ESP32-H' : 'ESP32 classic';
+  if (type === 'STM32' || type === 'ESP32') return type;
   if (type === 'RP2') return model;
   if (type === 'AVR') return model.startsWith('ATMEGA') ? 'ATmega' : 'AVR';
   return type;

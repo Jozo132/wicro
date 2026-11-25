@@ -171,6 +171,7 @@ test('platform setup: dependent fields and two-way Monaco JSON synchronization',
     const { validateStm32F103Image } = await import('../packages/programmers/src/stlink.js');
     assert.ok(validateStm32F103Image(Uint8Array.from(f103Build.bin)).reset & 1);
     const sourcesBeforeFamilyChange = (await json()).build.sources;
+    await page.selectOption('#config-type', 'RP2');
     await page.selectOption('#config-family', 'RP2350');
     assert.ok((await page.locator('#config-model option').allTextContents()).every((name) => name.includes('RP2350')));
     assert.equal((await json()).board, await page.locator('#config-board').inputValue());

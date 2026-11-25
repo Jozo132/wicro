@@ -56,9 +56,14 @@ test('init followed by build reports unavailable WASM/SDK execution explicitly',
     const init = runIn(directory, 'init', '--json');
     assert.equal(init.status, 0);
 
-    const build = runIn(directory, 'build', '--json');
+    const build = runIn(directory, 'build', '--json', '--offline', `--cache=${join(directory, 'empty-cache')}`);
     assert.notEqual(build.status, 0);
-    assert.ok(build.stderr || build.stdout);
+    assert.ok(build.stdout);
+
+    const report = JSON.parse(build.stdout);
+    assert.equal(report.ok, false);
+    assert.equal(report.command, 'build');
+    assert.match(report.error, /SDK resolution failed|offline mode|not present/i);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
