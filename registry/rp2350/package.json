@@ -2,36 +2,34 @@
   "name": "rp2350",
   "version": "1.0.0",
   "kind": "board",
-  "description": "Raspberry Pi RP2350 board package",
+  "description": "Generic RP2350 cortex-m33 bare-metal USB diagnostics",
   "license": "MIT",
   "dependencies": {
-    "arduino-pico": "^1.0.0",
-    "llvm-wasm": "^1.0.0",
-    "pico-sdk": "^2.1.0"
+    "llvm-wasm": "^1.0.0"
   },
   "metadata": {
-    "manufacturer": "Raspberry Pi",
+    "manufacturer": "Generic",
     "mcu": "RP2350",
     "architecture": "armv8m-mainline",
-    "framework": "arduino",
+    "cpu": "cortex-m33",
+    "platform": "raspberrypi-rp2350",
+    "framework": "bare-metal",
+    "flashCapacityBytes": 2097152,
+    "sramCapacityBytes": 532480,
+    "clockHz": 48000000,
+    "crystalHz": 12000000,
+    "flashAddress": "0x10000000",
+    "sramAddress": "0x20000000",
     "build": {
-      "kind": "object",
+      "kind": "firmware",
       "target": "armv8m-mainline",
       "targetOptions": {
         "mcpu": "cortex-m33"
       },
       "source": "main.c",
+      "linkerScript": "rp2350.ld",
+      "firmwareFormat": "rp2350-bin",
       "output": ".wicro/build"
-    },
-    "cpu": "cortex-m33",
-    "flashCapacityBytes": 4194304,
-    "sramCapacityBytes": 532480,
-    "clockHz": 150000000,
-    "flashAddress": "0x10000000",
-    "sramAddress": "0x20000000",
-    "led": {
-      "pin": 25,
-      "activeLow": false
     }
   }
 }

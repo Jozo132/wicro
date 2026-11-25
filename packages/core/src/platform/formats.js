@@ -1,3 +1,4 @@
+import { elfToRp2350Bin, validateRp2350Image, rp2350BinToUf2, rp2350Uf2ToBin } from '../../../runtime/src/rp2350-image.js';
 import { elfToRp2040Bin, validateRp2040Image, rp2040BinToUf2, rp2040Uf2ToBin } from '../../../runtime/src/rp2040-image.js';
 import { elfToEsp32OriginalBin, validateEsp32OriginalImage } from '../../../runtime/src/esp32-original-image.js';
 import { elfToAvrBin } from '../../../runtime/src/avr-image.js';
@@ -228,7 +229,11 @@ export const esp32OriginalRomFormatHandler = Object.freeze({
   validate: (bytes) => { try { return validateEsp32OriginalImage(bytes); } catch (error) { return { valid: false, errors: [String(error)] }; } }
 });
 
-export const BUILTIN_FIRMWARE_FORMATS = Object.freeze([esp32OriginalRomFormatHandler, rp2040BinFormatHandler, rp2040Uf2FormatHandler, avrBinFormatHandler, esp8266RomFormatHandler,
+/** @type {import('./registry.js').FirmwareFormatHandler} */
+export const rp2350BinFormatHandler = Object.freeze({ id: 'rp2350-bin', extension: '.bin', description: 'RP2350 PICOBIN flash image', convert: (elf) => elfToRp2350Bin(elf), validate: (bytes) => { try { return validateRp2350Image(bytes); } catch (error) { return { valid: false, errors: [String(error)] }; } } });
+/** @type {import('./registry.js').FirmwareFormatHandler} */
+export const rp2350Uf2FormatHandler = Object.freeze({ id: 'rp2350-uf2', extension: '.uf2', description: 'RP2350 architecture-specific UF2', convert: async (elf) => rp2350BinToUf2(await elfToRp2350Bin(elf)), validate: (bytes) => { try { return validateRp2350Image(rp2350Uf2ToBin(bytes)); } catch (error) { return { valid: false, errors: [String(error)] }; } } });
+export const BUILTIN_FIRMWARE_FORMATS = Object.freeze([rp2350BinFormatHandler, rp2350Uf2FormatHandler, esp32OriginalRomFormatHandler, rp2040BinFormatHandler, rp2040Uf2FormatHandler, avrBinFormatHandler, esp8266RomFormatHandler,
   elfFormatHandler,
   flatBinFormatHandler,
   intelHexFormatHandler,

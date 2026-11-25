@@ -4,6 +4,7 @@ import {
   BrowserEsp32Programmer,
   NanoBrowserProgrammer,
   Rp2040BrowserProgrammer,
+  Rp2350BrowserProgrammer,
   StLinkBrowserProgrammer,
   flashEsp8266,
   flashEsp32Original,
@@ -124,8 +125,9 @@ export class IdeDeviceService {
       try { return await programmer.writeFlash(await selection, options.firmwareBin, Number(options.board.metadata.flashCapacityBytes)); }
       finally { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); }
     }
-    if (options.board.metadata?.platform === 'raspberrypi-rp2040-zero') {
-      const programmer = new Rp2040BrowserProgrammer({ onProgress: options.onProgress });
+    if (['raspberrypi-rp2040-zero', 'raspberrypi-rp2350'].includes(String(options.board.metadata?.platform))) {
+      const Programmer = options.board.metadata?.platform === 'raspberrypi-rp2350' ? Rp2350BrowserProgrammer : Rp2040BrowserProgrammer;
+      const programmer = new Programmer({ onProgress: options.onProgress });
       const selection = programmer.requestRomDevice();
       await this.coordinator.acquireForFlash();
       try { return await programmer.writeFlash(await selection, options.firmwareBin); }
@@ -238,11 +240,11 @@ export class IdeDeviceService {
     } finally { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); }
   }
 
-  async enterRp2040Rom() {
-    const programmer = new Rp2040BrowserProgrammer();
+  async enterRp2040Rom(rp2350 = false) {
+    const programmer = rp2350 ? new Rp2350BrowserProgrammer() : new Rp2040BrowserProgrammer();
     const selection = programmer.requestRuntimeDevice();
     await this.coordinator.acquireForFlash();
-    try { await programmer.enterRom(await selection); this.callbacks.onLog('RP2040 ROM entry requested. Click Flash after ROM enumeration; first provisioning requires BOOT + reset.'); }
+    try { await programmer.enterRom(await selection); this.callbacks.onLog('RP2 ROM entry requested. Click Flash after ROM enumeration; first provisioning requires BOOT + reset.'); }
     finally { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); }
   }
 

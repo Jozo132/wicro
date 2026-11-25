@@ -295,9 +295,16 @@ export const elfToEsp32Bin = async (elf) => {
 export const elfToBin = async (elf) => {
   const view = new DataView(elf.buffer, elf.byteOffset, elf.byteLength);
   if (elf.length < 52 || view.getUint32(0, true) !== 0x464c457f) throw new Error('Invalid ELF image');
-  const machine = view.getUint16(18, true);
-  if (machine === 243) return elfToEsp32Bin(elf);
+  return view.getUint16(18, true) === 243 ? elfToEsp32Bin(elf) : elfToFlatBin(elf);
+};
 
+/** Extract flash load addresses independently of CPU instruction architecture.
+ * @param {Uint8Array} elf
+ * @returns {Promise<Uint8Array>}
+ */
+export const elfToFlatBin = async (elf) => {
+  const view = new DataView(elf.buffer, elf.byteOffset, elf.byteLength);
+  if (elf.length < 52 || view.getUint32(0, true) !== 0x464c457f) throw new Error('Invalid ELF image');
   const sectionOffset = view.getUint32(32, true);
   const sectionEntrySize = view.getUint16(46, true);
   const sectionCount = view.getUint16(48, true);

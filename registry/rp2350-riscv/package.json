@@ -1,0 +1,36 @@
+{
+  "name": "rp2350-riscv",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "Generic RP2350 hazard3 bare-metal USB diagnostics",
+  "license": "MIT",
+  "dependencies": {
+    "llvm-wasm": "^1.0.0"
+  },
+  "metadata": {
+    "manufacturer": "Generic",
+    "mcu": "RP2350",
+    "architecture": "riscv32",
+    "cpu": "hazard3",
+    "platform": "raspberrypi-rp2350",
+    "framework": "bare-metal",
+    "flashCapacityBytes": 2097152,
+    "sramCapacityBytes": 532480,
+    "clockHz": 48000000,
+    "crystalHz": 12000000,
+    "flashAddress": "0x10000000",
+    "sramAddress": "0x20000000",
+    "build": {
+      "kind": "firmware",
+      "target": "riscv32",
+      "targetOptions": {
+        "march": "rv32imac_zicsr_zifencei",
+        "mabi": "ilp32"
+      },
+      "source": "main.c",
+      "linkerScript": "rp2350.ld",
+      "firmwareFormat": "rp2350-bin",
+      "output": ".wicro/build"
+    }
+  }
+}

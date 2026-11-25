@@ -1,0 +1,14 @@
+{
+  "name": "rp2350-riscv-usb-heartbeat",
+  "board": "rp2350-riscv",
+  "framework": "bare-metal",
+  "build": {
+    "sources": [
+      "main.c",
+      "start.s"
+    ],
+    "formats": [
+      "rp2350-uf2"
+    ]
+  }
+}

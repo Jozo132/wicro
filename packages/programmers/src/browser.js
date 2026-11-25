@@ -268,3 +268,5 @@ export { flashEsp32Original } from './esp32-original.js';
 export { NanoBrowserProgrammer } from './stk500-browser.js';
 export { Rp2040BrowserProgrammer } from './rp2040-browser.js';
 export { StLinkBrowserProgrammer } from './stlink-browser.js';
+
+export { Rp2350BrowserProgrammer } from './rp2350-browser.js';

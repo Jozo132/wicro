@@ -256,3 +256,5 @@ export { Rp2040NodeProgrammer } from './rp2040-node.js';
 export { PicoBootProgrammer } from './picoboot.js';
 export { StLinkNodeProgrammer } from './stlink-node.js';
 export { StLinkProbe } from './stlink.js';
+
+export { Rp2350NodeProgrammer } from './rp2350-node.js';

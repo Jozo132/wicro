@@ -94,7 +94,8 @@ Status values:
 | STM32H723VG | Verified bare-metal fixture | Verified | Verified bare-metal ELF/BIN | ST-LINK/UART not hardware-verified | Not physically verified |
 | RP2040-Zero | Bare-metal USB source | Verified | Verified bare-metal ELF/BIN/UF2; Arduino/Pico SDK pending | Verified Node/CLI PICOBOOT, complete image readback and runtime-to-ROM re-upload | Verified 130 USB challenges over 65 seconds; browser hardware, UF2 drive copy and RGB LED unverified |
 | Other RP2040 boards | Source/presets present | Verified object compiler | Board recipes pending | Not hardware-verified | Not physically verified |
-| RP2350 | Source present | Verified | Pending | PICOBOOT not hardware-verified | Not physically verified |
+| Generic RP2350 Cortex-M33 | Source implemented | Verified | Verified bare-metal ELF/BIN/UF2 across Web/Node/VS Code | Verified Node/CLI PICOBOOT readback and runtime-to-ROM updates | 130 real USB challenges over 65 seconds; Arduino/Pico SDK, LED and browser hardware pending |
+| Generic RP2350 Hazard3 RISC-V | Source implemented | Verified | Verified bare-metal ELF/BIN/UF2 across Web/Node/VS Code | Verified Node/CLI PICOBOOT readback, architecture-selecting reboot and runtime-to-ROM updates | 130 real USB challenges over 65 seconds; Arduino/Pico SDK, LED and browser hardware pending |
 
 Do not report compiler or hardware support as verified until it passes a real target test.
 
@@ -113,3 +114,5 @@ See [RP2040-Zero WASM status](rp2040-wasm-status.md) for bare-metal USB evidence
 ## STM32 Arduino integration
 
 See [STM32 Arduino support](stm32-arduino.md) for exact F103C8/F401RC build, hardware and transport coverage. Production static browser cold downloads require a configured relay; the supplied relay is tested but not deployed.
+
+See [Generic RP2350 WASM status](rp2350-wasm-status.md) for the separate Cortex-M33 and Hazard3 physical evidence and conservative board bounds.

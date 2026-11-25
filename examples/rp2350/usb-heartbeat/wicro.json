@@ -1,0 +1,13 @@
+{
+  "name": "rp2350-usb-heartbeat",
+  "board": "rp2350",
+  "framework": "bare-metal",
+  "build": {
+    "sources": [
+      "main.c"
+    ],
+    "formats": [
+      "rp2350-uf2"
+    ]
+  }
+}

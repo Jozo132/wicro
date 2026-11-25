@@ -18,17 +18,17 @@ export class Rp2040NodeProgrammer {
   async enterRom() {
     const existing = await this.findRom(); if (existing) return existing;
     const runtime = await this.findRuntime();
-    if (!runtime) throw new Error('Put the RP2040-Zero in ROM mode using BOOT + reset');
+    if (!runtime) throw new Error('Put the selected RP2 board in ROM mode using BOOT + reset');
     await runtime.open();
     try {
       if (!runtime.configuration) await runtime.selectConfiguration(1);
       await runtime.claimInterface(0);
       const result = await runtime.controlTransferOut({ requestType: 'vendor', recipient: 'device', request: 0x5b, value: 0, index: 0 }, new Uint8Array());
-      if (result.status !== 'ok') throw new Error('RP2040 runtime rejected ROM boot request');
+      if (result.status !== 'ok') throw new Error('RP2 runtime rejected ROM boot request');
     } finally { await runtime.close(); }
     const deadline = Date.now() + 5000;
     while (Date.now() < deadline) { const device = await this.findRom(); if (device) return device; await new Promise((resolve) => setTimeout(resolve, 100)); }
-    throw new Error('RP2040 ROM re-enumeration was not confirmed');
+    throw new Error('RP2 ROM re-enumeration was not confirmed');
   }
   /** @param {Uint8Array} image @param {{onBackup?:(bytes:Uint8Array)=>Promise<void>,reboot?:boolean}} [options] */
   async writeFlash(image, options = {}) {

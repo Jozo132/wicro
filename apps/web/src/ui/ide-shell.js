@@ -75,7 +75,7 @@ export class IdeShell {
    *   onTransferControl: (action:'pause'|'resume'|'cancel') => void,
    *   onToggleMonitor: () => void,
    *   onSendSerial: (text: string) => void,
-   *   onDownloadArtifact: (kind: 'bin'|'elf'|'object') => void,
+   *   onDownloadArtifact: (kind: 'bin'|'elf'|'object'|'uf2') => void,
    *   onClearCache: () => void,
    *   onRevealDiagnostic: (file: string, line: number, column: number) => void
    * }} actions
@@ -592,6 +592,7 @@ export class IdeShell {
       if (last.artifacts?.object) {
         rows.push(`<button type="button" class="artifact-btn" data-dl="object">main.o <span>${formatBytes(last.artifacts.object.byteLength)}</span></button>`);
       }
+      if (last.artifacts?.uf2) rows.push(`<button type="button" class="artifact-btn" data-dl="uf2">firmware.uf2 <span>${formatBytes(last.artifacts.uf2.byteLength)}</span></button>`);
       const val = last.value?.validation;
       const valHtml = val
         ? `<div class="artifact-meta ${val.valid ? 'ok' : 'err'}">${val.valid ? '✓ Validated' : '✗ Invalid'} · ${val.segmentCount ?? 0} segs${val.sha256Valid ? ' · SHA-256 ✓' : ''}</div>`
@@ -600,7 +601,7 @@ export class IdeShell {
       this.artifactsBox.innerHTML = `${rows.join('')}${valHtml}${timeHtml}`;
       for (const btn of this.artifactsBox.querySelectorAll('.artifact-btn')) {
         btn.addEventListener('click', () => {
-          const kind = /** @type {'bin'|'elf'|'object'} */ (/** @type {HTMLElement} */ (btn).dataset.dl);
+          const kind = /** @type {'bin'|'elf'|'object'|'uf2'} */ (/** @type {HTMLElement} */ (btn).dataset.dl);
           this.actions.onDownloadArtifact(kind);
         });
       }

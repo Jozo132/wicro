@@ -290,7 +290,7 @@ const bootstrap = async () => {
     onDownloadArtifact: (kind) => {
       const data = store.lastBuild?.artifacts?.[kind];
       if (!(data instanceof Uint8Array)) return;
-      const ext = kind === 'bin' ? 'firmware.bin' : kind === 'elf' ? 'firmware.elf' : 'main.o';
+      const ext = kind === 'bin' ? 'firmware.bin' : kind === 'elf' ? 'firmware.elf' : kind === 'uf2' ? 'firmware.uf2' : 'main.o';
       triggerDownload(`${store.boardId}-${ext}`, data);
     },
     onClearCache: async () => {
@@ -334,7 +334,7 @@ const bootstrap = async () => {
   new PlatformConfigurationPanel(/** @type {HTMLElement} */ (root.querySelector('#wicro-platform-configuration')), store, {
     webSerial: deviceService.capabilities.webSerial,
     webUsb: deviceService.capabilities.webUsb,
-    onEnterRom: () => { void deviceService.enterRp2040Rom().catch((error) => store.appendCompilerLog(`[RP2040] ${error instanceof Error ? error.message : String(error)}`)); },
+    onEnterRom: () => { void deviceService.enterRp2040Rom(store.currentBoard?.metadata?.platform === 'raspberrypi-rp2350').catch((error) => store.appendCompilerLog(`[RP2] ${error instanceof Error ? error.message : String(error)}`)); },
     onEnterDfu: () => { void deviceService.enterCdcDfu(store.currentBoard).catch((error) => store.appendCompilerLog(`[DFU] ${error instanceof Error ? error.message : String(error)}`)); },
     onEditJson: () => { store.setActiveFile('wicro.json'); editorHost.openFile('wicro.json'); }
   });

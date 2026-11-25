@@ -470,7 +470,7 @@ const handleBuild = async (requestId, payload) => {
     Object.keys(payload.projectFiles).find((f) => /\.(ino|c|cpp)$/i.test(f)) ?? 'main/main.ino'
   );
 
-  /** @type {{bin?:Uint8Array,elf?:Uint8Array,object?:Uint8Array,extra?:Record<string,Uint8Array>}} */
+  /** @type {{bin?:Uint8Array,elf?:Uint8Array,object?:Uint8Array,uf2?:Uint8Array,extra?:Record<string,Uint8Array>}} */
   const artifacts = {};
   if (result.ok) {
     if (value.bin && virtualStore.get(value.bin) instanceof Uint8Array) {
@@ -479,6 +479,8 @@ const handleBuild = async (requestId, payload) => {
     if (value.elf && virtualStore.get(value.elf) instanceof Uint8Array) {
       artifacts.elf = /** @type {Uint8Array} */ (virtualStore.get(value.elf));
     }
+    const uf2Path = Object.values(value.artifacts ?? {}).find((path) => typeof path === 'string' && path.endsWith('.uf2'));
+    if (typeof uf2Path === 'string' && virtualStore.get(uf2Path) instanceof Uint8Array) artifacts.uf2 = /** @type {Uint8Array} */ (virtualStore.get(uf2Path));
     if (value.object && virtualStore.get(value.object) instanceof Uint8Array) {
       artifacts.object = /** @type {Uint8Array} */ (virtualStore.get(value.object));
     }

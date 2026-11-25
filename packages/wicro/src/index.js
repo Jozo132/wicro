@@ -688,6 +688,14 @@ export const main = async (args = []) => {
         emit({ command: 'upload', ...result }, json, 'Uploaded and verified STM32F103C8 firmware through ST-Link');
         return 0;
       }
+      if (['rp2350', 'rp2350-riscv'].includes(uploadBoard ?? '')) {
+        const binary = flags.find((arg) => arg.startsWith('--bin='))?.slice('--bin='.length) ?? (uploadProject ? resolve(uploadProject, '.wicro/build/firmware.bin') : undefined);
+        if (!binary) throw new Error('RP2350 upload requires --project or --bin');
+        const serialNumber = flags.find((arg) => arg.startsWith('--serial='))?.slice('--serial='.length);
+        const result = await new programmerModule.Rp2350NodeProgrammer({ serialNumber }).writeFlash(new Uint8Array(await readFile(resolve(binary))));
+        emit({ command: 'upload', ...result }, json, 'Uploaded and verified RP2350 firmware');
+        return 0;
+      }
       if (uploadBoard === 'rp2040-zero' || flags.includes('--programmer=picoboot')) {
         const binary = flags.find((arg) => arg.startsWith('--bin='))?.slice('--bin='.length) ?? (uploadProject ? resolve(uploadProject, '.wicro/build/firmware.bin') : undefined);
         if (!binary) throw new Error('RP2040-Zero upload requires --project or --bin');

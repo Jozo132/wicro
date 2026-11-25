@@ -28,6 +28,7 @@ The npm package is `@jozo132/wicro`. Its command-line executable is `wicro`.
 - Native USB VCP 1200-baud/DTR/RTS reset sequences in the programmer transport
 - GPIO8 active-low LED, serial heartbeat and 4 MB flash detection on the native reference firmware
 - Arduino Nano: genuine Arduino AVR WASM firmware, STK500 readback, bootloader preservation and 65-second serial stability; [details](docs/nano-wasm-status.md)
+- Generic RP2350: Cortex-M33 and Hazard3 RISC-V WASM BIN/UF2, verified PICOBOOT readback, sustained USB execution and runtime ROM re-entry; [details](docs/rp2350-wasm-status.md)
 - RP2040-Zero: bare-metal WASM BIN/UF2, verified Node/CLI PICOBOOT readback, 65-second vendor USB communication and automatic ROM re-entry; [details](docs/rp2040-wasm-status.md)
 - Monaco browser IDE shell and Web Serial controls
 - ESP8266 bare-metal WASM firmware, UART auto-reset, verified flash/readback and serial execution; [scope and commands](docs/esp8266-wasm-status.md)
@@ -131,7 +132,7 @@ Remaining integration work:
 - Browser remote acquisition remains deployment-blocked: current source archive and LLVM release URLs fail Chromium CORS probes, and the ESP32-C3 SDK URL returns HTTP 404; development assets do not establish remote browser compatibility
 - ESP32-C3 native USB VCP ROM entry is implemented but is not yet successful on the connected unit; physical flash/execution remains unverified
 - Header dependency tracking and incremental relinking need project-wide cache integration
-- Hardware verification is protocol- and target-specific: ST-Link/F103C8, CDC-DfuSe/F401RC, STK500/Nano and PICOBOOT/RP2040-Zero have documented physical evidence; STM32 UART remains unverified
+- Hardware verification is protocol- and target-specific: ST-Link/F103C8, CDC-DfuSe/F401RC, STK500/Nano and PICOBOOT/RP2040-Zero and RP2350 Arm/RISC-V have documented physical evidence; STM32 UART remains unverified
 - Physical firmware verification is target-specific and must be reported separately from source and build success. ESP32-C3 ROM sync and application-only stub flashing are now physically verified on `/dev/ttyACM0`; direct CDC DTR/RTS reset re-enters ROM mode automatically
 
 See [docs/compatibility.md](docs/compatibility.md) for the current implemented, planned and hardware-verified matrix.

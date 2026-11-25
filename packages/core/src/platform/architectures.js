@@ -6,7 +6,7 @@
 export const BUILTIN_ARCHITECTURES = Object.freeze([
   Object.freeze({
     id: 'riscv32',
-    name: 'RISC-V 32-bit (ESP32-C/H)',
+    name: 'RISC-V 32-bit',
     triple: 'riscv32-esp-elf',
     elfMachine: 243,
     defaultFlags: Object.freeze(['-fno-builtin']),
