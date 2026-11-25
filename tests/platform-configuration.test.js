@@ -156,6 +156,20 @@ test('platform setup: dependent fields and two-way Monaco JSON synchronization',
     assert.equal(rpBuild.ok, true, JSON.stringify(rpBuild.log));
     const { validateRp2040Image } = await import('../packages/runtime/src/rp2040-image.js');
     assert.equal(validateRp2040Image(Uint8Array.from(rpBuild.bin)).valid, true);
+    await page.selectOption('#wicro-example', 'stm32f103c8/swd-heartbeat');
+    assert.equal(await page.locator('#config-programmer').inputValue(), 'stm32f103-stlink');
+    assert.equal(await page.locator('#config-protocol').inputValue(), 'stlink-swd');
+    assert.equal(await page.locator('#config-upload-baud').count(), 0);
+    assert.equal(await page.locator('#config-auto-monitor').count(), 0);
+    assert.equal(await page.locator('#config-verify').count(), 0);
+    const f103Build = await page.evaluate(async () => {
+      const ide = /** @type {any} */ (window).__wicroIde;
+      const result = await ide.runBuild();
+      return { ok: result?.ok, bin: [...(result?.artifacts?.bin ?? [])], log: ide.store.compilerLog };
+    });
+    assert.equal(f103Build.ok, true, JSON.stringify(f103Build.log));
+    const { validateStm32F103Image } = await import('../packages/programmers/src/stlink.js');
+    assert.ok(validateStm32F103Image(Uint8Array.from(f103Build.bin)).reset & 1);
     const sourcesBeforeFamilyChange = (await json()).build.sources;
     await page.selectOption('#config-family', 'RP2350');
     assert.ok((await page.locator('#config-model option').allTextContents()).every((name) => name.includes('RP2350')));

@@ -8,9 +8,11 @@ import { BUILTIN_FRAMEWORKS } from './frameworks.js';
 import { BUILTIN_FIRMWARE_FORMATS } from './formats.js';
 import { esp32C3PlatformAdapter } from './esp32.js';
 import { stm32BareMetalPlatformAdapter } from './stm32.js';
+import { stm32F103SwdPlatformAdapter } from './stm32f103.js';
 
 /** @type {readonly import('./registry.js').ProgrammerDescriptor[]} */
 export const BUILTIN_PROGRAMMERS = Object.freeze([
+  Object.freeze({ id: 'stm32f103-stlink', name: 'STM32F103 ST-Link SWD', protocols: Object.freeze(['stlink-swd']), browserProtocols: Object.freeze(['stlink-swd']), platforms: Object.freeze(['st-stm32f103-swd']) }),
   Object.freeze({ id: 'esp32-original-uart', name: 'Original ESP32 UART', protocols: Object.freeze(['esptool-slip']), browserProtocols: Object.freeze(['esptool-slip']), platforms: Object.freeze(['espressif-esp32-original-bare-metal']) }),
   Object.freeze({ id: 'rp2040-picoboot', name: 'RP2040 ROM PICOBOOT', protocols: Object.freeze(['picoboot']), browserProtocols: Object.freeze(['picoboot']), platforms: Object.freeze(['raspberrypi-rp2040-zero']) }),
   Object.freeze({ id: 'nano-stk500v1', name: 'Arduino Nano UART (STK500v1)', protocols: Object.freeze(['stk500v1']), browserProtocols: Object.freeze(['stk500v1']), platforms: Object.freeze(['arduino-nano-avr']) }),
@@ -52,6 +54,7 @@ export const createDefaultPlatformRegistry = () => {
   registry.registerPlatform(esp32OriginalBareMetalPlatformAdapter);
   registry.registerPlatform(esp8266BareMetalPlatformAdapter);
   registry.registerPlatform(stm32BareMetalPlatformAdapter);
+  registry.registerPlatform(stm32F103SwdPlatformAdapter);
   for (const programmer of BUILTIN_PROGRAMMERS) registry.registerProgrammer(programmer);
   return registry;
 };

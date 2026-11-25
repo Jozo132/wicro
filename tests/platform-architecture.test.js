@@ -288,6 +288,25 @@ test('RP2040-Zero ELF, boot2 CRC BIN and UF2 match between Node WASI and browser
   assert.deepEqual(decoded.subarray(0, image.length), image);
 });
 
+test('STM32F103C8 SWD firmware ELF/BIN/HEX matches between Node and browser WASI', async () => {
+  /** @type {[string,string|Uint8Array][]} */
+  const entries = [['registry/stm32f103c8/package.json', await readFile('registry/stm32f103c8/package.json', 'utf8')]];
+  for (const name of ['wicro.json', 'main.c', 'startup.c', 'stm32f103c8.ld']) entries.push([`project/${name}`, await readFile(`examples/stm32f103c8/swd-heartbeat/${name}`, 'utf8')]);
+  const nodeStore = new Map(entries), browserStore = new Map(entries);
+  const module = await WebAssembly.compile(await readFile(llvmPath));
+  const engines = [
+    createWicroEngine({ host: { ...createMemoryHost(nodeStore), host: 'node' }, toolchain: new LlvmWasmToolchain({ llvmPath }) }),
+    createWicroEngine({ host: createMemoryHost(browserStore), toolchain: /** @type {any} */ (new BrowserLlvmWasmToolchain({ loadModule: async () => module })) })
+  ];
+  for (const engine of engines) {
+    const result = await engine.execute({ command: 'build', project: 'project' });
+    assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  }
+  for (const extension of ['elf', 'bin', 'hex']) assert.equal(Buffer.compare(/** @type {Uint8Array} */ (nodeStore.get(`project/.wicro/build/firmware.${extension}`)), /** @type {Uint8Array} */ (browserStore.get(`project/.wicro/build/firmware.${extension}`))), 0);
+  const { validateStm32F103Image } = await import('../packages/programmers/src/stlink.js');
+  assert.ok(validateStm32F103Image(/** @type {Uint8Array} */ (nodeStore.get('project/.wicro/build/firmware.bin'))).reset & 1);
+});
+
 test('Original ESP32 LX6 firmware matches between Node/browser WASI and parses with esptool-js', async () => {
   /** @type {[string,string|Uint8Array][]} */
   const entries = [['registry/esp32-original-bare-metal/package.json', await readFile('registry/esp32-original-bare-metal/package.json', 'utf8')]];

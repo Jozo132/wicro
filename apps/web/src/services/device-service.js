@@ -4,6 +4,7 @@ import {
   BrowserEsp32Programmer,
   NanoBrowserProgrammer,
   Rp2040BrowserProgrammer,
+  StLinkBrowserProgrammer,
   flashEsp8266,
   flashEsp32Original,
   BrowserCdcDfuProgrammer,
@@ -116,6 +117,13 @@ export class IdeDeviceService {
    * }} options
    */
   async flashFirmware(options) {
+    if (options.board.metadata?.platform === 'st-stm32f103-swd') {
+      const programmer = new StLinkBrowserProgrammer({ onProgress: options.onProgress });
+      const selection = programmer.requestDevice();
+      await this.coordinator.acquireForFlash();
+      try { return await programmer.writeFlash(await selection, options.firmwareBin, Number(options.board.metadata.flashCapacityBytes)); }
+      finally { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); }
+    }
     if (options.board.metadata?.platform === 'raspberrypi-rp2040-zero') {
       const programmer = new Rp2040BrowserProgrammer({ onProgress: options.onProgress });
       const selection = programmer.requestRomDevice();

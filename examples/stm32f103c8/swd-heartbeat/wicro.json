@@ -1,0 +1,13 @@
+{
+  "name": "stm32f103c8-swd-heartbeat",
+  "board": "stm32f103c8",
+  "framework": "bare-metal",
+  "build": {
+    "sources": [
+      "main.c"
+    ],
+    "formats": [
+      "hex"
+    ]
+  }
+}

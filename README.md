@@ -32,6 +32,7 @@ The npm package is `@jozo132/wicro`. Its command-line executable is `wicro`.
 - Monaco browser IDE shell and Web Serial controls
 - ESP8266 bare-metal WASM firmware, UART auto-reset, verified flash/readback and serial execution; [scope and commands](docs/esp8266-wasm-status.md)
 - Original ESP32 LX6 bare-metal WASM firmware, verified UART upload/readback and 65-second serial stability; [scope and commands](docs/esp32-original-wasm-status.md)
+- STM32F103C8: shared JavaScript ST-Link SWD programming, WASM firmware and live SRAM diagnostics; [scope and commands](docs/stm32f103-stlink.md)
 
 ## Quick start
 

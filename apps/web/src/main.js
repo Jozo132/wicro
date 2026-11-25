@@ -213,7 +213,8 @@ const bootstrap = async () => {
 
       store.flashStatus = 'success';
       store.flashProgress = { stage: 'done', message: `Flashed ${result.chip} (${firmwareBin.byteLength.toLocaleString()} B)`, percent: 100 };
-      store.appendCompilerLog(`[Flash] Complete: chip=${result.chip}${result.mac ? `, mac=${result.mac}` : ''}${result.readback?.verified ? ', readback=VERIFIED' : ''}`);
+      const mac = 'mac' in result ? result.mac : undefined;
+      store.appendCompilerLog(`[Flash] Complete: chip=${result.chip}${mac ? `, mac=${mac}` : ''}${result.readback?.verified ? ', readback=VERIFIED' : ''}`);
       store.emit('flash');
       if (store.autoMonitorAfterFlash) shell.setActiveBottomTab('serial');
       return result;

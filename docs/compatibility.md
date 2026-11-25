@@ -57,7 +57,7 @@ Status values:
 | Transitive dependencies | Implemented | SemVer registry resolution returns and detects dependency conflicts in a package tree |
 | PlatformIO registry integration | Implemented | Public PlatformIO search/package lookup adapter uses configurable fetch and HTTP contracts |
 | Programmer extension API | Implemented | `ProgrammerProtocolRegistry` supports custom named protocols; the simulated protocol is automated-tested |
-| Clean npm archive | Verified | The packed CLI dry run is 106.7 kB and contains no `.wasm`, SDK archive or extracted SDK tree; CLI tests exercise its command surfaces |
+| Clean npm archive | Verified | The packed CLI dry run is 111.6 kB and contains no `.wasm`, SDK archive or extracted SDK tree; CLI tests exercise its command surfaces |
 | Real Clang WASI diagnostics | Implemented | Existing LLVM WASM binary executes `-fsyntax-only` and returns parsed Clang diagnostics |
 | Clang WASI code completion | Implemented | Existing LLVM WASM binary executes `-code-completion-at` and returns parsed candidates |
 | `@wicro/language-server` LSP/session | Implemented | LSP initialization, document sync, diagnostics, completion, hover, definition, references, rename and formatting protocol are executable in tests |
@@ -89,6 +89,7 @@ Status values:
 | Arduino Nano / ATmega328P | Genuine Arduino AVR runtime | Verified | Verified Arduino ELF/BIN with WASM LLVM/LLD | Verified STK500v1 at 115200, page readback and preserved bootloader | Verified 65-second serial stability; browser hardware path unverified |
 | Arduino UNO / ATmega328P | Source present | Verified object compiler | SDK recipe not enabled for UNO | Not hardware-verified | Not physically verified |
 | STM32F103CB | Verified bare-metal fixture | Verified | Verified bare-metal ELF/BIN | ST-LINK/UART not hardware-verified | Not physically verified |
+| STM32F103C8 (reported 64 KiB target) | Bare-metal SWD diagnostic source | Verified Cortex-M3 WASM | Verified bare-metal ELF/BIN/HEX | Verified Node/CLI JavaScript ST-Link, 1 KiB page erase, complete readback and reset/run | Verified live SRAM challenges and GPIO output registers; visual PB2 LED, target USB firmware and browser hardware path unverified |
 | STM32F401RC | Verified bare-metal fixture | Verified | Verified STM32duino CDC-DFU development fixture (WASM LLVM/LLD, 27,672 B BIN) | Verified Node CDC → ROM DfuSe → write/readback → CDC | Verified USB heartbeat; browser hardware path and visual LED operation unverified |
 | STM32H723VG | Verified bare-metal fixture | Verified | Verified bare-metal ELF/BIN | ST-LINK/UART not hardware-verified | Not physically verified |
 | RP2040-Zero | Bare-metal USB source | Verified | Verified bare-metal ELF/BIN/UF2; Arduino/Pico SDK pending | Verified Node/CLI PICOBOOT, complete image readback and runtime-to-ROM re-upload | Verified 130 USB challenges over 65 seconds; browser hardware, UF2 drive copy and RGB LED unverified |
@@ -98,6 +99,8 @@ Status values:
 Do not report compiler or hardware support as verified until it passes a real target test.
 
 See [F401RC CDC-DFU](stm32-cdc-dfu.md) for physical evidence, browser limitations, hook translation and reproduction commands.
+
+See [STM32F103C8 ST-Link](stm32f103-stlink.md) for reported C8/CB capacity, the PB2 variant, physical SWD evidence and browser debugging scope.
 
 See [ESP8266 WASM hardware status](esp8266-wasm-status.md) for the verified 4 MiB/26 MHz bare-metal profile and its separate Arduino SDK limitations.
 

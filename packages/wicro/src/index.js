@@ -9,7 +9,7 @@ const packageJson = require('../package.json');
 export const version = packageJson.version;
 
 export const help = () => {
-  return `Wicro ${version}\n\nUsage:\n  wicro <command> [options]\n\nCommands:\n  init [name]       Create a Wicro project\n  build             Build firmware with the shared WASM engine\n  rebuild           Rebuild firmware\n  clean             Remove Wicro build and cache directories\n  upload            Upload ESP32-C3, ESP8266, Nano, RP2040-Zero or F401RC firmware\n  monitor           Monitor the ESP32-C3 serial console\n  install           Install packages and transitive dependencies\n  uninstall         Remove installed packages\n  update            Update packages and refresh the lockfile\n  board list        List available boards\n  device list       List detected ESP32-C3 devices\n  package list      List registry packages\n  doctor            Inspect the Node.js host environment\n  test              Run workspace tests\n\nOptions:\n  -h, --help        Show this help message\n  -V, --version     Show the version\n      --json        Emit machine-readable JSON\n`;
+  return `Wicro ${version}\n\nUsage:\n  wicro <command> [options]\n\nCommands:\n  init [name]       Create a Wicro project\n  build             Build firmware with the shared WASM engine\n  rebuild           Rebuild firmware\n  clean             Remove Wicro build and cache directories\n  upload            Upload firmware with the selected board programmer\n  monitor           Monitor the ESP32-C3 serial console\n  install           Install packages and transitive dependencies\n  uninstall         Remove installed packages\n  update            Update packages and refresh the lockfile\n  board list        List available boards\n  device list       List detected ESP32-C3 devices\n  device probe      Query ESP32-C3 ROM or ST-Link SWD target identity\n  package list      List registry packages\n  doctor            Inspect the Node.js host environment\n  test              Run workspace tests\n\nOptions:\n  -h, --help        Show this help message\n  -V, --version     Show the version\n      --json        Emit machine-readable JSON\n`;
 };
 
 /** @returns {Promise<string>} */
@@ -477,11 +477,18 @@ export const main = async (args = []) => {
 
   if (command === 'device' && flags[1] === 'probe') {
     try {
+      /** @type {any} */
       let programmerModule;
       try {
         programmerModule = await import('../../programmers/src/index.js');
       } catch {
         programmerModule = await import('../vendor/programmers/src/index.js');
+      }
+      if (flags.includes('--programmer=stlink')) {
+        const serialNumber = flags.find((arg) => arg.startsWith('--serial='))?.slice('--serial='.length);
+        const target = await new programmerModule.StLinkNodeProgrammer({ serialNumber }).inspect();
+        emit({ ok: true, command: 'device probe', target }, json, `STM32F1 target ${target.uid}: ${target.capacity / 1024} KiB flash, ST-Link ${target.probeSerial}`);
+        return 0;
       }
       const { Esp32C3NodeProgrammer } = programmerModule;
       /** @type {any} */
@@ -494,7 +501,7 @@ export const main = async (args = []) => {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       emit({ ok: false, command: 'device probe', implemented: false, error: message }, json,
-        `ESP32-C3 ROM probe failed: ${message}`);
+        `Device probe failed: ${message}`);
       return 1;
     }
   }
@@ -670,6 +677,16 @@ export const main = async (args = []) => {
       if (!uploadBoard && uploadProject) {
         try { uploadBoard = JSON.parse(await readFile(resolve(uploadProject, 'wicro.json'), 'utf8')).board; }
         catch (error) { if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ENOENT') throw error; }
+      }
+      if (uploadBoard === 'stm32f103c8' || flags.includes('--programmer=stlink')) {
+        if (uploadBoard !== 'stm32f103c8') throw new Error('ST-Link upload currently requires --board=stm32f103c8 or its project; other geometries need separate verification');
+        const binary = flags.find((arg) => arg.startsWith('--bin='))?.slice('--bin='.length) ?? (uploadProject ? resolve(uploadProject, '.wicro/build/firmware.bin') : undefined);
+        if (!binary) throw new Error('ST-Link upload requires --project or --bin');
+        const serialNumber = flags.find((arg) => arg.startsWith('--serial='))?.slice('--serial='.length);
+        const expectedUid = flags.find((arg) => arg.startsWith('--uid='))?.slice('--uid='.length);
+        const result = await new programmerModule.StLinkNodeProgrammer({ serialNumber, expectedUid, capacity: 65536 }).writeFlash(new Uint8Array(await readFile(resolve(binary))));
+        emit({ command: 'upload', ...result }, json, 'Uploaded and verified STM32F103C8 firmware through ST-Link');
+        return 0;
       }
       if (uploadBoard === 'rp2040-zero' || flags.includes('--programmer=picoboot')) {
         const binary = flags.find((arg) => arg.startsWith('--bin='))?.slice('--bin='.length) ?? (uploadProject ? resolve(uploadProject, '.wicro/build/firmware.bin') : undefined);

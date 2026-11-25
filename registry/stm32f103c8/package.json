@@ -1,0 +1,39 @@
+{
+  "name": "stm32f103c8",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "STM32F103C8 64 KiB bare-metal SWD profile",
+  "license": "MIT",
+  "dependencies": {
+    "llvm-wasm": "^1.0.0"
+  },
+  "metadata": {
+    "manufacturer": "STMicroelectronics",
+    "mcu": "STM32F103C8",
+    "platform": "st-stm32f103-swd",
+    "package": "LQFP48",
+    "architecture": "armv7-m",
+    "cpu": "cortex-m3",
+    "build": {
+      "kind": "firmware",
+      "target": "armv7-m",
+      "targetOptions": {
+        "mcpu": "cortex-m3"
+      },
+      "source": "main.c",
+      "startupSource": "startup.c",
+      "linkerScript": "stm32f103c8.ld",
+      "output": ".wicro/build"
+    },
+    "flashCapacityBytes": 65536,
+    "sramCapacityBytes": 20480,
+    "clockHz": 8000000,
+    "flashAddress": "0x08000000",
+    "sramAddress": "0x20000000",
+    "led": {
+      "port": "B",
+      "pin": 2
+    },
+    "framework": "bare-metal"
+  }
+}

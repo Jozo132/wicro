@@ -254,3 +254,5 @@ export { NanoNodeProgrammer } from './stk500-node.js';
 export { Stk500Programmer } from './stk500.js';
 export { Rp2040NodeProgrammer } from './rp2040-node.js';
 export { PicoBootProgrammer } from './picoboot.js';
+export { StLinkNodeProgrammer } from './stlink-node.js';
+export { StLinkProbe } from './stlink.js';

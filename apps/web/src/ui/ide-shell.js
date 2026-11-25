@@ -523,11 +523,11 @@ export class IdeShell {
     this.frameworkSelect.disabled = busy || Boolean(this.store.configurationError);
     this.exampleSelect.disabled = busy;
     this.buildBtn.disabled = busy || invalid;
-    this.monitorBtn.disabled = !this.store.deviceConnected && (busy || invalid || target.protocol === 'picoboot' || !this.actions.capabilities.webSerial);
+    this.monitorBtn.disabled = !this.store.deviceConnected && (busy || invalid || ['picoboot', 'stlink-swd'].includes(target.protocol ?? '') || !this.actions.capabilities.webSerial);
     this.buildBtn.textContent = this.store.buildStatus === 'building' ? 'Building…' : 'Build';
 
     const hasBin = Boolean(this.store.lastBuild?.artifacts?.bin instanceof Uint8Array);
-    this.flashBtn.disabled = busy || invalid || !hasBin || !(['dfuse', 'picoboot'].includes(target.protocol ?? '') ? this.actions.capabilities.webUsb : this.actions.capabilities.webSerial) || !target.browserUpload || this.store.uploadSettings.programmer === 'none';
+    this.flashBtn.disabled = busy || invalid || !hasBin || !(['dfuse', 'picoboot', 'stlink-swd'].includes(target.protocol ?? '') ? this.actions.capabilities.webUsb : this.actions.capabilities.webSerial) || !target.browserUpload || this.store.uploadSettings.programmer === 'none';
     this.flashBtn.textContent = this.store.flashStatus === 'flashing' ? 'Flashing…' : 'Flash';
 
     const activeProgress = this.store.flashStatus === 'flashing'
