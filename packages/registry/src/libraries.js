@@ -69,7 +69,7 @@ export const assertNoPlatformIoHooks = (files, config) => {
 const requestIdentity = (requests) => JSON.stringify(requests.map((request) => JSON.stringify({ provider: request.provider, name: request.name, owner: request.owner ?? '', version: request.version ?? '*', url: request.url ?? '', sha256: request.sha256?.toLowerCase() ?? '', archiveType: request.archiveType ?? '' })).sort());
 
 export class LibraryManager {
-  /** @param {{storage:import('./sdk.js').SdkStorage,fetch?:typeof fetch,catalog?:LibraryCatalog,offline?:boolean,target?:string,architecture?:string,framework?:string,frameworkLibraries?:LibraryRelease[],resolveArtifactUrl?:(url:string)=>Promise<string>}} options */
+  /** @param {{storage:import('./sdk.js').SdkStorage,fetch?:typeof fetch,catalog?:LibraryCatalog,offline?:boolean,target?:string,architecture?:string,framework?:string,frameworkLibraries?:LibraryRelease[],resolveArtifactUrl?:(url:string)=>Promise<string>,control?:import('./download.js').DownloadControl,progress?:(event:import('./download.js').DownloadProgress)=>void}} options */
   constructor(options) {
     this.storage = options.storage;
     this.fetch = options.fetch ?? fetch;
@@ -80,6 +80,8 @@ export class LibraryManager {
     this.framework = options.framework;
     this.frameworkLibraries = options.frameworkLibraries ?? [];
     this.resolveArtifactUrl = options.resolveArtifactUrl;
+    this.control = options.control;
+    this.progress = options.progress;
   }
 
   /** @param {LibraryRelease} release @returns {Promise<Record<string,Uint8Array>>} */
@@ -113,14 +115,14 @@ export class LibraryManager {
       if (!release.files || await sha256Bytes(new TextEncoder().encode(JSON.stringify(release.files))) !== release.sha256) throw new Error('Invalid framework library file inventory');
       for (const [path, entry] of Object.entries(release.files)) {
         safeLibraryPath(path);
-        const bytes = await downloadBytes(entry.url, { fetch: this.fetch });
+        const bytes = await downloadBytes(entry.url, { fetch: this.fetch, control: this.control, progress: this.progress, name: `${release.name}/${path}` });
         if (await sha256Bytes(bytes) !== entry.sha256) throw new Error(`Framework library checksum mismatch: ${path}`);
         files[path] = bytes;
       }
     } else {
       if (!release.url) throw new Error(`Library archive URL is missing for ${release.name}`);
       if (release.provider === 'platformio' && this.resolveArtifactUrl && new URL(release.url).pathname.startsWith('/download/')) release.url = await this.resolveArtifactUrl(release.url);
-      const bytes = await downloadBytes(release.url, { fetch: this.fetch });
+      const bytes = await downloadBytes(release.url, { fetch: this.fetch, control: this.control, progress: this.progress, name: release.name });
       if (await sha256Bytes(bytes) !== release.sha256.toLowerCase()) throw new Error(`Library SHA-256 mismatch: ${release.name}`);
       files = extractLibraryArchive(bytes, release.archiveType ?? 'zip');
     }

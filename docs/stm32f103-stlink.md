@@ -25,7 +25,7 @@ It initializes the vector table, data/BSS, polled SysTick, an SRAM diagnostic
 mailbox and **PB2** for this user's board variant. The PB2 assignment comes from
 the user, rather than assuming the common PC13 Blue Pill LED. The firmware
 alternates PB2 output states every 500 ms. Output-register verification establishes
-register operation; LED polarity and visible LED operation require observation.
+register operation. On 25 November 2026 the user additionally confirmed that the PB2 LED visibly blinks. Its active polarity has not been independently established.
 
 Both the target USB cable and ST-Link may stay connected. SWD access goes through
 the ST-Link, independent of the target's application USB peripheral. This example
@@ -55,9 +55,10 @@ select the ST-Link. The visual configuration uses ST-Link SWD at 100 kHz, mandat
 readback and no serial baud/automatic monitor fields. A supported ST-Link/V2 API
 v2 firmware J26 or newer and OS USB access are required. V2/V2.1 product IDs
 `3748`, `374b`, `3752` are implemented; only `0483:3748` V2J37S7 has completed the
-physical flash/runtime acceptance test. Browser hardware transport is implemented
-but has not been physically verified in Chromium. Real Chromium compilation and
-configuration controls are automated-tested.
+physical flash/runtime acceptance test. On 25 November 2026 the user confirmed successful real-browser ST-Link flashing
+on this target. This is user-observed hardware evidence, in addition to the
+automated Node/SWD acceptance run. Real Chromium compilation and configuration
+controls are also automated-tested.
 
 The uploader checks Cortex-M3 identity, medium-density ID, reported capacity,
 optional UID, voltage and protection state before flash operations. It rejects

@@ -24,12 +24,13 @@ import { downloadBytes } from './download.js';
  */
 
 export class CompilerAssetManager {
-  /** @param {{storage: import('./sdk.js').SdkStorage,fetch?:typeof fetch,progress?: (event:{name:string,status:string,received:number,total:number})=>void}} options */
+  /** @param {{storage: import('./sdk.js').SdkStorage,fetch?:typeof fetch,progress?: (event:import('./download.js').DownloadProgress)=>void,control?:import('./download.js').DownloadControl}} options */
   constructor(options) {
     if (!options.storage) throw new Error('A persistent compiler storage adapter is required');
     this.storage = options.storage;
     this.fetch = options.fetch ?? fetch;
     this.progress = options.progress;
+    this.control = options.control;
     /** @type {Map<string,Promise<CompilerAssetResult>>} */
     this.pending = new Map();
   }
@@ -143,7 +144,7 @@ export class CompilerAssetManager {
           if (attempt > 1) await new Promise((resolve) => setTimeout(resolve, 150 * attempt));
           const bytes = /^file:\/\//.test(url)
             ? await readLocalFileUrl(url)
-            : await downloadBytes(url, { fetch: this.fetch, progress: this.progress, name });
+            : await downloadBytes(url, { fetch: this.fetch, progress: this.progress, name, control: this.control });
           let decompressed = bytes;
           if (artifact.compression) {
             decompressed = await decompressBytes(bytes, artifact.compression);
@@ -157,6 +158,7 @@ export class CompilerAssetManager {
           await this.storage.writeBytes(targetPath, decompressed);
           return;
         } catch (error) {
+          if (error instanceof Error && error.name === 'AbortError') throw error;
           lastDownloadError = error;
         }
       }

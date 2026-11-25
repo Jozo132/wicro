@@ -72,6 +72,7 @@ export class IdeShell {
    *   onDeleteFile: (path: string) => void,
    *   onBuild: (options: {clean?:boolean}) => void,
    *   onFlash: () => void,
+   *   onTransferControl: (action:'pause'|'resume'|'cancel') => void,
    *   onToggleMonitor: () => void,
    *   onSendSerial: (text: string) => void,
    *   onDownloadArtifact: (kind: 'bin'|'elf'|'object') => void,
@@ -286,6 +287,14 @@ export class IdeShell {
         </div>
       </div>
 
+      <aside id="wicro-transfer" class="transfer-panel" hidden aria-label="Dependency download">
+        <div class="transfer-heading"><strong id="wicro-transfer-name"></strong><span id="wicro-transfer-state" role="status"></span></div>
+        <progress id="wicro-transfer-progress" max="100" aria-label="Download progress"></progress>
+        <div class="transfer-details"><span id="wicro-transfer-detail"></span><div>
+          <button id="wicro-transfer-pause" class="btn-tiny" type="button">Pause</button>
+          <button id="wicro-transfer-cancel" class="btn-tiny" type="button">Cancel</button>
+        </div></div>
+      </aside>
       <footer class="ide-statusbar">
         <div class="status-left">
           <span id="wicro-status-dot" class="status-dot idle"></span>
@@ -313,6 +322,8 @@ export class IdeShell {
       this.store.offline = this.offlineToggle.checked;
       this.store.emit('offline');
     });
+    this.root.querySelector('#wicro-transfer-pause')?.addEventListener('click', () => this.actions.onTransferControl(this.store.download?.status === 'paused' ? 'resume' : 'pause'));
+    this.root.querySelector('#wicro-transfer-cancel')?.addEventListener('click', () => this.actions.onTransferControl('cancel'));
     this.buildBtn.addEventListener('click', () => this.actions.onBuild({}));
     this.flashBtn.addEventListener('click', () => this.actions.onFlash());
     this.monitorBtn.addEventListener('click', () => this.actions.onToggleMonitor());
@@ -469,6 +480,7 @@ export class IdeShell {
       this.statusDevice.textContent = `USB: ${this.store.deviceLabel}`;
       this.statusDevice.classList.toggle('connected', this.store.deviceConnected);
     }
+    if (changed === 'all' || changed === 'download') this.renderTransfer();
     if (changed === 'all' || changed === 'cache') {
       this.renderCacheInfo();
     }
@@ -513,6 +525,22 @@ export class IdeShell {
       tab.addEventListener('click', () => this.actions.onSelectFile(path));
       this.tabsBar.appendChild(tab);
     }
+  }
+
+  renderTransfer() {
+    const download = this.store.download;
+    const panel = /** @type {HTMLElement} */ (this.root.querySelector('#wicro-transfer'));
+    panel.hidden = !download || ['complete', 'error', 'cancelled'].includes(download.status);
+    if (!download || panel.hidden) return;
+    (/** @type {HTMLElement} */ (this.root.querySelector('#wicro-transfer-name'))).textContent = download.name;
+    (/** @type {HTMLElement} */ (this.root.querySelector('#wicro-transfer-state'))).textContent = download.status === 'paused' ? 'Paused' : download.status === 'restarting' ? 'Restarting — server cannot resume' : 'Downloading';
+    const progress = /** @type {HTMLProgressElement} */ (this.root.querySelector('#wicro-transfer-progress'));
+    if (download.total > 0) progress.value = download.received / download.total * 100;
+    else progress.removeAttribute('value');
+    const eta = download.etaSeconds;
+    const detail = `${formatBytes(download.received)}${download.total ? ` / ${formatBytes(download.total)}` : ''} · ${formatBytes(download.bytesPerSecond ?? 0)}/s`;
+    (/** @type {HTMLElement} */ (this.root.querySelector('#wicro-transfer-detail'))).textContent = download.status === 'paused' ? `${formatBytes(download.received)} received · ${download.resumable ? 'Resume available' : 'Resume will restart this file'}` : `${detail}${typeof eta === 'number' ? ` · about ${Math.ceil(eta)}s remaining` : ' · estimating time…'}`;
+    (/** @type {HTMLElement} */ (this.root.querySelector('#wicro-transfer-pause'))).textContent = download.status === 'paused' ? 'Resume' : 'Pause';
   }
 
   renderBuildAndFlashState() {

@@ -76,6 +76,8 @@ export class IdeStore {
     );
 
     this.buildStatus = /** @type {'idle'|'building'|'success'|'error'} */ ('idle');
+    /** @type {(import('../../../../packages/registry/src/download.js').DownloadProgress & {requestId:string})|null} */
+    this.download = null;
     this.buildProgress = { stage: 'idle', message: 'Ready', percent: 0 };
     /** @type {string[]} */
     this.compilerLogs = [];

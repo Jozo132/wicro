@@ -1,3 +1,4 @@
+/** @typedef {{stage:string,message:string,percent?:number,transfer?:import('../../../../packages/registry/src/download.js').DownloadProgress}} BuildProgress */
 /**
  * Main-thread RPC client for the Wicro Web Worker WASM build engine.
  * Keeps all compilation, linking, SHA-256 verification, and SDK extraction off the UI thread.
@@ -7,7 +8,11 @@ export class WicroBuildClient {
   constructor() {
     this.worker = new Worker(new URL('../workers/build-worker.js', import.meta.url), { type: 'module' });
     this.nextId = 1;
-    /** @type {Map<string, {resolve:(value:any)=>void,reject:(error:Error)=>void,onProgress?:(event:{stage:string,message:string,percent?:number})=>void}>} */
+    /** @type {((event:import('../../../../packages/registry/src/download.js').DownloadProgress & {requestId:string})=>void)|undefined} */
+    this.onTransfer = undefined;
+    /** @type {Map<string,import('../../../../packages/registry/src/download.js').DownloadProgress>} */
+    this.transfers = new Map();
+    /** @type {Map<string, {resolve:(value:any)=>void,reject:(error:Error)=>void,onProgress?:(event:BuildProgress)=>void}>} */
     this.pending = new Map();
 
     this.worker.addEventListener('message', (event) => {
@@ -16,11 +21,18 @@ export class WicroBuildClient {
       const entry = this.pending.get(message.id);
       if (!entry) return;
       if (message.type === 'progress') {
-        entry.onProgress?.({ stage: message.stage, message: message.message, percent: message.percent });
+        if (message.transfer) {
+          this.transfers.set(message.id, message.transfer);
+          this.onTransfer?.({ ...message.transfer, requestId: message.id });
+        }
+        entry.onProgress?.({ stage: message.stage, message: message.message, percent: message.percent, transfer: message.transfer });
         return;
       }
       if (message.type === 'result') {
         this.pending.delete(message.id);
+        const transfer = this.transfers.get(message.id);
+        if (transfer) this.onTransfer?.({ ...transfer, requestId: message.id, status: message.ok ? 'complete' : 'error' });
+        this.transfers.delete(message.id);
         if (message.ok) entry.resolve(message.result);
         else entry.reject(new Error(message.error ?? 'Worker execution failed'));
       }
@@ -36,7 +48,7 @@ export class WicroBuildClient {
   /**
    * @param {string} type
    * @param {Record<string, unknown>} payload
-   * @param {(event:{stage:string,message:string,percent?:number})=>void} [onProgress]
+   * @param {(event:BuildProgress)=>void} [onProgress]
    */
   request(type, payload = {}, onProgress) {
     const id = `req-${this.nextId++}`;
@@ -48,7 +60,7 @@ export class WicroBuildClient {
 
   /**
    * @param {{boardId:string,framework?:string,projectFiles:Record<string,string>,offline?:boolean,clean?:boolean,formats?:string[]}} options
-   * @param {(event:{stage:string,message:string,percent?:number})=>void} [onProgress]
+   * @param {(event:BuildProgress)=>void} [onProgress]
    */
   build(options, onProgress) {
     return this.request('build', { ...options, origin: window.location.origin }, onProgress);
@@ -72,6 +84,9 @@ export class WicroBuildClient {
   libraries(type, payload) {
     return this.request(type, { ...payload, origin: window.location.origin });
   }
+
+  /** @param {string} requestId @param {'pause'|'resume'|'cancel'} action */
+  controlTransfer(requestId, action) { this.worker.postMessage({ type: 'transferControl', payload: { requestId, action } }); }
 
   cacheStatus() {
     return this.request('cacheStatus');

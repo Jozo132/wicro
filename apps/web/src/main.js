@@ -43,6 +43,7 @@ const bootstrap = async () => {
 
   const store = new IdeStore();
   const buildClient = new WicroBuildClient();
+  buildClient.onTransfer = (transfer) => { store.download = transfer; store.emit('download'); };
 
   const deviceService = new IdeDeviceService({
     onSerialLine: (line) => store.appendSerialLine(line),
@@ -111,6 +112,7 @@ const bootstrap = async () => {
           clean: options.clean
         },
         (progress) => {
+          if (progress.transfer) return;
           store.buildProgress = {
             stage: progress.stage,
             message: progress.message,
@@ -278,6 +280,7 @@ const bootstrap = async () => {
     },
     onBuild: (options) => { void runBuild(options); },
     onFlash: () => { void runFlash(); },
+    onTransferControl: (action) => { if (store.download) buildClient.controlTransfer(store.download.requestId, action); },
     onToggleMonitor: () => { void toggleMonitor(); },
     onSendSerial: (text) => {
       void deviceService.sendSerial(text, store.lineEnding).catch((error) => {

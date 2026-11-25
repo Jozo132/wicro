@@ -9,7 +9,7 @@ import { BrowserSdkStorage } from '../../../../packages/registry/src/browser-cac
 import { CompilerAssetManager } from '../../../../packages/registry/src/compiler-assets.js';
 import { safeSdkArchivePath, sha256Bytes } from '../../../../packages/registry/src/sdk.js';
 import { parseProjectConfiguration } from '../../../../packages/core/src/platform/configuration.js';
-import { downloadBytes } from '../../../../packages/registry/src/download.js';
+import { downloadBytes, DownloadControl } from '../../../../packages/registry/src/download.js';
 import { preprocessIno } from '../../../../packages/arduino/src/index.js';
 
 /**
@@ -94,7 +94,12 @@ const loadedSdks = new Map();
 /** @type {Map<string, Uint8Array>} */
 const incrementalObjectCache = new Map();
 
-/** @param {string} id @param {{stage:string,message:string,percent?:number}} event */
+/** @type {Map<string,DownloadControl>} */
+const downloadControls = new Map();
+/** @param {string} id */
+const transferOptions = (id) => ({ control: downloadControls.get(id), progress: (/** @type {import('../../../../packages/registry/src/download.js').DownloadProgress} */ transfer) => emitProgress(id, { stage: 'download', message: transfer.name, transfer }) });
+
+/** @param {string} id @param {{stage:string,message:string,percent?:number,transfer?:import('../../../../packages/registry/src/download.js').DownloadProgress}} event */
 const emitProgress = (id, event) => {
   self.postMessage({ type: 'progress', id, ...event });
 };
@@ -157,16 +162,7 @@ const ensureCompilerModule = async (origin, requestId, offline) => {
   emitProgress(requestId, { stage: 'toolchain', message: 'Checking cached LLVM WASM toolchain…', percent: 4 });
   const manager = new CompilerAssetManager({
     storage,
-    progress: (ev) => {
-      const pct = ev.total > 0 ? Math.min(25, Math.round((ev.received / ev.total) * 25)) : 10;
-      const mb = (ev.received / (1024 * 1024)).toFixed(1);
-      const totalMb = ev.total > 0 ? ` / ${(ev.total / (1024 * 1024)).toFixed(1)} MB` : '';
-      emitProgress(requestId, {
-        stage: 'toolchain',
-        message: `Downloading LLVM WASM (${mb}${totalMb} MB)…`,
-        percent: pct
-      });
-    }
+    ...transferOptions(requestId)
   });
 
   const resolved = await manager.ensure(localManifest, { offline, localSources: import.meta.env.DEV ? { clang: `${origin}/toolchain/llvm.wasm` } : undefined });
@@ -240,10 +236,7 @@ const ensureTargetSdk = async (origin, requestId, sdkManifest, offline) => {
         emitProgress(requestId, { stage: 'sdk', message: `Downloading ${sdkKey}…`, percent: 32 });
         const downloaded = await downloadBytes(url, {
           name: sdkKey,
-          progress: (event) => emitProgress(requestId, {
-            stage: 'sdk', message: `Downloading ${sdkKey} (${(event.received / (1024 * 1024)).toFixed(1)} MB)…`,
-            percent: event.total > 0 ? Math.min(48, Math.round(32 + event.received / event.total * 16)) : 40
-          })
+          ...transferOptions(requestId)
         });
         if (await sha256Bytes(downloaded) !== distribution.sha256.toLowerCase()) {
           throw new Error(`SDK SHA-256 mismatch for ${sdkKey} at ${url}`);
@@ -251,6 +244,7 @@ const ensureTargetSdk = async (origin, requestId, sdkManifest, offline) => {
         zipBytes = downloaded;
         break;
       } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') throw error;
         errors.push(`${url}: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
@@ -708,8 +702,8 @@ const getLibraryCatalog = async (payload) => {
   return libraryCatalog;
 };
 
-/** @param {any} payload */
-const handleLibraryInstall = async (payload) => {
+/** @param {any} payload @param {string} requestId */
+const handleLibraryInstall = async (payload, requestId) => {
   const catalog = await getLibraryCatalog(payload);
   const configuration = parseProjectConfiguration(payload.projectFiles['wicro.json'] ?? '{}');
   if (!configuration.value) throw new Error(configuration.error ?? 'Invalid project JSON');
@@ -722,7 +716,7 @@ const handleLibraryInstall = async (payload) => {
   for (const name of board.metadata?.libraryProviders ?? []) providers.push((await loadRegistryManifest(payload.origin, name, Boolean(payload.offline))).metadata.library);
   const mcu = String(board.metadata?.mcu ?? '');
   const architecture = /^ESP32/i.test(mcu) ? 'esp32' : /^ESP8266/i.test(mcu) ? 'esp8266' : /^STM32/i.test(mcu) ? 'stm32' : /^RP2/i.test(mcu) ? 'rp2040' : board.metadata?.architecture;
-  const manager = new LibraryManager({ storage: await getStorage(), catalog, offline: Boolean(payload.offline), target: payload.boardId, architecture, framework: configuration.value.framework ?? 'arduino', frameworkLibraries: providers, resolveArtifactUrl: libraryArtifactResolver(payload.origin) });
+  const manager = new LibraryManager({ storage: await getStorage(), catalog, offline: Boolean(payload.offline), target: payload.boardId, architecture, framework: configuration.value.framework ?? 'arduino', frameworkLibraries: providers, resolveArtifactUrl: libraryArtifactResolver(payload.origin), ...transferOptions(requestId) });
   const result = await manager.ensureProject(requests);
   return { requests, lock: result.lock, libraries: result.lock.libraries.map((entry) => ({ name: entry.name, version: entry.version })) };
 };
@@ -739,9 +733,17 @@ const handleLibraryFiles = async (payload) => {
 
 self.addEventListener('message', async (event) => {
   const { id, type, payload } = event.data ?? {};
+  if (type === 'transferControl') {
+    const control = downloadControls.get(payload.requestId);
+    if (payload.action === 'pause') control?.pause();
+    if (payload.action === 'resume') control?.resume();
+    if (payload.action === 'cancel') control?.cancel();
+    return;
+  }
+  downloadControls.set(id, new DownloadControl());
   try {
     if (type === 'librarySearch' || type === 'libraryInstall' || type === 'libraryFiles') {
-      const result = type === 'librarySearch' ? await (await getLibraryCatalog(payload)).search(payload.provider, payload.query, Boolean(payload.refresh)) : type === 'libraryInstall' ? await handleLibraryInstall(payload) : await handleLibraryFiles(payload);
+      const result = type === 'librarySearch' ? await (await getLibraryCatalog(payload)).search(payload.provider, payload.query, Boolean(payload.refresh)) : type === 'libraryInstall' ? await handleLibraryInstall(payload, id) : await handleLibraryFiles(payload);
       self.postMessage({ type: 'result', id, ok: true, result });
       return;
     }
@@ -778,5 +780,5 @@ self.addEventListener('message', async (event) => {
       ok: false,
       error: error instanceof Error ? error.message : String(error)
     });
-  }
+  } finally { downloadControls.delete(id); }
 });
