@@ -18,6 +18,8 @@ Wicro uses Arduino as the default framework for new projects. The implementation
 - PlatformIO registry search and INI import.
 - Arduino Board/Library Manager URL adapters with browser CORS diagnostics.
 
+Genuine STM32duino Arduino builds for F103C8 and F401RC now use on-demand SDK composition across Web, Node/CLI and VS Code; see [STM32 Arduino support](stm32-arduino.md) for physical evidence, acquisition costs and production relay configuration.
+
 ## Preset manifests
 
 The registry contains AVR, ESP32, ESP8266, STM32 and Pico preset metadata for UNO, Nano, Mega, Leonardo, ESP32-C3/DevKit/S2/S3/C6/H2, ESP8266 NodeMCU/D1 Mini, Blue/Black Pill, Nucleo-F401RE, Pico W, Pico 2 and Pico 2 W.
@@ -47,10 +49,10 @@ These heads are recorded for reproducibility. The pinned Arduino-ESP32 Codeload 
 - Precompiled core archive linking for every preset.
 - Official Arduino board/platform index downloads into persistent offline caches.
 - C library archive ABI validation against official Arduino toolchains.
-- Physical verification of additional boards beyond the verified ESP32-C3 firmware and [F401RC CDC-DFU development fixture](stm32-cdc-dfu.md).
+- Physical verification beyond the targets in the [compatibility matrix](compatibility.md).
 - Compiler CDN URLs and genuine release assets for the LLVM WASM binaries.
 - ESP-IDF source distributions that include required submodules and toolchain components.
-- Production SDK recipes for additional targets. Full ESP32-C3 WASM firmware and the cached-SDK F401RC CDC-DFU development fixture have been physically verified; the general STM32 Arduino SDK installer remains pending.
+- Production SDK recipes for targets beyond the documented ESP32-C3, Nano, STM32F103C8 and STM32F401RC coverage.
 
 No native Arduino, PlatformIO, Make or CMake command is executed by the Wicro build engine.
 

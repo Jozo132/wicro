@@ -169,7 +169,7 @@ export class IdeStore {
   }
 
   get uploadSettings() {
-    const target = getTargetConfiguration(this.currentBoard);
+    const target = getTargetConfiguration(this.currentBoard, this.framework);
     const upload = isConfigurationObject(this.configuration.upload) ? this.configuration.upload : {};
     return {
       programmer: upload.programmer ?? (target.browserUpload ? target.programmer?.id : 'none'),
@@ -190,7 +190,7 @@ export class IdeStore {
     this.configuration = parsed.value;
     if (typeof parsed.value.board === 'string') this.boardId = parsed.value.board;
     if (typeof parsed.value.framework === 'string') this.framework = parsed.value.framework;
-    else this.framework = getTargetConfiguration(this.currentBoard).frameworks[0];
+    else this.framework = getTargetConfiguration(this.currentBoard, this.framework).frameworks[0];
     const next = buildIdentity(this.configuration);
     if (previous !== next) this.lastBuild = null;
     const upload = this.uploadSettings;

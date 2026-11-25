@@ -438,7 +438,7 @@ export class IdeShell {
     if (changed === 'all' || changed === 'board' || changed === 'framework' || changed === 'project') {
       this.boardSelect.value = this.store.boardId;
       this.frameworkSelect.replaceChildren();
-      const frameworks = getTargetConfiguration(this.store.currentBoard).frameworks;
+      const frameworks = getTargetConfiguration(this.store.currentBoard, this.store.framework).frameworks;
       for (const framework of new Set([...frameworks, this.store.framework])) {
         this.frameworkSelect.add(new Option(framework + (frameworks.includes(framework) ? '' : ' (unsupported)'), framework));
       }
@@ -544,7 +544,7 @@ export class IdeShell {
   }
 
   renderBuildAndFlashState() {
-    const target = getTargetConfiguration(this.store.currentBoard);
+    const target = getTargetConfiguration(this.store.currentBoard, this.store.framework);
     const busy = this.store.buildStatus === 'building' || this.store.flashStatus === 'flashing';
     const invalid = this.store.configurationIssues.length > 0;
     this.boardSelect.disabled = busy || Boolean(this.store.configurationError);

@@ -29,9 +29,7 @@ register operation. On 25 November 2026 the user additionally confirmed that the
 
 Both the target USB cable and ST-Link may stay connected. SWD access goes through
 the ST-Link, independent of the target's application USB peripheral. This example
-provides SRAM diagnostics, not USB CDC or a tty console. USB application firmware,
-Arduino, HAL, USB bootloaders, other STM32 families, overclocking and 128 KiB CB
-hardware verification remain separate work. PB2 is also BOOT1; use BOOT0 low for
+provides SRAM diagnostics, not USB CDC or a tty console. The separate [Arduino recipe](stm32-arduino.md) now supplies genuine HAL and native USB CDC; USB bootloaders, other STM32 families, overclocking and 128 KiB CB hardware verification remain separate work. PB2 is also BOOT1; use BOOT0 low for
 normal flash boot.
 
 ## Use

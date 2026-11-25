@@ -1,0 +1,18 @@
+{
+  "name": "stm32f401rc-arduino-usb-heartbeat",
+  "board": "stm32f401rc",
+  "framework": "arduino",
+  "build": {
+    "sources": [
+      "main.ino"
+    ]
+  },
+  "libraries": [
+    {
+      "provider": "platformio",
+      "owner": "jozo132",
+      "name": "cdc-dfu",
+      "version": "1.1.2"
+    }
+  ]
+}

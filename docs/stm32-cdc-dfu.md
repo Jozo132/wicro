@@ -86,10 +86,7 @@ status remains unconfirmed unless independently observed; byte readback is the
 upload verification. Chromium, HTTPS/localhost and suitable OS USB permissions
 are required.
 
-The existing general F401RC build preset remains a bare-metal recipe. Selecting
-Arduino or adding the library does not yet install a complete STM32duino SDK
-recipe into that preset. A bare-metal image replaces the bridge if it omits the
-USB runtime; later entry then requires BOOT0/reset again.
+The F401RC preset now supports the complete shared Arduino recipe with on-demand SDK composition. The `examples/stm32f401rc/arduino-usb-heartbeat` project includes the pinned bridge library. Its 39,520-byte image passed upload/readback, another CDC-triggered update using its own hook, CDC return and a continuous 65-second heartbeat check. See [STM32 Arduino support](stm32-arduino.md) for all environments and production browser transport requirements. A bare-metal image that omits USB replaces the bridge and requires manual DFU entry afterward.
 
 ## Real firmware development fixture
 

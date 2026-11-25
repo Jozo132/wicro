@@ -1,4 +1,5 @@
 import { createDefaultPlatformRegistry } from './defaults.js';
+import { applyFrameworkConfiguration } from './framework-configuration.js';
 
 const registry = createDefaultPlatformRegistry();
 export const OPTIMIZATIONS = Object.freeze(['-O0', '-Og', '-O1', '-O2', '-O3', '-Os', '-Oz', '-Ofast']);
@@ -33,10 +34,10 @@ export const getDeviceFamily = (board) => {
 /**
  * Resolve choices from the same platform/programmer registry used by the engine.
  * Clock display describes the recipe; no generic clock override is implemented.
- * @param {ConfigurationBoard|null} board
+ * @param {ConfigurationBoard|null} board @param {string} [framework]
  */
-export const getTargetConfiguration = (board) => {
-  const metadata = board?.metadata ?? {};
+export const getTargetConfiguration = (board, framework) => {
+  const metadata = applyFrameworkConfiguration({ metadata: board?.metadata ?? {} }, framework).metadata;
   const platform = registry.getPlatform(String(metadata.platform ?? ''));
   const programmerId = metadata.programmerId ?? platform?.programmerId;
   const programmer = programmerId ? registry.getProgrammer(programmerId) : undefined;

@@ -1,0 +1,26 @@
+{
+  "lockfileVersion": 1,
+  "requests": [
+    {
+      "provider": "platformio",
+      "owner": "jozo132",
+      "name": "cdc-dfu",
+      "version": "1.1.2"
+    }
+  ],
+  "target": "stm32f401rc:arduino:",
+  "libraries": [
+    {
+      "id": "platformio/jozo132/cdc-dfu",
+      "provider": "platformio",
+      "owner": "jozo132",
+      "name": "cdc-dfu",
+      "version": "1.1.2",
+      "description": "Zero-overhead DFU bootloader jump for STM32 (F4, H7) via USB CDC DTR toggling. Auto-configures DFU upload trigger for PlatformIO.",
+      "license": "MIT",
+      "url": "https://dl.registry.platformio.org/download/jozo132/library/cdc-dfu/1.1.2/cdc-dfu-1.1.2.tar.gz",
+      "sha256": "64911fd4004b4fc8e311fb55cfc06e0d7f5fd2f8fc215c1d22480d92e13e3afe",
+      "archiveType": "tar.gz"
+    }
+  ]
+}

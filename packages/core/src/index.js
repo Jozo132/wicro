@@ -1,4 +1,6 @@
 import { loadProjectLibraries, validateLibraryCompileConfiguration } from './project-libraries.js';
+import { applyFrameworkConfiguration } from './platform/framework-configuration.js';
+export { applyFrameworkConfiguration } from './platform/framework-configuration.js';
 
 import { inspectElfMemoryStats } from '../../runtime/src/elf-utils.js';
 import { WicroPlatformRegistry } from './platform/registry.js';
@@ -60,6 +62,8 @@ export {
  * @property {(path: string) => Promise<string[]>} [readdir]
  * @property {string} [cacheDirectory]
  * @property {import('../../registry/src/sdk.js').SdkStorage} [libraryStorage]
+ * @property {import('../../registry/src/download.js').DownloadControl} [downloadControl]
+ * @property {(event:import('../../registry/src/download.js').DownloadProgress)=>void} [downloadProgress]
  * @property {typeof fetch} [fetch]
  * @property {(url:string)=>Promise<string>} [resolveLibraryArtifact]
  * @property {boolean} [offline]
@@ -450,7 +454,8 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
   if (!board) throw new Error('No board target was specified');
 
   // Phase 2: Resolve board, platform adapter, and framework adapter
-  const boardManifest = await loadBoardManifest(host, board);
+  const originalBoardManifest = await loadBoardManifest(host, board);
+  const boardManifest = applyFrameworkConfiguration(originalBoardManifest, typeof projectManifest.framework === 'string' ? projectManifest.framework : undefined);
   const build = asBuildManifest(boardManifest.metadata?.build);
   if (!build) throw new Error(`Board '${board}' has no compilation recipe`);
 
@@ -540,7 +545,7 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
 
   // Phase 5: Resolve platform compile configuration
   const compileConfig = platform
-    ? await platform.resolveCompileConfig({ host, board: boardDescriptor, project, projectManifest, sdk })
+    ? await platform.resolveCompileConfig({ host, board: boardDescriptor, project, projectManifest, sdk, libraryFiles: libraries.files })
     : {
         compilerFlags: [...(projectManifest.build?.flags ?? [])],
         includeDirs: [...sdk.includeDirs],
@@ -620,7 +625,7 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
       });
       const compiled = await toolchain.compileSource(extraUnit.source, build.target, build.targetOptions, {
         language: extraUnit.language,
-        includeDirs: compileConfig.includeDirs,
+        includeDirs: [...compileConfig.includeDirs, ...(extraUnit.includeDirs ?? [])],
         compilerFlags: extraUnit.language === 'c++' ? compileConfig.compilerFlags : compileConfig.compilerFlags.filter((flag) => !flag.startsWith('-std=gnu++') && !flag.startsWith('-std=c++') && flag !== '-fno-rtti' && flag !== '-fno-exceptions'),
         preopens: compileConfig.preopens,
         files: compileConfig.files,

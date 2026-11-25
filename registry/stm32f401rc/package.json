@@ -53,6 +53,31 @@
       "ramAddress": 536870912,
       "ramCapacity": 65536,
       "protocol": "dfuse"
-    }
+    },
+    "frameworkConfigurations": {
+      "arduino": {
+        "dependencies": {
+          "stm32-f4-arduino-sdk": "^1.0.0"
+        },
+        "metadata": {
+          "clockHz": 84000000,
+          "arduino": {
+            "series": "STM32F4xx",
+            "productLine": "STM32F401xC",
+            "variant": "STM32F4xx/F401R(B-C-D-E)T",
+            "board": "GENERIC_F401RCTX",
+            "startup": "startup_stm32f401xc.s",
+            "multilib": "v7e-m+fp/hard",
+            "led": "PC13"
+          },
+          "build": {
+            "source": "main.ino",
+            "kind": "firmware",
+            "firmwareFormat": "bin"
+          }
+        }
+      }
+    },
+    "platform": "st-stm32-bare-metal"
   }
 }

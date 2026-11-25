@@ -1,0 +1,5 @@
+{
+  "name": "wicro-registry-relay",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-25"
+}

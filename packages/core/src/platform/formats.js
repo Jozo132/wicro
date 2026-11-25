@@ -4,8 +4,8 @@ import { elfToAvrBin } from '../../../runtime/src/avr-image.js';
 import { elfToEsp8266Bin, validateEsp8266Image } from '../../../runtime/src/esp8266-image.js';
 import { elfToEsp32Bin, validateEsp32Image } from '../../../runtime/src/elf-utils.js';
 
-/** @param {Uint8Array} elf @param {number} minAddress */
-const extractFlatBinaryFromElf = (elf, minAddress = 0x08000000) => {
+/** @param {Uint8Array} elf @param {number} minAddress @param {number} maxAddress */
+const extractFlatBinaryFromElf = (elf, minAddress = 0x08000000, maxAddress = 0x20000000) => {
   const view = new DataView(elf.buffer, elf.byteOffset, elf.byteLength);
   if (elf.length < 52 || view.getUint32(0, true) !== 0x464c457f) {
     throw new Error('Invalid ELF32 image');
@@ -13,8 +13,17 @@ const extractFlatBinaryFromElf = (elf, minAddress = 0x08000000) => {
   const shoff = view.getUint32(32, true);
   const shent = view.getUint16(46, true);
   const shnum = view.getUint16(48, true);
-  if (shoff === 0 || shent < 40 || shnum === 0) {
+  if (shoff === 0 || shent < 40 || shnum === 0 || shoff + shent * shnum > elf.length) {
     throw new Error('ELF image has no section table');
+  }
+
+  const phoff = view.getUint32(28, true), phent = view.getUint16(42, true), phnum = view.getUint16(44, true);
+  if (phnum && (phent < 32 || phoff + phent * phnum > elf.length)) throw new Error('Invalid ELF program table');
+  /** @type {Array<{off:number,size:number,address:number}>} */
+  const loads = [];
+  for (let index = 0; index < phnum; index++) {
+    const at = phoff + index * phent;
+    if (view.getUint32(at, true) === 1) loads.push({ off: view.getUint32(at + 4, true), size: view.getUint32(at + 16, true), address: view.getUint32(at + 12, true) });
   }
 
   /** @type {Array<{addr:number,off:number,size:number}>} */
@@ -24,11 +33,14 @@ const extractFlatBinaryFromElf = (elf, minAddress = 0x08000000) => {
     if (pos + 40 > elf.length) break;
     const type = view.getUint32(pos + 4, true);
     const flags = view.getUint32(pos + 8, true);
-    const addr = view.getUint32(pos + 12, true);
+    let addr = view.getUint32(pos + 12, true);
     const off = view.getUint32(pos + 16, true);
     const size = view.getUint32(pos + 20, true);
-    if (type === 8 || (flags & 2) === 0 || size === 0 || addr < minAddress) continue;
-    if (off + size > elf.length) continue;
+    if (type === 8 || (flags & 2) === 0 || size === 0) continue;
+    if (off + size > elf.length) throw new Error('Truncated ELF section contents');
+    const load = loads.find((segment) => off >= segment.off && off + size <= segment.off + segment.size);
+    if (load) addr = load.address + off - load.off;
+    if (addr < minAddress || addr + size > maxAddress) throw new Error('ELF payload is outside the configured flash bounds; initialized SRAM requires a flash load address');
     slices.push({ addr, off, size });
   }
   if (slices.length === 0) throw new Error('ELF image has no loadable flash sections');
@@ -117,7 +129,10 @@ export const flatBinFormatHandler = Object.freeze({
   id: 'bin',
   extension: '.bin',
   description: 'Flat raw flash binary image',
-  convert: (elf, options = {}) => extractFlatBinaryFromElf(elf, resolveBaseAddress(options, 0x08000000)).data,
+  convert: (elf, options = {}) => {
+    const base = resolveBaseAddress(options, 0x08000000);
+    return extractFlatBinaryFromElf(elf, base, typeof options.flashCapacityBytes === 'number' ? base + options.flashCapacityBytes : 0x20000000).data;
+  },
   validate: (image) => ({
     valid: image.length > 0,
     errors: image.length > 0 ? [] : ['Binary firmware image is empty']

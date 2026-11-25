@@ -21,7 +21,7 @@ The npm package is `@jozo132/wicro`. Its command-line executable is `wicro`.
 - Host-independent `@wicro/language-server` LSP/session primitives with clang WASI diagnostics and completion
 - VS Code and Monaco language operations and generated `compile_commands.json` data
 - Worker protocol support for browser/Node language isolation
-- STM32F401RC Cortex-M4 bare-metal ELF/BIN reference fixture
+- Genuine STM32duino Arduino firmware for F103C8/F401RC across Web, Node/CLI and VS Code, with on-demand SDK composition; [scope and setup](docs/stm32-arduino.md)
 - RISC-V WebAssembly compiler execution for ELF32 object generation
 - ESP32-C3 SuperMini hardware discovery through USB-Serial/JTAG
 - Native ESP-IDF v6.1.1 reference blink build and serial heartbeat observation on hardware
@@ -131,7 +131,7 @@ Remaining integration work:
 - Browser remote acquisition remains deployment-blocked: current source archive and LLVM release URLs fail Chromium CORS probes, and the ESP32-C3 SDK URL returns HTTP 404; development assets do not establish remote browser compatibility
 - ESP32-C3 native USB VCP ROM entry is implemented but is not yet successful on the connected unit; physical flash/execution remains unverified
 - Header dependency tracking and incremental relinking need project-wide cache integration
-- ST-LINK, USB DFU/DfuSe, STM32 UART, AVR STK500 and PICOBOOT protocol implementations are public extension surfaces but are not yet hardware-verified
+- Hardware verification is protocol- and target-specific: ST-Link/F103C8, CDC-DfuSe/F401RC, STK500/Nano and PICOBOOT/RP2040-Zero have documented physical evidence; STM32 UART remains unverified
 - Physical firmware verification is target-specific and must be reported separately from source and build success. ESP32-C3 ROM sync and application-only stub flashing are now physically verified on `/dev/ttyACM0`; direct CDC DTR/RTS reset re-enters ROM mode automatically
 
 See [docs/compatibility.md](docs/compatibility.md) for the current implemented, planned and hardware-verified matrix.

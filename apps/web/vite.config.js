@@ -1,3 +1,6 @@
+import { relayArtifact } from '../../services/registry-relay/worker.js';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { resolvePlatformIoDownload } from './platformio-download.js';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -128,6 +131,21 @@ export default defineConfig({
     {
       name: 'wicro-canonical-platform-assets',
       configureServer(server) {
+        server.middlewares.use('/api/asset-download', async (request, response) => {
+          const controller = new AbortController();
+          response.on('close', () => controller.abort());
+          try {
+            const headers = new Headers();
+            for (const name of ['range', 'if-range']) { const value = request.headers[name]; if (typeof value === 'string') headers.set(name, value); }
+            const result = await relayArtifact(new Request(`http://localhost/${request.url ?? ''}`, { method: request.method, headers, signal: controller.signal }));
+            response.writeHead(result.status, Object.fromEntries(result.headers));
+            if (result.body) await pipeline(Readable.fromWeb(/** @type {any} */ (result.body)), response);
+            else response.end();
+          } catch (error) {
+            if (!response.headersSent) { response.statusCode = 502; response.end(error instanceof Error ? error.message : String(error)); }
+            else response.destroy();
+          }
+        });
         server.middlewares.use('/api/library-download', async (request, response) => {
           response.setHeader('Content-Type', 'application/json');
           try {

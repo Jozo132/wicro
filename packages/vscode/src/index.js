@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { LlvmWasmToolchain } from '../../runtime/src/index.js';
 import { NodeSerialHost } from '../../hardware/src/index.js';
 import { WicroLanguageService } from '../../language-server/src/index.js';
+import { buildNodeProject } from '../../core/src/node-build.js';
 
 export class VSCodeHostAdapter {
   /** @param {{workspaceRoot?:string,llvmPath?:string,toolchain?:LlvmWasmToolchain,resolveToolchain?:()=>Promise<{llvmPath:string,linkerPath?:string}>}} [options] */
@@ -66,6 +67,13 @@ export class VSCodeHostAdapter {
   async compileBareMetal(options) {
     const toolchain = await this.ensureToolchain();
     return toolchain.compileAndLinkBareMetal(options);
+  }
+
+  /** Build a complete project with the same engine, SDK acquisition and WASM
+   * compiler as the Node CLI. @param {{project?:string,board?:string,framework?:string,offline?:boolean,cacheDirectory?:string}} [options]
+   */
+  buildProject(options = {}) {
+    return buildNodeProject({ ...options, project: resolve(this.workspaceRoot, options.project ?? '.'), toolchain: this.toolchain });
   }
 
   /** @param {{uri:string,languageId:string,text:string,version:number}} document */
@@ -135,6 +143,7 @@ export class VSCodeHostAdapter {
       'wicro.boardList',
       'wicro.compileSource',
       'wicro.compileBareMetal',
+      'wicro.buildProject',
       'wicro.deviceList',
       'wicro.documentDiagnostics',
       'wicro.documentCompletion',

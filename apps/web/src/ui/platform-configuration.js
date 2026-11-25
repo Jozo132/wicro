@@ -33,7 +33,7 @@ export class PlatformConfigurationPanel {
     const focusId = this.root.contains(document.activeElement) ? document.activeElement?.id : null;
     const config = this.store.configuration;
     const board = this.store.currentBoard;
-    const target = getTargetConfiguration(board);
+    const target = getTargetConfiguration(board, this.store.framework);
     const family = board ? getDeviceFamily(board) : '';
     const model = String(board?.metadata.mcu ?? '');
     const families = [...new Set(this.store.boards.map(getDeviceFamily))].sort();

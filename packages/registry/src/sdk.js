@@ -49,7 +49,7 @@ export class SdkLifecycleManager {
    */
   async ensure(manifest, options = {}) {
     const distribution = /** @type {{distribution?:SdkDistribution}} */ (manifest.metadata ?? {}).distribution;
-    if (!distribution?.url && !options.localSources?.[manifest.name]) {
+    if (!distribution?.url && !options.localSources?.[manifest.name] && !manifest.metadata?.composition) {
       throw new Error(`SDK package '${manifest.name}' has no downloadable distribution`);
     }
 
@@ -151,6 +151,13 @@ export class SdkLifecycleManager {
         }
       }
       if (bytes) break;
+    }
+    if (!bytes && manifest.metadata?.composition) {
+      try {
+        const { composeSdkArchive } = await import('./sdk-composition.js');
+        bytes = await composeSdkArchive(/** @type {{sources:import('./sdk-composition.js').CompositionSource[]}} */ (manifest.metadata.composition), { storage: this.storage, fetch: this.fetch });
+        if (await sha256Bytes(bytes) !== distribution.sha256.toLowerCase()) throw new Error('Composed SDK checksum mismatch');
+      } catch (error) { await this.storage.remove(stagingName); throw error; }
     }
     if (!bytes) {
       await this.storage.remove(stagingName);

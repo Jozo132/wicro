@@ -1,0 +1,10 @@
+{
+  "name": "stm32f103c8-arduino-usb-heartbeat",
+  "board": "stm32f103c8",
+  "framework": "arduino",
+  "build": {
+    "sources": [
+      "main.ino"
+    ]
+  }
+}

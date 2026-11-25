@@ -73,7 +73,7 @@ Status values:
 | Arduino bare-metal C++ ELF/BIN | Implemented | Shared LLVM WASM runtime links C++ setup/loop code with startup and linker script using C-linkage `main` |
 | Arduino SDK manifests | Implemented | AVR, ESP32, ESP8266, STM32 and Pico upstream revisions are recorded in versioned framework packages |
 | Official Arduino board presets | Implemented | UNO, Nano, Mega, Leonardo, ESP32 families, ESP8266 NodeMCU/D1 Mini, STM32 boards and Pico variants are registered; SDK artifacts remain separate |
-| Complete Arduino SDK firmware linking | ESP32-C3 and Nano verified; F401RC development fixture verified | Nano Arduino AVR and ESP32-C3 Arduino-ESP32 firmware compiles and links completely through WASM LLD and runs on physical hardware; F401RC STM32duino CDC-DFU firmware is physically verified using cached SDK inputs in a development fixture; production STM32 Arduino SDK integration, other AVR boards, RP2040 Arduino, ESP8266 Arduino and original ESP32 remain separate work |
+| Complete Arduino SDK firmware linking | ESP32-C3, Nano, F103C8 and F401RC verified | Genuine WASM firmware and physical execution; [STM32 Arduino](stm32-arduino.md) includes shared Web/CLI/VS Code parity, on-demand composition, CDC and F401 CDC-DFU. Other presets require separate integration and verification. |
 | boards.txt/platform.txt parsing | Implemented | Property-file parsing, board names, menu options and platform INI parsing are executable and tested |
 | library.properties/library.json parsing | Implemented | Arduino and PlatformIO library metadata parsing is executable and tested |
 | PlatformIO import/search | Implemented | PlatformIO INI parsing and registry lookup are available; script execution is prohibited |
@@ -109,3 +109,7 @@ See [original ESP32 WASM status](esp32-original-wasm-status.md) for the verified
 See [Nano Arduino WASM status](nano-wasm-status.md) for verified scope and the pending cold production SDK distribution.
 
 See [RP2040-Zero WASM status](rp2040-wasm-status.md) for bare-metal USB evidence and the separate Arduino/Pico SDK scope.
+
+## STM32 Arduino integration
+
+See [STM32 Arduino support](stm32-arduino.md) for exact F103C8/F401RC build, hardware and transport coverage. Production static browser cold downloads require a configured relay; the supplied relay is tested but not deployed.

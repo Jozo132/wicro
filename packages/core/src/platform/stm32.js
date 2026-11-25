@@ -1,3 +1,5 @@
+import { resolveStm32ArduinoCompileConfig, prepareStm32ArduinoLinkPlan } from './stm32-arduino.js';
+
 /**
  * STM32 bare-metal platform adapter (ARM Cortex-M3/M4/M7).
  * Validates that the canonical Wicro platform API cleanly supports a second,
@@ -21,7 +23,9 @@ export const stm32BareMetalPlatformAdapter = Object.freeze({
     );
   },
 
-  async resolveCompileConfig({ host, board, project, projectManifest, sdk }) {
+  async resolveCompileConfig(context) {
+    const { host, board, project, projectManifest, sdk } = context;
+    if (board.framework === 'arduino' && board.metadata.arduino) return resolveStm32ArduinoCompileConfig(context);
     const buildSection = /** @type {{flags?:string[],defines?:string[]}|undefined} */ (projectManifest.build);
     const extraFlags = Array.isArray(buildSection?.flags) ? buildSection.flags : [];
     const extraDefines = Array.isArray(buildSection?.defines) ? buildSection.defines : [];
@@ -45,7 +49,9 @@ export const stm32BareMetalPlatformAdapter = Object.freeze({
     };
   },
 
-  async prepareLinkPlan({ host, board, project, compiledObjects }) {
+  async prepareLinkPlan(context) {
+    const { host, board, project, compiledObjects } = context;
+    if (board.framework === 'arduino' && board.metadata.arduino) return prepareStm32ArduinoLinkPlan(context);
     if (!board.build.linkerScript) {
       throw new Error(`Board '${board.id}' has an incomplete bare-metal build recipe: missing linkerScript`);
     }

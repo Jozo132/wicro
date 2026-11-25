@@ -105,7 +105,7 @@
  * @property {string[]} defines
  * @property {Record<string,string>} [preopens]
  * @property {Record<string,string|Uint8Array>} [files]
- * @property {Array<{name:string,source:string,language:'c'|'c++'|'assembly'}>} [extraUnits]
+ * @property {Array<{name:string,source:string,language:'c'|'c++'|'assembly',includeDirs?:string[]}>} [extraUnits]
  */
 
 /**
@@ -134,7 +134,7 @@
  * @property {string} defaultFirmwareFormat
  * @property {string} [programmerId]
  * @property {(board: BoardDescriptor) => boolean} matchesBoard
- * @property {(context: {host:import('../index.js').WicroHostAdapter,board:BoardDescriptor,project:string,projectManifest:Record<string,unknown>,sdk:{files:Record<string,string|Uint8Array>,includeDirs:string[],archives:Record<string,Uint8Array>,linkerScripts:Record<string,string>}}) => Promise<PlatformCompileConfig>} resolveCompileConfig
+ * @property {(context: {host:import('../index.js').WicroHostAdapter,board:BoardDescriptor,project:string,projectManifest:Record<string,unknown>,libraryFiles?:Record<string,Uint8Array>,sdk:{files:Record<string,string|Uint8Array>,includeDirs:string[],archives:Record<string,Uint8Array>,linkerScripts:Record<string,string>}}) => Promise<PlatformCompileConfig>} resolveCompileConfig
  * @property {(context: {host:import('../index.js').WicroHostAdapter,board:BoardDescriptor,project:string,projectManifest:Record<string,unknown>,compiledObjects:Record<string,Uint8Array>,sdk:{files:Record<string,string|Uint8Array>,includeDirs:string[],archives:Record<string,Uint8Array>,linkerScripts:Record<string,string>}}) => Promise<PlatformLinkPlan>} prepareLinkPlan
  */
 

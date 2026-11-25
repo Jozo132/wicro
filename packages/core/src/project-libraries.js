@@ -21,7 +21,7 @@ export const loadProjectLibraries = async (host, project, manifest, board, frame
   try { lockText = await host.readFile(`${project}/wicro-libraries.lock.json`, { encoding: 'utf8' }); } catch { /* First dependency resolution. */ }
   const lock = typeof lockText === 'string' ? JSON.parse(lockText) : null;
   const architecture = /^ESP32/i.test(board.mcu) ? 'esp32' : /^ESP8266/i.test(board.mcu) ? 'esp8266' : /^STM32/i.test(board.mcu) ? 'stm32' : /^RP2/i.test(board.mcu) ? 'rp2040' : board.architecture;
-  const manager = new LibraryManager({ storage: host.libraryStorage, fetch: host.fetch, offline: host.offline, target: board.id, architecture, framework: board.framework, frameworkLibraries, resolveArtifactUrl: host.resolveLibraryArtifact });
+  const manager = new LibraryManager({ storage: host.libraryStorage, fetch: host.fetch, offline: host.offline, target: board.id, architecture, framework: board.framework, frameworkLibraries, resolveArtifactUrl: host.resolveLibraryArtifact, control: host.downloadControl, progress: host.downloadProgress });
   const installed = await manager.ensureProject(manifest.libraries, lock);
   await host.writeFile(`${project}/wicro-libraries.lock.json`, JSON.stringify(installed.lock, null, 2));
   return createLibraryCompilePlan(installed.installed);

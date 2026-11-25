@@ -17,6 +17,7 @@ test('VS Code host exposes compile and device commands', () => {
     'wicro.boardList',
     'wicro.compileSource',
     'wicro.compileBareMetal',
+    'wicro.buildProject',
     'wicro.deviceList',
     'wicro.documentDiagnostics',
     'wicro.documentCompletion',

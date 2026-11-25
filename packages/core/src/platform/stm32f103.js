@@ -6,7 +6,7 @@ import { stm32BareMetalPlatformAdapter } from './stm32.js';
 export const stm32F103SwdPlatformAdapter = Object.freeze({
   ...stm32BareMetalPlatformAdapter,
   id: 'st-stm32f103-swd',
-  frameworks: Object.freeze(['bare-metal']),
+  frameworks: Object.freeze(['bare-metal', 'arduino']),
   programmerId: 'stm32f103-stlink',
   matchesBoard: (board) => board.metadata.platform === 'st-stm32f103-swd'
 });

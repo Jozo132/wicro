@@ -2,7 +2,7 @@ import { createLibraryCompilePlan } from '../../../../packages/core/src/project-
 import { LibraryCatalog } from '../../../../packages/registry/src/library-catalog.js';
 import { LibraryManager, assertNoPlatformIoHooks } from '../../../../packages/registry/src/libraries.js';
 import { unzipSync } from 'fflate';
-import { createWicroEngine, createDefaultPlatformRegistry, ESP32_C3_ARDUINO_RECIPE } from '../../../../packages/core/src/index.js';
+import { createWicroEngine, createDefaultPlatformRegistry, ESP32_C3_ARDUINO_RECIPE, applyFrameworkConfiguration } from '../../../../packages/core/src/index.js';
 import { BrowserLlvmWasmToolchain, buildWasiDirectoryMap } from '../../../../packages/runtime/src/browser-toolchain.js';
 import { parseClangDiagnostics } from '../../../../packages/runtime/src/elf-utils.js';
 import { BrowserSdkStorage } from '../../../../packages/registry/src/browser-cache.js';
@@ -10,6 +10,7 @@ import { CompilerAssetManager } from '../../../../packages/registry/src/compiler
 import { safeSdkArchivePath, sha256Bytes } from '../../../../packages/registry/src/sdk.js';
 import { parseProjectConfiguration } from '../../../../packages/core/src/platform/configuration.js';
 import { downloadBytes, DownloadControl } from '../../../../packages/registry/src/download.js';
+import { composeSdkArchive } from '../../../../packages/registry/src/sdk-composition.js';
 import { preprocessIno } from '../../../../packages/arduino/src/index.js';
 
 /**
@@ -99,6 +100,14 @@ const downloadControls = new Map();
 /** @param {string} id */
 const transferOptions = (id) => ({ control: downloadControls.get(id), progress: (/** @type {import('../../../../packages/registry/src/download.js').DownloadProgress} */ transfer) => emitProgress(id, { stage: 'download', message: transfer.name, transfer }) });
 
+/** @param {string} origin @param {string} url */
+const resolveAssetUrl = (origin, url) => {
+  if (!['dl.registry.platformio.org', 'github.com'].includes(new URL(url).hostname)) return url;
+  const endpoint = import.meta.env.DEV ? `${origin}/api/asset-download` : import.meta.env.VITE_WICRO_ASSET_RELAY_URL;
+  if (!endpoint) throw new Error('Configure VITE_WICRO_ASSET_RELAY_URL for browser acquisition of upstream archives without CORS');
+  return `${endpoint}${endpoint.includes('?') ? '&' : '?'}url=${encodeURIComponent(url)}`;
+};
+
 /** @param {string} id @param {{stage:string,message:string,percent?:number,transfer?:import('../../../../packages/registry/src/download.js').DownloadProgress}} event */
 const emitProgress = (id, event) => {
   self.postMessage({ type: 'progress', id, ...event });
@@ -162,6 +171,7 @@ const ensureCompilerModule = async (origin, requestId, offline) => {
   emitProgress(requestId, { stage: 'toolchain', message: 'Checking cached LLVM WASM toolchain…', percent: 4 });
   const manager = new CompilerAssetManager({
     storage,
+    fetch: (url, init) => fetch(resolveAssetUrl(origin, String(url)), init),
     ...transferOptions(requestId)
   });
 
@@ -249,6 +259,10 @@ const ensureTargetSdk = async (origin, requestId, sdkManifest, offline) => {
       }
     }
 
+    if (!zipBytes && sdkManifest.metadata?.composition) {
+      emitProgress(requestId, { stage: 'sdk', message: `Composing ${sdkKey} from verified upstream sources…`, percent: 35 });
+      zipBytes = await composeSdkArchive(sdkManifest.metadata.composition, { storage, ...transferOptions(requestId), resolveUrl: (url) => resolveAssetUrl(origin, url) });
+    }
     if (!zipBytes) {
       throw new Error(`Unable to acquire SDK '${sdkKey}': ${errors.join('; ')}`);
     }
@@ -341,7 +355,7 @@ const handleBuild = async (requestId, payload) => {
   const parsedProject = parseProjectConfiguration(payload.projectFiles['wicro.json'] ?? '{}');
   if (!parsedProject.value) throw new Error(parsedProject.error ?? 'Invalid project JSON');
   assertNoPlatformIoHooks(payload.projectFiles, parsedProject.value);
-  const boardManifest = await loadRegistryManifest(payload.origin, payload.boardId, Boolean(payload.offline));
+  const boardManifest = applyFrameworkConfiguration(await loadRegistryManifest(payload.origin, payload.boardId, Boolean(payload.offline)), payload.framework ?? parsedProject.value.framework);
   const compiler = await ensureCompilerModule(payload.origin, requestId, Boolean(payload.offline));
   const boardSdk = await resolveBoardSdk(payload.origin, requestId, boardManifest, Boolean(payload.offline));
 
@@ -374,6 +388,8 @@ const handleBuild = async (requestId, payload) => {
   const host = {
     host: 'browser',
     libraryStorage: await getStorage(),
+    downloadControl: downloadControls.get(requestId),
+    downloadProgress: transferOptions(requestId).progress,
     resolveLibraryArtifact: libraryArtifactResolver(payload.origin),
     offline: Boolean(payload.offline),
     sdkCacheDirectory: sdkPrefix,

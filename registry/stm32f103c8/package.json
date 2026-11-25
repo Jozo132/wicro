@@ -34,6 +34,30 @@
       "port": "B",
       "pin": 2
     },
-    "framework": "bare-metal"
+    "framework": "bare-metal",
+    "frameworkConfigurations": {
+      "arduino": {
+        "dependencies": {
+          "stm32-f1-arduino-sdk": "^1.0.0"
+        },
+        "metadata": {
+          "clockHz": 72000000,
+          "arduino": {
+            "series": "STM32F1xx",
+            "productLine": "STM32F103xB",
+            "variant": "STM32F1xx/F103C8T_F103CB(T-U)",
+            "board": "GENERIC_F103C8TX",
+            "startup": "startup_stm32f103xb.s",
+            "multilib": "v7-m/nofp",
+            "led": "PB2"
+          },
+          "build": {
+            "source": "main.ino",
+            "kind": "firmware",
+            "firmwareFormat": "bin"
+          }
+        }
+      }
+    }
   }
 }

@@ -255,7 +255,7 @@ export const main = async (args = []) => {
       /** @type {string|undefined} */
       let installedPlatformSdkDir;
       try {
-        /** @type {{board?:string}} */
+        /** @type {{board?:string,framework?:string}} */
         let projectManifest = {};
         try {
           const manifestValue = await readFile(resolve(target, 'wicro.json'), 'utf8');
@@ -265,7 +265,7 @@ export const main = async (args = []) => {
         }
         const boardName = board ?? projectManifest.board;
         if (!boardName) throw new Error('No board target was specified');
-        const boardManifest = (await findRegistryManifest(boardName)).manifest;
+        const boardManifest = coreModule.applyFrameworkConfiguration((await findRegistryManifest(boardName)).manifest, projectManifest.framework);
         for (const [depName] of Object.entries(/** @type {Record<string,string>} */ (boardManifest.dependencies ?? {}))) {
           const isSdkDep = depName.endsWith('-sdk') || depName.startsWith('arduino-') || depName === 'esp-idf' || depName === 'cmsis';
           if (!isSdkDep) continue;
@@ -727,9 +727,9 @@ export const main = async (args = []) => {
         emit({ command: 'upload', ...result }, json, `Uploaded and verified ${binary} on ESP8266 (${result.mac})`);
         return 0;
       }
-      if (flags.includes('--programmer=cdc-dfu')) {
-        if (!flags.includes('--board=stm32f401rc')) throw new Error('CDC-DFU currently requires --board=stm32f401rc; MCU flash bounds must be explicit');
-        const binary = flags.find((arg) => arg.startsWith('--bin='))?.slice('--bin='.length);
+      if (flags.includes('--programmer=cdc-dfu') || uploadBoard === 'stm32f401rc') {
+        if (uploadBoard !== 'stm32f401rc') throw new Error('CDC-DFU currently requires --board=stm32f401rc or its project; MCU flash bounds must be explicit');
+        const binary = flags.find((arg) => arg.startsWith('--bin='))?.slice('--bin='.length) ?? (uploadProject ? resolve(uploadProject, '.wicro/build/firmware.bin') : undefined);
         if (!binary) throw new Error('CDC-DFU requires --bin=/path/to/firmware.bin');
         const serialNumber = flags.find((arg) => arg.startsWith('--serial='))?.slice('--serial='.length);
         const result = await new programmerModule.NodeCdcDfuProgrammer({
