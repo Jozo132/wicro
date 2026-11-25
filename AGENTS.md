@@ -17,3 +17,5 @@ Keep documentation accurate and update it with implementation changes.
 Make Git commits verbose, descriptive, and understandable, explaining what changed, why, and how it was verified.
 
 Commit completed work; never publish packages or releases without authorization.
+
+Web release and GitHub Pages safety: do not run `build:release:web`, create a release archive/tag, publish a GitHub release, or deploy Pages unless the user explicitly confirms that release operation. Do not add push/tag or scheduled deployment triggers. The pages workflow must remain manual and require an explicit consent input.

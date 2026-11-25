@@ -121,6 +121,7 @@ const loadCanonicalExamples = async () => {
 };
 
 export default defineConfig({
+  base: './',
   publicDir: 'public',
   worker: {
     format: 'es'
@@ -256,6 +257,31 @@ export default defineConfig({
         });
       },
       async generateBundle() {
+        for (const [name, cachePath] of [['llvm.wasm', llvmPath], ['ld.wasm', ldPath]]) {
+          try {
+            this.emitFile({
+              type: 'asset',
+              fileName: `toolchain/${name}`,
+              source: await readFile(cachePath)
+            });
+          } catch {
+            throw new Error(`Pinned LLVM WASM asset is missing: ${cachePath}`);
+          }
+        }
+
+        try {
+          for (const entry of await readdir(distAssetsDir, { withFileTypes: true })) {
+            if (!entry.isFile() || (!entry.name.endsWith('.zip') && !entry.name.endsWith('.gz') && !entry.name.endsWith('.br'))) continue;
+            this.emitFile({
+              type: 'asset',
+              fileName: `assets/${entry.name}`,
+              source: await readFile(join(distAssetsDir, entry.name))
+            });
+          }
+        } catch {
+          // SDK assets may be staged by the release build; remote manifests remain the fallback.
+        }
+
         const { packages, boards } = await loadCanonicalRegistry();
         this.emitFile({
           type: 'asset',

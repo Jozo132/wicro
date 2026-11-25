@@ -63,26 +63,26 @@ export class WicroBuildClient {
    * @param {(event:BuildProgress)=>void} [onProgress]
    */
   build(options, onProgress) {
-    return this.request('build', { ...options, origin: window.location.origin }, onProgress);
+    return this.request('build', { ...options, origin: new URL(import.meta.env.BASE_URL, window.location.href).href.replace(/\/$/, '') }, onProgress);
   }
 
   /**
    * @param {{boardId:string,projectFiles:Record<string,string>,activeFile:string}} options
    */
   diagnose(options) {
-    return this.request('diagnose', { ...options, origin: window.location.origin });
+    return this.request('diagnose', { ...options, origin: new URL(import.meta.env.BASE_URL, window.location.href).href.replace(/\/$/, '') });
   }
 
   /**
    * @param {{boardId:string,projectFiles:Record<string,string>,activeFile:string,line:number,column:number}} options
    */
   complete(options) {
-    return this.request('complete', { ...options, origin: window.location.origin });
+    return this.request('complete', { ...options, origin: new URL(import.meta.env.BASE_URL, window.location.href).href.replace(/\/$/, '') });
   }
 
   /** @param {string} type @param {Record<string,unknown>} payload */
   libraries(type, payload) {
-    return this.request(type, { ...payload, origin: window.location.origin });
+    return this.request(type, { ...payload, origin: new URL(import.meta.env.BASE_URL, window.location.href).href.replace(/\/$/, '') });
   }
 
   /** @param {string} requestId @param {'pause'|'resume'|'cancel'} action */

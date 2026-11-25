@@ -17,6 +17,7 @@
     "publish:dry-run": "npm publish --dry-run --workspace @jozo132/wicro --access public",
     "dev:web": "npm run dev --workspace @wicro/web",
     "build:web": "npm run build --workspace @wicro/web",
+    "build:release:web": "node scripts/build-web-release.js",
     "benchmark:llvm": "node scripts/benchmark-llvm-wasm.js",
     "build:llvm": "node scripts/build-llvm-wasm.js unified",
     "build:llvm:dry-run": "node scripts/build-llvm-wasm.js unified --dry-run",

@@ -175,7 +175,10 @@ const ensureCompilerModule = async (origin, requestId, offline) => {
     ...transferOptions(requestId)
   });
 
-  const resolved = await manager.ensure(localManifest, { offline, localSources: import.meta.env.DEV ? { clang: `${origin}/toolchain/llvm.wasm` } : undefined });
+  const resolved = await manager.ensure(localManifest, {
+    offline,
+    localSources: { clang: `${origin}/toolchain/llvm.wasm` }
+  });
   compilerCacheState = resolved.cache;
 
   emitProgress(requestId, { stage: 'toolchain', message: 'Compiling LLVM WebAssembly module…', percent: 26 });
@@ -235,9 +238,9 @@ const ensureTargetSdk = async (origin, requestId, sdkManifest, offline) => {
     }
 
     const candidateUrls = [
+      `${origin}/assets/${sdkKey}.zip`,
       ...(typeof distribution.url === 'string' && distribution.url ? [distribution.url] : []),
-      ...(Array.isArray(distribution.mirrors) ? distribution.mirrors : []),
-      ...(import.meta.env.DEV ? [`${origin}/assets/${sdkKey}.zip`] : [])
+      ...(Array.isArray(distribution.mirrors) ? distribution.mirrors : [])
     ];
 
     const errors = [];

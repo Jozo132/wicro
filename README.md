@@ -120,6 +120,8 @@ npm run build:web
 npm run pack:check
 ```
 
+> **Release safety:** `npm run build:release:web` is not a routine build and must not be run arbitrarily or by unattended automation. It can generate large public distribution artifacts and does not imply release approval. Creating a release ZIP, `web-vX.Y.Z` tag, GitHub release, or Pages deployment requires separate explicit user consent. GitHub Pages deployment must remain manual and confirmation-gated.
+
 For ESP-IDF firmware work, the compiler is staged under `toolchain/llvm-wasm/cache`, while the ESP32-C3 framework and native reference environment are under `toolchain/esp32-c3/esp-idf`. Downloaded compiler, framework and build assets are ignored by Git; their manifests remain versioned in `registry/`.
 
 SDK and package archives may be staged in `registry-cache/`. The filename convention is `<manifest-name>-<manifest-version>.zip`, for example `arduino-esp32-1.0.0.zip`. Local files are attempted before network mirrors, their SHA-256 identity is still verified, and `registry-cache/` is ignored by Git.
@@ -129,7 +131,7 @@ SDK and package archives may be staged in `registry-cache/`. The filename conven
 Remaining integration work:
 
 - ESP-IDF/Pico SDK/CMSIS/Arduino SDK distributions must provide their complete headers, submodules, startup artifacts and core archives before full SDK firmware linking can be claimed; pinned AVR, ESP8266, STM32, Pico and Pico SDK archives now have verified SHA-256 identities
-- Browser remote acquisition remains deployment-blocked: current source archive and LLVM release URLs fail Chromium CORS probes, and the ESP32-C3 SDK URL returns HTTP 404; development assets do not establish remote browser compatibility
+- Browser compiler and staged SDK assets are served with the static frontend; remote SDK mirrors remain fallback sources, with OPFS persistence and checksum verification. Frontend releases do not rebuild the pinned LLVM WASM toolchain.
 - ESP32-C3 native USB VCP ROM entry is implemented but is not yet successful on the connected unit; physical flash/execution remains unverified
 - Header dependency tracking and incremental relinking need project-wide cache integration
 - Hardware verification is protocol- and target-specific: ST-Link/F103C8, CDC-DfuSe/F401RC, STK500/Nano and PICOBOOT/RP2040-Zero and RP2350 Arm/RISC-V have documented physical evidence; STM32 UART remains unverified

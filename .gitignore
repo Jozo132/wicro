@@ -8,6 +8,7 @@ build/
 build-*/
 dist/
 out/
+artifacts/
 coverage/
 managed_components/
 dependencies.lock

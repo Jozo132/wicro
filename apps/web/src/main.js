@@ -343,9 +343,10 @@ const bootstrap = async () => {
 
   // Load canonical board catalog and example projects from Vite / static endpoints
   try {
+    const appBase = new URL(import.meta.env.BASE_URL, window.location.href).href.replace(/\/$/, '');
     const [boardsResp, examplesResp] = await Promise.all([
-      fetch('/registry/boards.json', { cache: 'no-cache' }),
-      fetch('/examples/index.json', { cache: 'no-cache' })
+      fetch(`${appBase}/registry/boards.json`, { cache: 'no-cache' }),
+      fetch(`${appBase}/examples/index.json`, { cache: 'no-cache' })
     ]);
     if (boardsResp.ok) store.setBoards(await boardsResp.json());
     if (examplesResp.ok) store.setExamples(await examplesResp.json());
