@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
+import { stat } from 'node:fs/promises';
 import test from 'node:test';
 import { chromium } from 'playwright';
 
@@ -112,10 +113,26 @@ test('platform setup: dependent fields and two-way Monaco JSON synchronization',
     const { validateEsp8266Image } = await import('../packages/runtime/src/esp8266-image.js');
     assert.equal(validateEsp8266Image(Uint8Array.from(espBuild.bin)).segmentCount, 2);
 
+    await page.selectOption('#wicro-example', 'arduino-nano/heartbeat');
+    assert.equal(await page.locator('#config-programmer').inputValue(), 'nano-stk500v1');
+    assert.equal(await page.locator('#config-protocol').inputValue(), 'stk500v1');
+    await page.selectOption('#config-upload-baud', '57600');
+    assert.equal((await json()).upload.baudRate, 57600);
+    await page.selectOption('#config-upload-baud', '115200');
+    if (await stat('dist/assets/nano-arduino-sdk-1.0.0.zip').then(() => true, () => false)) {
+      const nanoBuild = await page.evaluate(async () => {
+        const ide = /** @type {any} */ (window).__wicroIde;
+        const result = await ide.runBuild();
+        return { ok: result?.ok, bytes: result?.artifacts?.bin?.length, log: ide.store.compilerLog };
+      });
+      assert.equal(nanoBuild.ok, true, JSON.stringify(nanoBuild.log));
+      assert.ok(nanoBuild.bytes > 1000 && nanoBuild.bytes <= 30720);
+    }
+    const sourcesBeforeFamilyChange = (await json()).build.sources;
     await page.selectOption('#config-family', 'RP2350');
     assert.ok((await page.locator('#config-model option').allTextContents()).every((name) => name.includes('RP2350')));
     assert.equal((await json()).board, await page.locator('#config-board').inputValue());
-    assert.ok((await json()).build.sources.includes('main.c'), 'target selection must preserve the selected ESP8266 example sources');
+    assert.deepEqual((await json()).build.sources, sourcesBeforeFamilyChange, 'target selection must preserve example sources');
     await page.selectOption('#wicro-board', 'esp32-c3-supermini');
     assert.equal(await page.locator('#config-family').inputValue(), 'ESP32');
     assert.deepEqual(errors, []);

@@ -5,7 +5,7 @@
   "description": "Arduino Nano ATmega328P preset",
   "license": "MIT",
   "dependencies": {
-    "arduino-avr-core": "^1.0.0",
+    "nano-arduino-sdk": "^1.0.0",
     "llvm-wasm": "^1.0.0"
   },
   "metadata": {
@@ -19,20 +19,27 @@
     "sramCapacityBytes": 2048,
     "eepromCapacityBytes": 1024,
     "build": {
-      "kind": "object",
+      "kind": "firmware",
       "target": "avr",
       "targetOptions": {
         "mcu": "atmega328p"
       },
       "source": "main.ino",
-      "output": ".wicro/build"
+      "output": ".wicro/build",
+      "firmwareFormat": "avr-bin"
     },
     "menus": {
       "cpu": {
-        "atmega328": "ATmega328P"
+        "atmega328": "ATmega328P",
+        "atmega328old": "ATmega328P (old bootloader, 57600 baud)"
       }
     },
-    "status": "preset",
-    "firmwareLinking": "pending-sdk-distribution"
+    "status": "implemented",
+    "firmwareLinking": "wasm-arduino-sdk",
+    "platform": "arduino-nano-avr",
+    "uploadBaud": 115200,
+    "monitorBaud": 115200,
+    "usbVendorId": "1a86",
+    "usbProductId": "7523"
   }
 }

@@ -2,6 +2,7 @@ import { Transport } from 'esptool-js';
 import { createDefaultPlatformRegistry } from '../../../../packages/core/src/index.js';
 import {
   BrowserEsp32Programmer,
+  NanoBrowserProgrammer,
   flashEsp8266,
   BrowserCdcDfuProgrammer,
   describeWebSerialPort,
@@ -120,6 +121,19 @@ export class IdeDeviceService {
       await this.coordinator.acquireForFlash();
       try { return await programmer.writeFlash(await selection, options.firmwareBin, { onProgress: options.onProgress }); }
       finally { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); }
+    }
+
+    if (options.board.metadata?.platform === 'arduino-nano-avr') {
+      const nav = /** @type {any} */ (navigator);
+      if (!nav.serial) throw new Error('Web Serial is required for Nano');
+      const selection = this.coordinator.port ? Promise.resolve(this.coordinator.port) : nav.serial.requestPort({ filters: [{ usbVendorId: 0x1a86, usbProductId: 0x7523 }] });
+      await this.coordinator.acquireForFlash();
+      try {
+        const port = await selection; this.coordinator.setPort(port);
+        const result = await new NanoBrowserProgrammer({ baudRate: Number(options.board.metadata.uploadBaud) || 115200, onProgress: options.onProgress }).writeFlash(port, options.firmwareBin);
+        await this.coordinator.releaseAfterFlash({ reconnectMonitor: Boolean(options.autoMonitor), baudRate: options.monitorBaudRate ?? 115200 });
+        return result;
+      } catch (error) { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); throw error; }
     }
 
     if (options.board.metadata?.platform === 'espressif-esp8266-bare-metal') {

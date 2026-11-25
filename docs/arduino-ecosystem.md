@@ -55,3 +55,5 @@ These heads are recorded for reproducibility. The pinned Arduino-ESP32 Codeload 
 No native Arduino, PlatformIO, Make or CMake command is executed by the Wicro build engine.
 
 The [ESP8266 bare-metal profile](esp8266-wasm-status.md) now has verified WASM-linked firmware and Node flash/readback/serial execution. This does not change the pending status of complete Arduino ESP8266 SDK firmware.
+
+The [Arduino Nano AVR recipe](nano-wasm-status.md) now builds genuine Arduino firmware with WASM and has verified STK500 upload/readback, bootloader preservation and serial execution. Its curated SDK currently has a local development distribution; cold production acquisition remains pending. Other AVR board recipes are not enabled by this verification.

@@ -46,6 +46,7 @@ export class PlatformConfigurationPanel {
     const upload = this.store.uploadSettings;
     const dfu = target.protocol === 'dfuse';
     const esp8266 = target.programmer?.id === 'esp8266-uart';
+    const nano = target.programmer?.id === 'nano-stk500v1';
     const canUpload = dfu ? this.options.webUsb : this.options.webSerial;
     const uploading = upload.programmer !== 'none' && target.browserUpload;
     const busy = this.store.buildStatus === 'building' || this.store.flashStatus === 'flashing';
@@ -77,13 +78,13 @@ export class PlatformConfigurationPanel {
           ${field('config-programmer', 'Programmer', select('config-programmer', [{ value: 'none', label: 'Download artifacts only' }, ...(target.programmer ? [{ value: target.programmer.id, label: target.programmer.name, disabled: !target.browserUpload || !canUpload }] : [])], upload.programmer))}
           ${!target.browserUpload ? '<p class="config-help">No browser upload adapter is available for this preset. Download artifacts for an external programmer.</p>' : !canUpload ? '<p class="config-help">The required USB API is unavailable in this browser.</p>' : ''}
           <div id="config-upload-fields" ${uploading ? '' : 'hidden'}>
-            ${field('config-protocol', 'Upload protocol', select('config-protocol', [{ value: target.protocol ?? '', label: dfu ? 'STM32 USB DfuSe' : 'Espressif ROM / stub (SLIP)' }], upload.protocol))}
-            ${dfu ? '' : field('config-upload-baud', 'Upload baud rate', `<input id="config-upload-baud" ${esp8266 ? 'disabled' : ''} type="number" min="1" max="2000000" step="1" value="${escape(upload.baudRate)}">`)}
-            ${dfu || esp8266 ? '<p class="config-help">Verification: byte-for-byte flash readback (required).</p>' : check('config-verify', 'Verify after upload', upload.verify !== 'none')}
+            ${field('config-protocol', 'Upload protocol', select('config-protocol', [{ value: target.protocol ?? '', label: dfu ? 'STM32 USB DfuSe' : nano ? 'AVR STK500v1' : 'Espressif ROM / stub (SLIP)' }], upload.protocol))}
+            ${nano ? field('config-upload-baud', 'Bootloader / upload speed', select('config-upload-baud', [{ value: '115200', label: '115200 · current bootloader' }, { value: '57600', label: '57600 · old bootloader' }], upload.baudRate)) : dfu ? '' : field('config-upload-baud', 'Upload baud rate', `<input id="config-upload-baud" ${esp8266 ? 'disabled' : ''} type="number" min="1" max="2000000" step="1" value="${escape(upload.baudRate)}">`)}
+            ${dfu || esp8266 || nano ? '<p class="config-help">Verification: byte-for-byte flash readback (required).</p>' : check('config-verify', 'Verify after upload', upload.verify !== 'none')}
             <div id="config-verification-fields" ${upload.verify !== 'none' ? '' : 'hidden'}>${field('config-verification', 'Verification protocol', select('config-verification', [{ value: 'readback', label: 'Byte-for-byte flash readback' }], upload.verify === 'none' ? 'readback' : upload.verify))}</div>
             ${dfu ? '<p class="config-help">Monitor reconnect is manual after USB re-enumeration.</p>' : check('config-auto-monitor', 'Open serial monitor after upload', upload.autoMonitor)}
             <div id="config-monitor-fields" ${upload.autoMonitor && !dfu ? '' : 'hidden'}>${field('config-monitor-baud', 'Monitor baud rate', `<input id="config-monitor-baud" type="number" min="1" max="2000000" step="1" value="${escape(upload.monitorBaudRate)}">`)}</div>
-            ${dfu ? '<p class="config-help">F401RC: flash 0x08000000, 256 KiB. Flash requires ROM DFU. Use BOOT0/reset for first provisioning; the CDC trigger requires bridge-enabled firmware. Readback is mandatory.</p><button id="config-enter-dfu" type="button" class="btn-tiny">Enter DFU through CDC</button>' : esp8266 ? '<p class="config-help">UART DTR/RTS reset · RAM-only ROM image at flash offset 0 · 4 MiB board profile · 115200 baud.</p>' : '<p class="config-help">USB Serial/JTAG CDC reset · application partition at 0x10000.</p>'}
+            ${dfu ? '<p class="config-help">F401RC: flash 0x08000000, 256 KiB. Flash requires ROM DFU. Use BOOT0/reset for first provisioning; the CDC trigger requires bridge-enabled firmware. Readback is mandatory.</p><button id="config-enter-dfu" type="button" class="btn-tiny">Enter DFU through CDC</button>' : nano ? '<p class="config-help">ATmega328P · 128-byte flash pages · 30 KiB application limit · bootloader preserved.</p>' : esp8266 ? '<p class="config-help">UART DTR/RTS reset · RAM-only ROM image at flash offset 0 · 4 MiB board profile · 115200 baud.</p>' : '<p class="config-help">USB Serial/JTAG CDC reset · application partition at 0x10000.</p>'}
           </div>
         </div></details>
       </fieldset>

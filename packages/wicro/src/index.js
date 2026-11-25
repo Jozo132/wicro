@@ -271,7 +271,7 @@ export const main = async (args = []) => {
           if (!isSdkDep) continue;
           try {
             const depManifest = (await findRegistryManifest(depName)).manifest;
-            if (depManifest.metadata?.distribution?.url) {
+            if (depManifest.metadata?.distribution?.sha256) {
               /** @type {Record<string,string>} */
               const localSources = {};
               const envOverride = process.env.WICRO_SDK_SOURCE;
@@ -670,6 +670,17 @@ export const main = async (args = []) => {
       if (!uploadBoard && uploadProject) {
         try { uploadBoard = JSON.parse(await readFile(resolve(uploadProject, 'wicro.json'), 'utf8')).board; }
         catch (error) { if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ENOENT') throw error; }
+      }
+      if (flags.includes('--programmer=stk500v1') || uploadBoard === 'arduino-nano') {
+        if (uploadBoard !== 'arduino-nano') throw new Error('STK500v1 currently requires --board=arduino-nano');
+        const path = flags.find((arg) => arg.startsWith('--port='))?.slice('--port='.length);
+        const binary = flags.find((arg) => arg.startsWith('--bin='))?.slice('--bin='.length) ?? (uploadProject ? resolve(uploadProject, '.wicro/build/firmware.bin') : undefined);
+        if (!path || !binary) throw new Error('Nano upload requires explicit --port and --bin');
+        const baud = Number(flags.find((arg) => arg.startsWith('--baud='))?.slice('--baud='.length) ?? 115200);
+        if (![115200, 57600].includes(baud)) throw new Error('Nano bootloader baud must be 115200 or 57600');
+        const result = await new programmerModule.NanoNodeProgrammer({ path, baudRate: baud }).writeFlash(new Uint8Array(await readFile(resolve(binary))));
+        emit({ command: 'upload', ...result }, json, `Uploaded and verified Nano firmware on ${path}`);
+        return 0;
       }
       if (uploadBoard === 'esp8266-bare-metal' || flags.includes('--programmer=esp8266-uart')) {
         const path = flags.find((arg) => arg.startsWith('--port='))?.slice('--port='.length);

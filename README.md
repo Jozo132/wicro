@@ -27,6 +27,7 @@ The npm package is `@jozo132/wicro`. Its command-line executable is `wicro`.
 - Native ESP-IDF v6.1.1 reference blink build and serial heartbeat observation on hardware
 - Native USB VCP 1200-baud/DTR/RTS reset sequences in the programmer transport
 - GPIO8 active-low LED, serial heartbeat and 4 MB flash detection on the native reference firmware
+- Arduino Nano: genuine Arduino AVR WASM firmware, STK500 readback, bootloader preservation and 65-second serial stability; [details](docs/nano-wasm-status.md)
 - Monaco browser IDE shell and Web Serial controls
 - ESP8266 bare-metal WASM firmware, UART auto-reset, verified flash/readback and serial execution; [scope and commands](docs/esp8266-wasm-status.md)
 

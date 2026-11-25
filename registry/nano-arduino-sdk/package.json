@@ -1,0 +1,16 @@
+{
+  "name": "nano-arduino-sdk",
+  "version": "1.0.0",
+  "kind": "platform",
+  "description": "Curated genuine Arduino AVR core and AVR5 target runtime for Nano; distribution deployment pending",
+  "license": "LGPL-2.1-or-later",
+  "metadata": {
+    "distribution": {
+      "url": "",
+      "mirrors": [],
+      "archiveType": "zip",
+      "sha256": "2cb7539b1e417c252da5870d82a9118c898563490967c255721beff36d1586e9"
+    },
+    "deployment": "local-development-only"
+  }
+}

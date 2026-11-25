@@ -1,0 +1,7 @@
+{
+  "name": "nano-arduino-heartbeat",
+  "board": "arduino-nano",
+  "framework": "arduino",
+  "toolchain": "llvm-wasm",
+  "build": { "sources": ["main.ino"] }
+}
