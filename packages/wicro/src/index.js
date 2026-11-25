@@ -9,7 +9,7 @@ const packageJson = require('../package.json');
 export const version = packageJson.version;
 
 export const help = () => {
-  return `Wicro ${version}\n\nUsage:\n  wicro <command> [options]\n\nCommands:\n  init [name]       Create a Wicro project\n  build             Build firmware with the shared WASM engine\n  rebuild           Rebuild firmware\n  clean             Remove Wicro build and cache directories\n  upload            Upload an ESP32-C3 firmware image\n  monitor           Monitor the ESP32-C3 serial console\n  install           Install packages and transitive dependencies\n  uninstall         Remove installed packages\n  update            Update packages and refresh the lockfile\n  board list        List available boards\n  device list       List detected ESP32-C3 devices\n  package list      List registry packages\n  doctor            Inspect the Node.js host environment\n  test              Run workspace tests\n\nOptions:\n  -h, --help        Show this help message\n  -V, --version     Show the version\n      --json        Emit machine-readable JSON\n`;
+  return `Wicro ${version}\n\nUsage:\n  wicro <command> [options]\n\nCommands:\n  init [name]       Create a Wicro project\n  build             Build firmware with the shared WASM engine\n  rebuild           Rebuild firmware\n  clean             Remove Wicro build and cache directories\n  upload            Upload ESP32-C3 or explicit F401RC CDC-DFU firmware\n  monitor           Monitor the ESP32-C3 serial console\n  install           Install packages and transitive dependencies\n  uninstall         Remove installed packages\n  update            Update packages and refresh the lockfile\n  board list        List available boards\n  device list       List detected ESP32-C3 devices\n  package list      List registry packages\n  doctor            Inspect the Node.js host environment\n  test              Run workspace tests\n\nOptions:\n  -h, --help        Show this help message\n  -V, --version     Show the version\n      --json        Emit machine-readable JSON\n`;
 };
 
 /** @returns {Promise<string>} */
@@ -665,6 +665,22 @@ export const main = async (args = []) => {
       }
       const { Esp32C3NodeProgrammer } = programmerModule;
       const { readFile } = await import('node:fs/promises');
+      if (flags.includes('--programmer=cdc-dfu')) {
+        if (!flags.includes('--board=stm32f401rc')) throw new Error('CDC-DFU currently requires --board=stm32f401rc; MCU flash bounds must be explicit');
+        const binary = flags.find((arg) => arg.startsWith('--bin='))?.slice('--bin='.length);
+        if (!binary) throw new Error('CDC-DFU requires --bin=/path/to/firmware.bin');
+        const serialNumber = flags.find((arg) => arg.startsWith('--serial='))?.slice('--serial='.length);
+        const result = await new programmerModule.NodeCdcDfuProgrammer({
+          profile: { ...programmerModule.STM32F401RC_CDC_DFU_PROFILE, serialNumber },
+          onLog: (/** @type {string} */ message) => { if (!json) console.error(message); }
+        }).writeFlash(new Uint8Array(await readFile(resolve(binary))), {
+          trigger: !flags.includes('--manual-dfu'),
+          leave: !flags.includes('--stay-in-dfu'),
+          verifyReadback: true
+        });
+        emit({ command: 'upload', ...result }, json, `Uploaded and verified ${binary} on STM32F401RC`);
+        return 0;
+      }
       const project = flags.find((arg) => arg.startsWith('--project='))?.slice('--project='.length) ?? 'examples/esp32-c3-supermini/blink';
       const target = resolve(project);
       const appBin = (await import('node:fs/promises')).readdir(target + '/build').then((names) => names.find((name) => name.endsWith('.bin') && name !== 'bootloader.bin' && name !== 'partition-table.bin'));

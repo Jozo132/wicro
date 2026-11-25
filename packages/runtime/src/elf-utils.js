@@ -303,35 +303,43 @@ export const elfToBin = async (elf) => {
   const sectionCount = view.getUint16(48, true);
   if (sectionOffset === 0 || sectionEntrySize < 40 || sectionCount === 0) throw new Error('ELF image has no section table');
 
-  let start = Number.MAX_SAFE_INTEGER;
-  let end = 0;
+  // Section VMAs can point into RAM while their initializers are stored in
+  // flash. Use PT_LOAD physical addresses to locate those bytes in the image.
+  const programOffset = view.getUint32(28, true);
+  const programEntrySize = view.getUint16(42, true);
+  const programCount = view.getUint16(44, true);
+  /** @type {{offset:number,size:number,address:number}[]} */
+  const loads = [];
+  if (programCount && programEntrySize < 32) throw new Error('Invalid ELF program table');
+  for (let index = 0; index < programCount; index++) {
+    const offset = programOffset + index * programEntrySize;
+    if (offset + 32 > elf.length) throw new Error('Truncated ELF program table');
+    if (view.getUint32(offset, true) === 1) loads.push({ offset: view.getUint32(offset + 4, true), address: view.getUint32(offset + 12, true), size: view.getUint32(offset + 16, true) });
+  }
+  /** @type {{address:number,fileOffset:number,size:number}[]} */
+  const sections = [];
   for (let index = 0; index < sectionCount; index++) {
     const offset = sectionOffset + index * sectionEntrySize;
-    if (offset + 40 > elf.length) break;
-    const address = view.getUint32(offset + 12, true);
+    if (offset + 40 > elf.length) throw new Error('Truncated ELF section table');
+    let address = view.getUint32(offset + 12, true);
     const fileOffset = view.getUint32(offset + 16, true);
     const size = view.getUint32(offset + 20, true);
     const type = view.getUint32(offset + 4, true);
     const flags = view.getUint32(offset + 8, true);
-    if (type === 8 || (flags & 2) === 0 || address < 0x08000000) continue;
-    if (fileOffset + size > elf.length) continue;
-    start = Math.min(start, address);
-    end = Math.max(end, address + size);
+    if (type === 8 || (flags & 2) === 0 || !size) continue;
+    if (fileOffset + size > elf.length) throw new Error('Truncated ELF section contents');
+    const load = loads.find((segment) => fileOffset >= segment.offset && fileOffset + size <= segment.offset + segment.size);
+    if (load) address = load.address + fileOffset - load.offset;
+    if (address < 0x08000000 || address >= 0x20000000) continue;
+    if (address + size > 0x20000000) throw new Error('ELF section crosses flash address space');
+    sections.push({ address, fileOffset, size });
   }
-  if (start === Number.MAX_SAFE_INTEGER || end <= start) throw new Error('ELF image has no flash sections');
+  if (!sections.length) throw new Error('ELF image has no flash sections');
+  const start = Math.min(...sections.map((section) => section.address));
+  const end = Math.max(...sections.map((section) => section.address + section.size));
+  if (end - start > 64 * 1024 * 1024) throw new Error('ELF flash image contains an excessive address gap');
   const bin = new Uint8Array(end - start);
-  for (let index = 0; index < sectionCount; index++) {
-    const offset = sectionOffset + index * sectionEntrySize;
-    if (offset + 40 > elf.length) break;
-    const address = view.getUint32(offset + 12, true);
-    const fileOffset = view.getUint32(offset + 16, true);
-    const size = view.getUint32(offset + 20, true);
-    const type = view.getUint32(offset + 4, true);
-    const flags = view.getUint32(offset + 8, true);
-    if (type === 8 || (flags & 2) === 0 || address < 0x08000000) continue;
-    if (fileOffset + size > elf.length) continue;
-    bin.set(elf.subarray(fileOffset, fileOffset + size), address - start);
-  }
+  for (const { address, fileOffset, size } of sections) bin.set(elf.subarray(fileOffset, fileOffset + size), address - start);
   return bin;
 };
 

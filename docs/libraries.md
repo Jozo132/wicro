@@ -115,7 +115,7 @@ running the same file through a standalone Python interpreter does not reproduce
 that environment. See the official [Advanced Scripting documentation](https://docs.platformio.org/en/latest/scripting/index.html).
 
 Wicro does not execute these hooks or pretend they ran. Declared project
-`extra_scripts` and library `build.extraScript` requirements stop import/build with
+`extra_scripts` and unported library `build.extraScript` requirements stop import/build with
 an explicit explanation. A Python helper merely included in documentation or used
 upstream to generate a checked-in header is not considered a required build hook.
 
@@ -145,3 +145,5 @@ package files, builds a validated ESP32-C3 firmware image, reloads the app, and
 rebuilds with external network requests blocked. It requires Chrome plus the staged
 compiler/ESP32-C3 SDK used by `tests/web-ide.test.js`. Ordinary tests do not replace
 vendor libraries with mock versions or silently assert hardware functionality.
+
+The checksum-pinned PlatformIO `jozo132/cdc-dfu` 1.1.2 release now has a shared recipe for its forced source compilation and global USB hook define. It requires a genuine STM32F4/H7 Arduino USB CDC framework recipe. See [F401RC CDC-DFU](stm32-cdc-dfu.md); this exception does not enable arbitrary Python hooks or complete the general STM32 Arduino SDK installer.

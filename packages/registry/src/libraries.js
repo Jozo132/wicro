@@ -9,14 +9,15 @@ import { extractLibraryArchive, safeLibraryPath } from './library-archive.js';
 /** @typedef {import('./library-catalog.js').LibraryRequest} LibraryRequest */
 /** @typedef {{lockfileVersion:1,requests:LibraryRequest[],target:string,libraries:LibraryRelease[]}} LibraryLock */
 
-/** @param {Record<string,Uint8Array>} files */
-export const inspectLibrary = (files) => {
+/** @param {Record<string,Uint8Array>} files @param {LibraryRelease} [release] */
+export const inspectLibrary = (files, release) => {
   const decode = new TextDecoder();
   const properties = files['library.properties'] ? parseLibraryProperties(decode.decode(files['library.properties'])) : {};
   const manifest = files['library.json'] ? JSON.parse(decode.decode(files['library.json'])) : {};
-  if (manifest.build?.extraScript || manifest.extraScript) throw new Error(`Library requires a PlatformIO Python/SCons hook (${manifest.build?.extraScript ?? manifest.extraScript}). Port its required operations to a shared Wicro build recipe; hooks are not silently skipped.`);
+  const cdcDfuRecipe = release?.provider === 'platformio' && release.owner === 'jozo132' && release.name === 'cdc-dfu' && release.version === '1.1.2' && release.sha256 === '64911fd4004b4fc8e311fb55cfc06e0d7f5fd2f8fc215c1d22480d92e13e3afe';
+  if (!cdcDfuRecipe && (manifest.build?.extraScript || manifest.extraScript)) throw new Error(`Library requires a PlatformIO Python/SCons hook (${manifest.build?.extraScript ?? manifest.extraScript}). Port its required operations to a shared Wicro build recipe; hooks are not silently skipped.`);
   for (const key of Object.keys(manifest.build ?? {})) {
-    if (!['srcDir', 'includeDir', 'flags', 'libArchive'].includes(key)) throw new Error(`Unsupported PlatformIO library build option '${key}'; provide an explicit Wicro recipe before importing it`);
+    if (![...['srcDir', 'includeDir', 'flags', 'libArchive'], ...(cdcDfuRecipe ? ['extraScript', 'srcFilter'] : [])].includes(key)) throw new Error(`Unsupported PlatformIO library build option '${key}'; provide an explicit Wicro recipe before importing it`);
   }
   if (properties.precompiled && properties.precompiled !== 'false' || Object.keys(files).some((name) => /\.(a|o|so|dll|exe)$/i.test(name))) throw new Error('Precompiled library binaries require a verified target/ABI recipe; import source libraries instead');
   /** @type {Array<{name:string,version?:string,owner?:string}>} */
@@ -51,7 +52,7 @@ export const inspectLibrary = (files) => {
   // native paths and PlatformIO variables never masquerade as WASI paths.
   const flags = Array.isArray(rawFlags) ? rawFlags : rawFlags.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)?.map((flag) => flag.replace(/["']/g, '')) ?? [];
   if (flags.some((/** @type {unknown} */ flag) => typeof flag !== 'string' || /^-(?:I|L|include|isystem)/.test(flag) || flag.includes('${'))) throw new Error('Library include/library path flags require an explicit Wicro recipe');
-  return { name: manifest.name ?? properties.name, version: manifest.version ?? properties.version, dependencies, sourceFiles, includeRoots: roots, flags, architectures: properties.architectures?.split(',').map((value) => value.trim()) ?? [], frameworks: manifest.frameworks };
+  return { recipe: cdcDfuRecipe ? 'cdc-dfu-1.1.2' : null, globalDefines: cdcDfuRecipe ? ['DTR_TOGGLING_SEQ'] : [], name: manifest.name ?? properties.name, version: manifest.version ?? properties.version, dependencies, sourceFiles, includeRoots: roots, flags, architectures: properties.architectures?.split(',').map((value) => value.trim()) ?? [], frameworks: manifest.frameworks };
 };
 
 /** Refuse declared project hooks before any build downloads or compilation. @param {Record<string,string>} files @param {Record<string,any>} config */
@@ -144,7 +145,7 @@ export class LibraryManager {
 
   /** @param {LibraryRelease} release @param {Record<string,Uint8Array>} files */
   checkCompatibility(release, files) {
-    const metadata = inspectLibrary(files);
+    const metadata = inspectLibrary(files, release);
     const architectures = metadata.architectures.length ? metadata.architectures : release.architectures ?? [];
     if (this.architecture && architectures.length && !architectures.includes('*') && !architectures.includes(this.architecture)) throw new Error(`${release.name} does not support Arduino architecture '${this.architecture}'`);
     if (metadata.frameworks && this.framework && metadata.frameworks !== '*' && !(Array.isArray(metadata.frameworks) ? metadata.frameworks : [metadata.frameworks]).includes(this.framework)) throw new Error(`${release.name} does not support framework '${this.framework}'`);
@@ -170,7 +171,7 @@ export class LibraryManager {
         if (installed.size >= 100) throw new Error('Library dependency graph exceeds 100 packages');
         const files = await this.load(release);
         installed.set(release.id, { release, files });
-        const dependencies = [...(release.dependencies ?? []), ...inspectLibrary(files).dependencies];
+        const dependencies = [...(release.dependencies ?? []), ...inspectLibrary(files, release).dependencies];
         for (const dependency of dependencies) await visit({ provider: request.provider === 'platformio' ? 'platformio' : 'arduino', ...dependency });
         if (installed.size > 100) throw new Error('Library dependency graph exceeds 100 packages');
       };

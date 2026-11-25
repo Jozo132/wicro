@@ -329,6 +329,8 @@ const bootstrap = async () => {
 
   new PlatformConfigurationPanel(/** @type {HTMLElement} */ (root.querySelector('#wicro-platform-configuration')), store, {
     webSerial: deviceService.capabilities.webSerial,
+    webUsb: deviceService.capabilities.webUsb,
+    onEnterDfu: () => { void deviceService.enterCdcDfu(store.currentBoard).catch((error) => store.appendCompilerLog(`[DFU] ${error instanceof Error ? error.message : String(error)}`)); },
     onEditJson: () => { store.setActiveFile('wicro.json'); editorHost.openFile('wicro.json'); }
   });
 

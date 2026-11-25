@@ -243,3 +243,7 @@ const waitForEspPort = async (timeoutMs) => {
 export const findEsp32C3Ports = (ports) => ports.filter((port) =>
   port.vendorId?.toLowerCase() === '303a' && (port.productId?.toLowerCase() === '1001' || port.productId?.toLowerCase() === '1002')
 );
+
+export { NodeCdcDfuProgrammer } from './cdc-dfu-node.js';
+export { STM32F401RC_CDC_DFU_PROFILE, validateCortexMImage } from './cdc-dfu-profile.js';
+export { UsbDfuProgrammer } from './dfu.js';

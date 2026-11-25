@@ -38,7 +38,8 @@ export const getDeviceFamily = (board) => {
 export const getTargetConfiguration = (board) => {
   const metadata = board?.metadata ?? {};
   const platform = registry.getPlatform(String(metadata.platform ?? ''));
-  const programmer = platform?.programmerId ? registry.getProgrammer(platform.programmerId) : undefined;
+  const programmerId = metadata.programmerId ?? platform?.programmerId;
+  const programmer = programmerId ? registry.getProgrammer(programmerId) : undefined;
   const browserUpload = Boolean(programmer?.browserProtocols?.length);
   return {
     frameworks: [...(platform?.frameworks ?? [String(metadata.framework ?? 'arduino'), 'bare-metal'])].filter((value, index, all) => all.indexOf(value) === index),

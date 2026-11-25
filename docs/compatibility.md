@@ -57,7 +57,7 @@ Status values:
 | Transitive dependencies | Implemented | SemVer registry resolution returns and detects dependency conflicts in a package tree |
 | PlatformIO registry integration | Implemented | Public PlatformIO search/package lookup adapter uses configurable fetch and HTTP contracts |
 | Programmer extension API | Implemented | `ProgrammerProtocolRegistry` supports custom named protocols; the simulated protocol is automated-tested |
-| Clean npm archive | Verified | The packed CLI is 33.8 kB, installs in a temporary directory, runs `npx wicro --help`, and contains no `.wasm`, SDK archive or extracted SDK tree |
+| Clean npm archive | Verified | The packed CLI dry run is 91.1 kB, installs in a temporary directory, runs `npx wicro --help`, and contains no `.wasm`, SDK archive or extracted SDK tree |
 | Real Clang WASI diagnostics | Implemented | Existing LLVM WASM binary executes `-fsyntax-only` and returns parsed Clang diagnostics |
 | Clang WASI code completion | Implemented | Existing LLVM WASM binary executes `-code-completion-at` and returns parsed candidates |
 | `@wicro/language-server` LSP/session | Implemented | LSP initialization, document sync, diagnostics, completion, hover, definition, references, rename and formatting protocol are executable in tests |
@@ -73,7 +73,7 @@ Status values:
 | Arduino bare-metal C++ ELF/BIN | Implemented | Shared LLVM WASM runtime links C++ setup/loop code with startup and linker script using C-linkage `main` |
 | Arduino SDK manifests | Implemented | AVR, ESP32, ESP8266, STM32 and Pico upstream revisions are recorded in versioned framework packages |
 | Official Arduino board presets | Implemented | UNO, Nano, Mega, Leonardo, ESP32 families, ESP8266 NodeMCU/D1 Mini, STM32 boards and Pico variants are registered; SDK artifacts remain separate |
-| Complete Arduino SDK firmware linking | ESP32-C3 verified; other targets planned | ESP32-C3 Arduino-ESP32 firmware compiles and links completely through WASM LLD and runs on physical hardware; AVR, STM32, RP2040, ESP8266 and original ESP32 full SDK linking remain separate work |
+| Complete Arduino SDK firmware linking | ESP32-C3 verified; F401RC development fixture verified | ESP32-C3 Arduino-ESP32 firmware compiles and links completely through WASM LLD and runs on physical hardware; F401RC STM32duino CDC-DFU firmware is physically verified using cached SDK inputs in a development fixture; production STM32 Arduino SDK integration, AVR, RP2040, ESP8266 and original ESP32 remain separate work |
 | boards.txt/platform.txt parsing | Implemented | Property-file parsing, board names, menu options and platform INI parsing are executable and tested |
 | library.properties/library.json parsing | Implemented | Arduino and PlatformIO library metadata parsing is executable and tested |
 | PlatformIO import/search | Implemented | PlatformIO INI parsing and registry lookup are available; script execution is prohibited |
@@ -88,9 +88,11 @@ Status values:
 | ESP8266 | Source present | Implemented | Pending | Protocol surface pending | Not physically verified |
 | Arduino UNO / ATmega328P | Source present | Verified | Pending | AVR STK500 not hardware-verified | Not physically verified |
 | STM32F103CB | Verified bare-metal fixture | Verified | Verified bare-metal ELF/BIN | ST-LINK/UART not hardware-verified | Not physically verified |
-| STM32F401RC | Verified bare-metal fixture | Verified | Recipe present | ST-LINK/UART not hardware-verified | Not physically verified |
+| STM32F401RC | Verified bare-metal fixture | Verified | Verified STM32duino CDC-DFU development fixture (WASM LLVM/LLD, 27,672 B BIN) | Verified Node CDC → ROM DfuSe → write/readback → CDC | Verified USB heartbeat; browser hardware path and visual LED operation unverified |
 | STM32H723VG | Verified bare-metal fixture | Verified | Verified bare-metal ELF/BIN | ST-LINK/UART not hardware-verified | Not physically verified |
 | RP2040 | Source present | Verified | Pending | PICOBOOT not hardware-verified | Not physically verified |
 | RP2350 | Source present | Verified | Pending | PICOBOOT not hardware-verified | Not physically verified |
 
 Do not report compiler or hardware support as verified until it passes a real target test.
+
+See [F401RC CDC-DFU](stm32-cdc-dfu.md) for physical evidence, browser limitations, hook translation and reproduction commands.

@@ -260,3 +260,5 @@ export class BrowserEsp32Programmer {
     }
   }
 }
+
+export { BrowserCdcDfuProgrammer } from './cdc-dfu-browser.js';

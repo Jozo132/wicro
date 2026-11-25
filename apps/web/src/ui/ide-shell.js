@@ -527,7 +527,7 @@ export class IdeShell {
 
     const hasBin = Boolean(this.store.lastBuild?.artifacts?.bin instanceof Uint8Array);
     const target = getTargetConfiguration(this.store.currentBoard);
-    this.flashBtn.disabled = busy || invalid || !hasBin || !this.actions.capabilities.webSerial || !target.browserUpload || this.store.uploadSettings.programmer === 'none';
+    this.flashBtn.disabled = busy || invalid || !hasBin || !(target.protocol === 'dfuse' ? this.actions.capabilities.webUsb : this.actions.capabilities.webSerial) || !target.browserUpload || this.store.uploadSettings.programmer === 'none';
     this.flashBtn.textContent = this.store.flashStatus === 'flashing' ? 'Flashing…' : 'Flash';
 
     const activeProgress = this.store.flashStatus === 'flashing'

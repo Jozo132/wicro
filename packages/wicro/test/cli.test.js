@@ -147,3 +147,20 @@ test('unknown commands use a usage exit code', () => {
   assert.equal(result.status, 64);
   assert.match(result.stdout, /Unknown command/);
 });
+
+test('CDC-DFU upload requires the supported board, an explicit binary, and a valid vector table before USB access', async () => {
+  const wrongBoard = run('upload', '--programmer=cdc-dfu', '--board=stm32f401cc', '--json');
+  assert.equal(wrongBoard.status, 1);
+  assert.match(JSON.parse(wrongBoard.stdout).error, /requires --board=stm32f401rc/);
+  const missingBinary = run('upload', '--programmer=cdc-dfu', '--board=stm32f401rc', '--json');
+  assert.equal(missingBinary.status, 1);
+  assert.match(JSON.parse(missingBinary.stdout).error, /requires --bin/);
+  const directory = await mkdtemp(join(tmpdir(), 'wicro-dfu-preflight-'));
+  try {
+    const path = join(directory, 'invalid.bin');
+    await writeFile(path, Uint8Array.of(1, 2, 3));
+    const invalid = run('upload', '--programmer=cdc-dfu', '--board=stm32f401rc', `--bin=${path}`, '--json');
+    assert.equal(invalid.status, 1);
+    assert.match(JSON.parse(invalid.stdout).error, /vector table/);
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});

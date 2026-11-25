@@ -89,6 +89,15 @@ test('platform setup: dependent fields and two-way Monaco JSON synchronization',
     await editJson(modelText);
     assert.equal(await page.locator('#config-family').isDisabled(), false);
 
+    await page.selectOption('#wicro-board', 'stm32f401rc');
+    await page.selectOption('#config-programmer', 'stm32-cdc-dfu');
+    assert.equal(await page.locator('#config-protocol').inputValue(), 'dfuse');
+    assert.equal(await page.locator('#config-upload-baud').count(), 0);
+    assert.equal(await page.locator('#config-enter-dfu').count(), 1);
+    assert.equal(await page.locator('#config-verify').count(), 0, 'DFU readback is required');
+    assert.equal((await json()).upload.programmer, 'stm32-cdc-dfu');
+    assert.equal(await page.locator('#config-auto-monitor').count(), 0);
+
     await page.selectOption('#config-family', 'RP2350');
     assert.ok((await page.locator('#config-model option').allTextContents()).every((name) => name.includes('RP2350')));
     assert.equal((await json()).board, await page.locator('#config-board').inputValue());

@@ -37,6 +37,22 @@
         "pin": 13,
         "activeLow": true
       }
+    },
+    "programmerId": "stm32-cdc-dfu",
+    "usbVendorId": "0483",
+    "usbProductId": "5740",
+    "cdcDfu": {
+      "runtimeVendorId": 1155,
+      "runtimeProductId": 22336,
+      "dfuVendorId": 1155,
+      "dfuProductId": 57105,
+      "interfaceNumber": 0,
+      "alternateSetting": 0,
+      "address": 134217728,
+      "capacity": 262144,
+      "ramAddress": 536870912,
+      "ramCapacity": 65536,
+      "protocol": "dfuse"
     }
   }
 }

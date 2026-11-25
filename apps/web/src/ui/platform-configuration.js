@@ -16,7 +16,7 @@ const check = (id, label, checked) => `<label class="config-check"><input id="${
 const choices = (values) => values.map((value) => ({ value, label: value }));
 
 export class PlatformConfigurationPanel {
-  /** @param {HTMLElement} root @param {import('../state/ide-store.js').IdeStore} store @param {{webSerial:boolean,onEditJson:()=>void}} options */
+  /** @param {HTMLElement} root @param {import('../state/ide-store.js').IdeStore} store @param {{webSerial:boolean,webUsb?:boolean,onEnterDfu?:()=>void,onEditJson:()=>void}} options */
   constructor(root, store, options) {
     this.root = root;
     this.store = store;
@@ -44,6 +44,8 @@ export class PlatformConfigurationPanel {
     const defines = Array.isArray(config.build?.defines) ? config.build.defines : [];
     const optimization = flags.filter((/** @type {string} */ flag) => OPTIMIZATIONS.includes(flag)).at(-1) ?? '';
     const upload = this.store.uploadSettings;
+    const dfu = target.protocol === 'dfuse';
+    const canUpload = dfu ? this.options.webUsb : this.options.webSerial;
     const uploading = upload.programmer !== 'none' && target.browserUpload;
     const busy = this.store.buildStatus === 'building' || this.store.flashStatus === 'flashing';
     const issues = this.store.configurationIssues;
@@ -71,16 +73,16 @@ export class PlatformConfigurationPanel {
           <details id="config-advanced-section" class="config-advanced"><summary>Additional compiler flags</summary>${field('config-flags', 'Flags · one argument per line', `<textarea id="config-flags" rows="4" spellcheck="false">${escape(flags.join('\n'))}</textarea>`)}</details>
         </div></details>
         <details id="config-upload-section" open><summary>03 <span>Programmer & upload</span></summary><div class="config-fields">
-          ${field('config-programmer', 'Programmer', select('config-programmer', [{ value: 'none', label: 'Download artifacts only' }, ...(target.programmer ? [{ value: target.programmer.id, label: target.programmer.name, disabled: !target.browserUpload || !this.options.webSerial }] : [])], upload.programmer))}
-          ${!target.browserUpload ? '<p class="config-help">No browser upload adapter is available for this preset. Download artifacts for an external programmer.</p>' : !this.options.webSerial ? '<p class="config-help">Web Serial is unavailable in this browser.</p>' : ''}
+          ${field('config-programmer', 'Programmer', select('config-programmer', [{ value: 'none', label: 'Download artifacts only' }, ...(target.programmer ? [{ value: target.programmer.id, label: target.programmer.name, disabled: !target.browserUpload || !canUpload }] : [])], upload.programmer))}
+          ${!target.browserUpload ? '<p class="config-help">No browser upload adapter is available for this preset. Download artifacts for an external programmer.</p>' : !canUpload ? '<p class="config-help">The required USB API is unavailable in this browser.</p>' : ''}
           <div id="config-upload-fields" ${uploading ? '' : 'hidden'}>
-            ${field('config-protocol', 'Upload protocol', select('config-protocol', [{ value: 'esptool-slip', label: 'Espressif ROM / stub (SLIP)' }], upload.protocol))}
-            ${field('config-upload-baud', 'Upload baud rate', `<input id="config-upload-baud" type="number" min="1" max="2000000" step="1" value="${escape(upload.baudRate)}">`)}
-            ${check('config-verify', 'Verify after upload', upload.verify !== 'none')}
+            ${field('config-protocol', 'Upload protocol', select('config-protocol', [{ value: target.protocol ?? '', label: dfu ? 'STM32 USB DfuSe' : 'Espressif ROM / stub (SLIP)' }], upload.protocol))}
+            ${dfu ? '' : field('config-upload-baud', 'Upload baud rate', `<input id="config-upload-baud" type="number" min="1" max="2000000" step="1" value="${escape(upload.baudRate)}">`)}
+            ${dfu ? '<p class="config-help">Verification: byte-for-byte USB flash readback (required).</p>' : check('config-verify', 'Verify after upload', upload.verify !== 'none')}
             <div id="config-verification-fields" ${upload.verify !== 'none' ? '' : 'hidden'}>${field('config-verification', 'Verification protocol', select('config-verification', [{ value: 'readback', label: 'Byte-for-byte flash readback' }], upload.verify === 'none' ? 'readback' : upload.verify))}</div>
-            ${check('config-auto-monitor', 'Open serial monitor after upload', upload.autoMonitor)}
-            <div id="config-monitor-fields" ${upload.autoMonitor ? '' : 'hidden'}>${field('config-monitor-baud', 'Monitor baud rate', `<input id="config-monitor-baud" type="number" min="1" max="2000000" step="1" value="${escape(upload.monitorBaudRate)}">`)}</div>
-            <p class="config-help">USB Serial/JTAG CDC reset · application partition at 0x10000.</p>
+            ${dfu ? '<p class="config-help">Monitor reconnect is manual after USB re-enumeration.</p>' : check('config-auto-monitor', 'Open serial monitor after upload', upload.autoMonitor)}
+            <div id="config-monitor-fields" ${upload.autoMonitor && !dfu ? '' : 'hidden'}>${field('config-monitor-baud', 'Monitor baud rate', `<input id="config-monitor-baud" type="number" min="1" max="2000000" step="1" value="${escape(upload.monitorBaudRate)}">`)}</div>
+            ${dfu ? '<p class="config-help">F401RC: flash 0x08000000, 256 KiB. Flash requires ROM DFU. Use BOOT0/reset for first provisioning; the CDC trigger requires bridge-enabled firmware. Readback is mandatory.</p><button id="config-enter-dfu" type="button" class="btn-tiny">Enter DFU through CDC</button>' : '<p class="config-help">USB Serial/JTAG CDC reset · application partition at 0x10000.</p>'}
           </div>
         </div></details>
       </fieldset>
@@ -88,6 +90,8 @@ export class PlatformConfigurationPanel {
     for (const element of this.root.querySelectorAll('details')) {
       if (sections.has(element.id)) element.open = Boolean(sections.get(element.id));
     }
+    const trigger = this.root.querySelector('#config-enter-dfu');
+    if (trigger) /** @type {HTMLButtonElement} */ (trigger).disabled = !this.options.webSerial;
     this.bindEvents(flags);
     if (focusId) /** @type {HTMLElement|null} */ (this.root.querySelector(`#${focusId}`))?.focus({ preventScroll: true });
     this.root.scrollTop = scrollTop;
@@ -123,6 +127,7 @@ export class PlatformConfigurationPanel {
     change('config-verification', (input) => this.store.updateUploadConfiguration({ verify: input.value }));
     change('config-auto-monitor', (input) => this.store.updateUploadConfiguration({ autoMonitor: /** @type {HTMLInputElement} */ (input).checked }));
     change('config-monitor-baud', (input) => this.store.updateUploadConfiguration({ monitorBaudRate: Number(input.value) }));
+    this.root.querySelector('#config-enter-dfu')?.addEventListener('click', () => this.options.onEnterDfu?.());
     this.root.querySelector('#config-edit-json')?.addEventListener('click', this.options.onEditJson);
     this.root.querySelector('#config-close')?.addEventListener('click', () => { this.root.hidden = true; document.querySelector('#wicro-configure')?.setAttribute('aria-expanded', 'false'); });
   }

@@ -54,7 +54,7 @@ wicro upload --project=examples/esp32-c3-supermini/blink --port=/dev/ttyACM0
 wicro monitor --port=/dev/ttyACM0 --baud=115200
 ```
 
-The ESP32-C3 test board uses USB-Serial/JTAG VID/PID `303a:1001`, GPIO8 for the active-low onboard blue LED and BOOT on GPIO9. The STM32F401RC second MVP fixture uses Cortex-M4 Thumb, flash origin `0x08000000`, SRAM origin `0x20000000`, and 256 KB flash / 96 KB SRAM.
+The ESP32-C3 test board uses USB-Serial/JTAG VID/PID `303a:1001`, GPIO8 for the active-low onboard blue LED and BOOT on GPIO9. The STM32F401RC second MVP fixture uses Cortex-M4 Thumb, flash origin `0x08000000`, SRAM origin `0x20000000`, and 256 KiB flash / 64 KiB SRAM. CDC-DFU upload, full readback, CDC return and the running WASM-built Arduino firmware heartbeat have been physically verified on this board; see [F401RC CDC-DFU](docs/stm32-cdc-dfu.md).
 
 ## Arduino-first workflow
 

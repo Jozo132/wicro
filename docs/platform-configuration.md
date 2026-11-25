@@ -41,8 +41,7 @@ are retained when a visual control changes.
 Programmer descriptors declare their browser upload protocols. Currently the
 ESP32-C3 USB Serial/JTAG adapter exposes Espressif SLIP upload; its USB CDC reset
 transport is not presented as a separate interchangeable upload protocol.
-Other programmer descriptors remain unavailable in the browser. Web Serial must
-also be available before a browser programmer can be selected for use.
+The F401RC additionally exposes USB DfuSe through WebUSB and a separate CDC entry action through Web Serial. DFU hides baud controls and requires readback; monitor reconnection is manual. Other programmer descriptors remain unavailable in the browser. See [F401RC CDC-DFU](stm32-cdc-dfu.md) for provisioning and current SDK limitations.
 
 Download artifacts only hides upload settings and disables Flash. With a supported
 programmer, upload baud rate is editable. Verify after upload reveals byte-for-byte
@@ -72,8 +71,7 @@ baud rate. These settings are persisted in the project's `upload` section:
 The browser flashing service consumes the upload speed, verification choice,
 automatic monitor choice, and monitor speed. The existing serial dock controls
 stay synchronized with the same settings. Changing boards clears target-specific
-upload overrides. This does not add upload implementations for other devices or
-change CLI upload argument handling.
+upload overrides. F401RC CLI uploads also accept an explicit CDC-DFU programmer, board and binary path; see the target documentation.
 
 ## Editing and validation
 

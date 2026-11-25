@@ -1,4 +1,4 @@
-import { loadProjectLibraries } from './project-libraries.js';
+import { loadProjectLibraries, validateLibraryCompileConfiguration } from './project-libraries.js';
 
 import { inspectElfMemoryStats } from '../../runtime/src/elf-utils.js';
 import { WicroPlatformRegistry } from './platform/registry.js';
@@ -547,6 +547,8 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
         extraUnits: []
       };
 
+  validateLibraryCompileConfiguration(libraries, boardDescriptor.framework, compileConfig.defines);
+  compileConfig.defines = [...new Set([...compileConfig.defines, ...libraries.globalDefines])];
   compileConfig.includeDirs = [...new Set([...compileConfig.includeDirs, ...libraries.includeDirs])];
   compileConfig.files = { ...(compileConfig.files ?? {}), ...libraries.files };
 

@@ -1,6 +1,7 @@
 import { createDefaultPlatformRegistry } from '../../../../packages/core/src/index.js';
 import {
   BrowserEsp32Programmer,
+  BrowserCdcDfuProgrammer,
   describeWebSerialPort,
   detectBrowserCapabilities
 } from '../../../../packages/programmers/src/browser.js';
@@ -48,7 +49,7 @@ export class IdeDeviceService {
     if (!board) return null;
     const platformId = String(board.metadata?.platform ?? '');
     const platform = platformId ? platforms.getPlatform(platformId) : null;
-    const programmerId = platform?.programmerId ?? (platformId === 'espressif-esp32c3' ? 'esp32-c3-usb-jtag' : null);
+    const programmerId = board.metadata?.programmerId ?? platform?.programmerId ?? (platformId === 'espressif-esp32c3' ? 'esp32-c3-usb-jtag' : null);
     if (!programmerId) return null;
     const descriptor = platforms.getProgrammer(programmerId);
     return {
@@ -110,6 +111,15 @@ export class IdeDeviceService {
    * }} options
    */
   async flashFirmware(options) {
+    if (options.board.metadata?.cdcDfu) {
+      const programmer = new BrowserCdcDfuProgrammer({ profile: options.board.metadata.cdcDfu });
+      // Request permission before awaiting monitor cleanup, preserving activation.
+      const selection = programmer.requestDfuDevice();
+      await this.coordinator.acquireForFlash();
+      try { return await programmer.writeFlash(await selection, options.firmwareBin, { onProgress: options.onProgress }); }
+      finally { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); }
+    }
+
     if (!this.capabilities.webSerial) {
       throw new Error('Web Serial API is unavailable in this browser. Use Chrome or Edge to flash hardware.');
     }
@@ -165,6 +175,18 @@ export class IdeDeviceService {
       await this.coordinator.releaseAfterFlash({ reconnectMonitor: false });
       throw error;
     }
+  }
+
+  /** @param {import('../state/ide-store.js').BoardCatalogEntry|null} board */
+  async enterCdcDfu(board) {
+    if (!board?.metadata?.cdcDfu) throw new Error('Select an explicit CDC-DFU board profile');
+    const programmer = new BrowserCdcDfuProgrammer({ profile: board.metadata.cdcDfu });
+    const selection = programmer.requestRuntimePort();
+    await this.coordinator.acquireForFlash();
+    try {
+      await programmer.trigger(await selection);
+      this.callbacks.onLog('CDC trigger sent. Wait for DFU enumeration, then click Flash and select STM32 BOOTLOADER. First provisioning requires BOOT0/reset.');
+    } finally { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); }
   }
 
   dispose() {

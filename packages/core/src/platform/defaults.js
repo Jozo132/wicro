@@ -15,6 +15,13 @@ export const BUILTIN_PROGRAMMERS = Object.freeze([
     platforms: Object.freeze(['espressif-esp32c3'])
   }),
   Object.freeze({
+    id: 'stm32-cdc-dfu',
+    name: 'STM32 CDC trigger / USB DfuSe',
+    protocols: Object.freeze(['cdc-dfu', 'dfuse']),
+    browserProtocols: Object.freeze(['dfuse']),
+    platforms: Object.freeze(['st-stm32-bare-metal'])
+  }),
+  Object.freeze({
     id: 'stm32-stlink',
     name: 'STM32 ST-LINK / UART / DFU',
     protocols: Object.freeze(['stlink', 'stm32-uart', 'dfu']),

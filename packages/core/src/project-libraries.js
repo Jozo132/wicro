@@ -35,9 +35,15 @@ export const createLibraryCompilePlan = (installed) => {
   const units = [];
   /** @type {string[]} */
   const includeDirs = [];
+  /** @type {string[]} */
+  const globalDefines = [];
+  /** @type {string[]} */
+  const recipes = [];
   for (const entry of installed) {
     const prefix = `libraries/${entry.release.sha256}`;
-    const metadata = inspectLibrary(entry.files);
+    const metadata = inspectLibrary(entry.files, entry.release);
+    globalDefines.push(...metadata.globalDefines);
+    if (metadata.recipe) recipes.push(metadata.recipe);
     for (const [name, bytes] of Object.entries(entry.files)) files[`${prefix}/${name}`] = bytes;
     includeDirs.push(...metadata.includeRoots.map((root) => `${prefix}${root ? `/${root}` : ''}`));
     for (const path of metadata.sourceFiles) units.push({
@@ -47,5 +53,14 @@ export const createLibraryCompilePlan = (installed) => {
       compilerFlags: metadata.flags
     });
   }
-  return { files, units, includeDirs: [...new Set(includeDirs)], libraries: installed.map(({ release }) => ({ id: release.id, name: release.name, version: release.version })) };
+  return { files, units, globalDefines: [...new Set(globalDefines)], recipes, includeDirs: [...new Set(includeDirs)], libraries: installed.map(({ release }) => ({ id: release.id, name: release.name, version: release.version })) };
+};
+
+/** Reject an upstream empty firmware guard before any compilation.
+ * @param {{recipes:string[]}} plan @param {string} framework @param {string[]} compilerDefines
+ */
+export const validateLibraryCompileConfiguration = (plan, framework, compilerDefines) => {
+  if (!plan.recipes.includes('cdc-dfu-1.1.2')) return;
+  const defines = new Set(compilerDefines.map((define) => define.split('=')[0]));
+  if (framework !== 'arduino' || !['STM32F4xx', 'STM32H7xx'].some((define) => defines.has(define)) || !defines.has('USBCON') || !defines.has('USBD_USE_CDC')) throw new Error('cdc-dfu 1.1.2 requires an STM32F4/H7 Arduino USB CDC framework recipe; its firmware hook would otherwise compile empty');
 };

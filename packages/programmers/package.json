@@ -13,6 +13,7 @@
   },
   "optionalDependencies": {
     "serialport": "^13.0.0",
-    "esptool-js": "^0.7.1"
+    "esptool-js": "^0.7.1",
+    "usb": "^3.3.1"
   }
 }
