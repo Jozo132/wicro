@@ -31,7 +31,8 @@
     "release:llvm:verify": "node scripts/release-llvm-wasm.js verify",
     "test:remote-assets": "node --test tests/remote-assets.test.js",
     "check:remote-assets": "node scripts/check-remote-assets.js",
-    "test:libraries:live": "node scripts/test-libraries-live.js"
+    "test:libraries:live": "node scripts/test-libraries-live.js",
+    "test:esp8266-hardware": "node --test tests/esp8266-hardware.test.js"
   },
   "engines": {
     "node": ">=18"

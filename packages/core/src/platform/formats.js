@@ -1,3 +1,4 @@
+import { elfToEsp8266Bin, validateEsp8266Image } from '../../../runtime/src/esp8266-image.js';
 import { elfToEsp32Bin, validateEsp32Image } from '../../../runtime/src/elf-utils.js';
 
 /** @param {Uint8Array} elf @param {number} minAddress */
@@ -184,7 +185,14 @@ export const esp32C3BinFormatHandler = Object.freeze({
   }
 });
 
-export const BUILTIN_FIRMWARE_FORMATS = Object.freeze([
+/** @type {import('./registry.js').FirmwareFormatHandler} */
+export const esp8266RomFormatHandler = Object.freeze({
+  id: 'esp8266-rom', extension: '.bin', description: 'ESP8266 RAM-only ROM boot image',
+  convert: (elf) => elfToEsp8266Bin(elf),
+  validate: (image) => { try { return validateEsp8266Image(image); } catch (error) { return { valid: false, errors: [error instanceof Error ? error.message : String(error)] }; } }
+});
+
+export const BUILTIN_FIRMWARE_FORMATS = Object.freeze([esp8266RomFormatHandler,
   elfFormatHandler,
   flatBinFormatHandler,
   intelHexFormatHandler,

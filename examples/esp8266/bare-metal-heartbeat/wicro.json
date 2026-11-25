@@ -1,0 +1,7 @@
+{
+  "name": "esp8266-bare-metal-heartbeat",
+  "board": "esp8266-bare-metal",
+  "framework": "bare-metal",
+  "toolchain": "llvm-wasm",
+  "build": { "sources": ["main.c"], "flags": ["-Os"] }
+}

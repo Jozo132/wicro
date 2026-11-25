@@ -265,3 +265,32 @@ test('SDK & compiler cache: atomic install, concurrent deduplication, corruption
     await rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test('ESP8266 bare-metal ELF and ROM image match between Node WASI and browser WASI', async () => {
+  const project = resolve('examples/esp8266/bare-metal-heartbeat');
+  const board = await readFile('registry/esp8266-bare-metal/package.json', 'utf8');
+  /** @type {[string,string|Uint8Array][]} */
+  const entries = [['registry/esp8266-bare-metal/package.json', board]];
+  for (const name of ['wicro.json', 'main.c', 'startup.s', 'esp8266.ld']) entries.push([`project/${name}`, await readFile(join(project, name), 'utf8')]);
+  const nodeStore = new Map(entries), browserStore = new Map(entries);
+  const nodeEngine = createWicroEngine({ host: { ...createMemoryHost(nodeStore), host: 'node' }, toolchain: new LlvmWasmToolchain({ llvmPath }) });
+  const module = await WebAssembly.compile(await readFile(llvmPath));
+  const browserEngine = createWicroEngine({ host: createMemoryHost(browserStore), toolchain: /** @type {any} */ (new BrowserLlvmWasmToolchain({ loadModule: async () => module })) });
+  for (const engine of [nodeEngine, browserEngine]) {
+    const result = await engine.execute({ command: 'build', project: 'project' });
+    assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  }
+  for (const extension of ['elf', 'bin']) assert.equal(Buffer.compare(/** @type {Uint8Array} */ (nodeStore.get(`project/.wicro/build/firmware.${extension}`)), /** @type {Uint8Array} */ (browserStore.get(`project/.wicro/build/firmware.${extension}`))), 0);
+  const image = /** @type {Uint8Array} */ (nodeStore.get('project/.wicro/build/firmware.bin'));
+  const { validateEsp8266Image } = await import('../packages/runtime/src/esp8266-image.js');
+  assert.equal(validateEsp8266Image(image).segmentCount, 2);
+  const { ESP8266ROMFirmwareImage } = await import('esptool-js/lib/image/esp8266.js');
+  const { ESP8266ROM } = await import('esptool-js/lib/targets/esp8266.js');
+  const parsed = new ESP8266ROMFirmwareImage(new ESP8266ROM(), image);
+  assert.equal(parsed.entrypoint, validateEsp8266Image(image).entry);
+  const badChecksum = image.slice(); badChecksum[badChecksum.length - 1] ^= 1;
+  assert.throws(() => validateEsp8266Image(badChecksum), /checksum/);
+  const badEntry = image.slice(); new DataView(badEntry.buffer).setUint32(4, 0x40000000, true);
+  assert.throws(() => validateEsp8266Image(badEntry), /executable IRAM/);
+  assert.throws(() => validateEsp8266Image(image.subarray(0, image.length - 16)), /truncated|checksum/);
+});

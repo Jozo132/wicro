@@ -1,3 +1,4 @@
+export { elfToEsp8266Bin, validateEsp8266Image } from './esp8266-image.js';
 import { WASI } from 'node:wasi';
 import { closeSync, openSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -476,7 +477,8 @@ export class LlvmWasmToolchain {
    * Link explicit object/archive inputs with WASM LLD for any supported target.
    * Prefers file-backed WASI preopens (`archivePaths`, `linkerScriptPaths`, `preopens`)
    * so large SDK archives stay on disk instead of being copied through JS memory.
-   * @param {{objects:Record<string,Uint8Array>|Uint8Array[],preObjects?:Record<string,Uint8Array>,archives?:Record<string,Uint8Array>,archivePaths?:string[],linkerScripts?:Record<string,string|Uint8Array>,linkerScriptPaths?:string[],libraryPaths?:string[],libraries?:string[],undefinedSymbols?:string[],extraLinkerArgs?:string[],target:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},entry?:string,preopens?:Record<string,string>}} options
+   * emitBinary:false defers binary conversion to the shared firmware format handler.
+   * @param {{objects:Record<string,Uint8Array>|Uint8Array[],preObjects?:Record<string,Uint8Array>,archives?:Record<string,Uint8Array>,archivePaths?:string[],linkerScripts?:Record<string,string|Uint8Array>,linkerScriptPaths?:string[],libraryPaths?:string[],libraries?:string[],undefinedSymbols?:string[],extraLinkerArgs?:string[],emitBinary?:boolean,target:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},entry?:string,preopens?:Record<string,string>}} options
    */
   async linkElf(options) {
     const directory = await mkdtemp(join(tmpdir(), 'wicro-elf-link-'));
@@ -548,7 +550,7 @@ export class LlvmWasmToolchain {
 
       const elf = await readFile(join(directory, 'firmware.elf'));
       if (elf.length < 52 || elf.subarray(0, 4).toString('hex') !== '7f454c46') throw new Error('Linked output is not an ELF32 image');
-      return { elf, bin: await this.elfToBin(elf), target: options.target, diagnostics: linked.stderr ? [linked.stderr] : [] };
+      return { elf, bin: options.emitBinary === false ? new Uint8Array(0) : await this.elfToBin(elf), target: options.target, diagnostics: linked.stderr ? [linked.stderr] : [] };
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -556,7 +558,7 @@ export class LlvmWasmToolchain {
 
   /**
    * Backward-compatible alias for linking ESP32 ELF images through WASM LLD.
-   * @param {{objects:Record<string,Uint8Array>|Uint8Array[],preObjects?:Record<string,Uint8Array>,archives?:Record<string,Uint8Array>,archivePaths?:string[],linkerScripts?:Record<string,string|Uint8Array>,linkerScriptPaths?:string[],libraryPaths?:string[],libraries?:string[],undefinedSymbols?:string[],extraLinkerArgs?:string[],target:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},entry?:string,preopens?:Record<string,string>}} options
+   * @param {{objects:Record<string,Uint8Array>|Uint8Array[],preObjects?:Record<string,Uint8Array>,archives?:Record<string,Uint8Array>,archivePaths?:string[],linkerScripts?:Record<string,string|Uint8Array>,linkerScriptPaths?:string[],libraryPaths?:string[],libraries?:string[],undefinedSymbols?:string[],extraLinkerArgs?:string[],emitBinary?:boolean,target:string,targetOptions?:{march?:string,mabi?:string,mcpu?:string,mcu?:string},entry?:string,preopens?:Record<string,string>}} options
    */
   async linkEsp32Elf(options) {
     return this.linkElf(options);

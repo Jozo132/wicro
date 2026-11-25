@@ -262,3 +262,5 @@ export class BrowserEsp32Programmer {
 }
 
 export { BrowserCdcDfuProgrammer } from './cdc-dfu-browser.js';
+
+export { flashEsp8266 } from './esp8266.js';

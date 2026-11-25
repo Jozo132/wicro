@@ -53,3 +53,5 @@ These heads are recorded for reproducibility. The pinned Arduino-ESP32 Codeload 
 - Production SDK recipes for additional targets. Full ESP32-C3 WASM firmware and the cached-SDK F401RC CDC-DFU development fixture have been physically verified; the general STM32 Arduino SDK installer remains pending.
 
 No native Arduino, PlatformIO, Make or CMake command is executed by the Wicro build engine.
+
+The [ESP8266 bare-metal profile](esp8266-wasm-status.md) now has verified WASM-linked firmware and Node flash/readback/serial execution. This does not change the pending status of complete Arduino ESP8266 SDK firmware.

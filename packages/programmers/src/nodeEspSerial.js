@@ -121,7 +121,10 @@ export class NodeEspSerialTransport {
     /** @type {any} */
     this.port = undefined;
     this.tracing = false;
+    this.signals = { dtr: true, rts: true };
   }
+
+  get baudrate() { return this.baudRate; }
 
   getInfo() {
     return this.path;
@@ -173,6 +176,8 @@ export class NodeEspSerialTransport {
   /** @param {number} baud @param {object} [serialOptions] */
   async connect(baud = this.baudRate, serialOptions = {}) {
     if (this.port?.isOpen) await this.disconnect();
+    this.signals = { dtr: true, rts: true };
+    this.baudRate = baud;
     this.port = new SerialPort({ path: this.path, baudRate: baud, autoOpen: false });
     await new Promise((resolve, reject) => {
       this.port.open((/** @type {Error|null} */ error) => error ? reject(error) : resolve(undefined));
@@ -253,20 +258,10 @@ export class NodeEspSerialTransport {
   }
 
   /** @param {boolean} state */
-  async setRTS(state) {
-    if (!this.port?.isOpen) throw new Error('Serial port is not open');
-    await new Promise((resolve, reject) => {
-      this.port.set({ rts: state }, (/** @type {Error|null} */ error) => error ? reject(error) : resolve(undefined));
-    });
-  }
+  async setRTS(state) { await this.setSignals(this.signals.dtr, state); }
 
   /** @param {boolean} state */
-  async setDTR(state) {
-    if (!this.port?.isOpen) throw new Error('Serial port is not open');
-    await new Promise((resolve, reject) => {
-      this.port.set({ dtr: state }, (/** @type {Error|null} */ error) => error ? reject(error) : resolve(undefined));
-    });
-  }
+  async setDTR(state) { await this.setSignals(state, this.signals.rts); }
 
   /** @param {boolean} dtr @param {boolean} rts */
   async setSignals(dtr, rts) {
@@ -274,6 +269,7 @@ export class NodeEspSerialTransport {
     await new Promise((resolve, reject) => {
       this.port.set({ dtr, rts }, (/** @type {Error|null} */ error) => error ? reject(error) : resolve(undefined));
     });
+    this.signals = { dtr, rts };
   }
 
   /** @param {number} baud @param {object} [serialOptions] */

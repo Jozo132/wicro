@@ -96,3 +96,16 @@ test('custom programmer protocol factories are public', async () => {
   const protocol = await registry.create('demo', { transport: {} });
   assert.deepEqual(await protocol.probe({ transport: {} }), { ok: true, protocol: 'demo' });
 });
+
+test('serial DTR and RTS updates preserve the other line instead of reapplying SerialPort defaults', async () => {
+  const transport = new NodeEspSerialTransport({ path: '/dev/ttyUSB0', baudRate: 115200 });
+  /** @type {{dtr:boolean,rts:boolean}[]} */
+  const signals = [];
+  transport.port = { isOpen: true, set: (/** @type {{dtr:boolean,rts:boolean}} */ value, /** @type {()=>void} */ done) => { signals.push(value); done(); } };
+  await transport.setSignals(false, true);
+  await transport.setRTS(false);
+  await transport.setDTR(true);
+  await transport.setRTS(true);
+  assert.deepEqual(signals, [{ dtr: false, rts: true }, { dtr: false, rts: false }, { dtr: true, rts: false }, { dtr: true, rts: true }]);
+  assert.equal(transport.baudrate, 115200);
+});

@@ -98,10 +98,24 @@ test('platform setup: dependent fields and two-way Monaco JSON synchronization',
     assert.equal((await json()).upload.programmer, 'stm32-cdc-dfu');
     assert.equal(await page.locator('#config-auto-monitor').count(), 0);
 
+    await page.selectOption('#wicro-example', 'esp8266/bare-metal-heartbeat');
+    assert.equal(await page.locator('#config-programmer').inputValue(), 'esp8266-uart');
+    assert.equal(await page.locator('#config-framework').inputValue(), 'bare-metal');
+    assert.equal(await page.locator('#config-upload-baud').isDisabled(), true);
+    assert.equal(await page.locator('#config-verify').count(), 0);
+    const espBuild = await page.evaluate(async () => {
+      const ide = /** @type {any} */ (window).__wicroIde;
+      const result = await ide.runBuild();
+      return { ok: result?.ok, bin: [...(result?.artifacts?.bin ?? [])], log: ide.store.compilerLog };
+    });
+    assert.equal(espBuild.ok, true, JSON.stringify(espBuild.log));
+    const { validateEsp8266Image } = await import('../packages/runtime/src/esp8266-image.js');
+    assert.equal(validateEsp8266Image(Uint8Array.from(espBuild.bin)).segmentCount, 2);
+
     await page.selectOption('#config-family', 'RP2350');
     assert.ok((await page.locator('#config-model option').allTextContents()).every((name) => name.includes('RP2350')));
     assert.equal((await json()).board, await page.locator('#config-board').inputValue());
-    assert.ok((await json()).build.sources.includes('main/main.ino'), 'target selection must preserve source configuration');
+    assert.ok((await json()).build.sources.includes('main.c'), 'target selection must preserve the selected ESP8266 example sources');
     await page.selectOption('#wicro-board', 'esp32-c3-supermini');
     assert.equal(await page.locator('#config-family').inputValue(), 'ESP32');
     assert.deepEqual(errors, []);

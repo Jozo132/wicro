@@ -1,6 +1,8 @@
+import { Transport } from 'esptool-js';
 import { createDefaultPlatformRegistry } from '../../../../packages/core/src/index.js';
 import {
   BrowserEsp32Programmer,
+  flashEsp8266,
   BrowserCdcDfuProgrammer,
   describeWebSerialPort,
   detectBrowserCapabilities
@@ -118,6 +120,20 @@ export class IdeDeviceService {
       await this.coordinator.acquireForFlash();
       try { return await programmer.writeFlash(await selection, options.firmwareBin, { onProgress: options.onProgress }); }
       finally { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); }
+    }
+
+    if (options.board.metadata?.platform === 'espressif-esp8266-bare-metal') {
+      const nav = /** @type {any} */ (navigator);
+      if (!nav.serial) throw new Error('Web Serial is required for ESP8266');
+      const selection = this.coordinator.port ? Promise.resolve(this.coordinator.port) : nav.serial.requestPort({ filters: [{ usbVendorId: 0x1a86, usbProductId: 0x7523 }] });
+      await this.coordinator.acquireForFlash();
+      try {
+        const port = await selection;
+        this.coordinator.setPort(port);
+        const result = await flashEsp8266(new Transport(port), options.firmwareBin, { onLog: this.callbacks.onLog, onProgress: options.onProgress });
+        await this.coordinator.releaseAfterFlash({ reconnectMonitor: Boolean(options.autoMonitor), baudRate: options.monitorBaudRate ?? 115200 });
+        return result;
+      } catch (error) { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); throw error; }
     }
 
     if (!this.capabilities.webSerial) {

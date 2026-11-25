@@ -9,7 +9,7 @@ const packageJson = require('../package.json');
 export const version = packageJson.version;
 
 export const help = () => {
-  return `Wicro ${version}\n\nUsage:\n  wicro <command> [options]\n\nCommands:\n  init [name]       Create a Wicro project\n  build             Build firmware with the shared WASM engine\n  rebuild           Rebuild firmware\n  clean             Remove Wicro build and cache directories\n  upload            Upload ESP32-C3 or explicit F401RC CDC-DFU firmware\n  monitor           Monitor the ESP32-C3 serial console\n  install           Install packages and transitive dependencies\n  uninstall         Remove installed packages\n  update            Update packages and refresh the lockfile\n  board list        List available boards\n  device list       List detected ESP32-C3 devices\n  package list      List registry packages\n  doctor            Inspect the Node.js host environment\n  test              Run workspace tests\n\nOptions:\n  -h, --help        Show this help message\n  -V, --version     Show the version\n      --json        Emit machine-readable JSON\n`;
+  return `Wicro ${version}\n\nUsage:\n  wicro <command> [options]\n\nCommands:\n  init [name]       Create a Wicro project\n  build             Build firmware with the shared WASM engine\n  rebuild           Rebuild firmware\n  clean             Remove Wicro build and cache directories\n  upload            Upload ESP32-C3, ESP8266 bare-metal or F401RC CDC-DFU firmware\n  monitor           Monitor the ESP32-C3 serial console\n  install           Install packages and transitive dependencies\n  uninstall         Remove installed packages\n  update            Update packages and refresh the lockfile\n  board list        List available boards\n  device list       List detected ESP32-C3 devices\n  package list      List registry packages\n  doctor            Inspect the Node.js host environment\n  test              Run workspace tests\n\nOptions:\n  -h, --help        Show this help message\n  -V, --version     Show the version\n      --json        Emit machine-readable JSON\n`;
 };
 
 /** @returns {Promise<string>} */
@@ -665,6 +665,22 @@ export const main = async (args = []) => {
       }
       const { Esp32C3NodeProgrammer } = programmerModule;
       const { readFile } = await import('node:fs/promises');
+      const uploadProject = flags.find((arg) => arg.startsWith('--project='))?.slice('--project='.length);
+      let uploadBoard = flags.find((arg) => arg.startsWith('--board='))?.slice('--board='.length);
+      if (!uploadBoard && uploadProject) {
+        try { uploadBoard = JSON.parse(await readFile(resolve(uploadProject, 'wicro.json'), 'utf8')).board; }
+        catch (error) { if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ENOENT') throw error; }
+      }
+      if (uploadBoard === 'esp8266-bare-metal' || flags.includes('--programmer=esp8266-uart')) {
+        const path = flags.find((arg) => arg.startsWith('--port='))?.slice('--port='.length);
+        if (!path) throw new Error('ESP8266 upload requires an explicit --port');
+        const binary = flags.find((arg) => arg.startsWith('--bin='))?.slice('--bin='.length) ?? (uploadProject ? resolve(uploadProject, '.wicro/build/firmware.bin') : undefined);
+        if (!binary) throw new Error('ESP8266 upload requires --project or --bin');
+        const expectedMac = flags.find((arg) => arg.startsWith('--mac='))?.slice('--mac='.length);
+        const result = await new programmerModule.Esp8266NodeProgrammer({ path, expectedMac, onLog: (/** @type {string} */ message) => { if (!json) console.error(message); } }).writeFlash(new Uint8Array(await readFile(resolve(binary))));
+        emit({ command: 'upload', ...result }, json, `Uploaded and verified ${binary} on ESP8266 (${result.mac})`);
+        return 0;
+      }
       if (flags.includes('--programmer=cdc-dfu')) {
         if (!flags.includes('--board=stm32f401rc')) throw new Error('CDC-DFU currently requires --board=stm32f401rc; MCU flash bounds must be explicit');
         const binary = flags.find((arg) => arg.startsWith('--bin='))?.slice('--bin='.length);

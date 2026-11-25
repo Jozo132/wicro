@@ -186,7 +186,7 @@ export class BrowserLlvmWasmToolchain {
   /**
    * Link ELF32 firmware entirely in-memory via browser WASI `ld.lld`.
    * Supports both staged object/archive buffers and `/sdk` preopen paths.
-   * @param {{objects:Record<string,Uint8Array>,preObjects?:Record<string,Uint8Array>,archives?:Record<string,Uint8Array>,archivePaths?:string[],linkerScripts?:Record<string,string|Uint8Array>,linkerScriptPaths?:string[],libraryPaths?:string[],libraries?:string[],undefinedSymbols?:string[],extraLinkerArgs?:string[],entry?:string,preopens?:Record<string,string>,target:string}} options
+   * @param {{objects:Record<string,Uint8Array>,preObjects?:Record<string,Uint8Array>,archives?:Record<string,Uint8Array>,archivePaths?:string[],linkerScripts?:Record<string,string|Uint8Array>,linkerScriptPaths?:string[],libraryPaths?:string[],libraries?:string[],undefinedSymbols?:string[],extraLinkerArgs?:string[],emitBinary?:boolean,entry?:string,preopens?:Record<string,string>,target:string}} options
    */
   async linkElf(options) {
     const tmpFiles = new Map();

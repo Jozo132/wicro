@@ -1,0 +1,41 @@
+{
+  "name": "esp8266-bare-metal",
+  "version": "1.0.0",
+  "kind": "board",
+  "description": "ESP8266 4 MiB / 26 MHz crystal RAM-only bare-metal UART firmware",
+  "license": "MIT",
+  "dependencies": {
+    "llvm-wasm": "^1.0.0"
+  },
+  "metadata": {
+    "manufacturer": "Espressif",
+    "mcu": "ESP8266",
+    "architecture": "xtensa",
+    "cpu": "xtensa-l106",
+    "platform": "espressif-esp8266-bare-metal",
+    "framework": "bare-metal",
+    "flashCapacityBytes": 4194304,
+    "sramCapacityBytes": 81920,
+    "usbVendorId": "1a86",
+    "usbProductId": "7523",
+    "uploadBaud": 115200,
+    "monitorBaud": 115200,
+    "led": {
+      "pin": 2,
+      "activeLow": true
+    },
+    "build": {
+      "kind": "firmware",
+      "target": "xtensa",
+      "targetOptions": {
+        "mcpu": "esp8266"
+      },
+      "source": "main.c",
+      "startupSource": "startup.s",
+      "linkerScript": "esp8266.ld",
+      "firmwareFormat": "esp8266-rom",
+      "output": ".wicro/build"
+    },
+    "crystalHz": 26000000
+  }
+}

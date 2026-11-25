@@ -41,7 +41,7 @@ are retained when a visual control changes.
 Programmer descriptors declare their browser upload protocols. Currently the
 ESP32-C3 USB Serial/JTAG adapter exposes Espressif SLIP upload; its USB CDC reset
 transport is not presented as a separate interchangeable upload protocol.
-The F401RC additionally exposes USB DfuSe through WebUSB and a separate CDC entry action through Web Serial. DFU hides baud controls and requires readback; monitor reconnection is manual. Other programmer descriptors remain unavailable in the browser. See [F401RC CDC-DFU](stm32-cdc-dfu.md) for provisioning and current SDK limitations.
+The F401RC additionally exposes USB DfuSe through WebUSB and a separate CDC entry action through Web Serial. DFU hides baud controls and requires readback; monitor reconnection is manual. The ESP8266 bare-metal profile also exposes UART SLIP upload with fixed 115200 baud, mandatory readback and offset-0 ROM images; its browser build is tested and Node hardware path is verified. See [ESP8266 status](esp8266-wasm-status.md). Other programmer descriptors remain unavailable in the browser. See [F401RC CDC-DFU](stm32-cdc-dfu.md) for provisioning and current SDK limitations.
 
 Download artifacts only hides upload settings and disables Flash. With a supported
 programmer, upload baud rate is editable. Verify after upload reveals byte-for-byte

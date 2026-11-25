@@ -5,8 +5,9 @@ import { WicroPlatformRegistry } from './platform/registry.js';
 import { createDefaultPlatformRegistry, BUILTIN_PROGRAMMERS } from './platform/defaults.js';
 import { BUILTIN_ARCHITECTURES, resolveArchitectureTargetArgs } from './platform/architectures.js';
 import { BUILTIN_FRAMEWORKS, arduinoFrameworkAdapter, bareMetalFrameworkAdapter, espIdfFrameworkAdapter } from './platform/frameworks.js';
-import { BUILTIN_FIRMWARE_FORMATS, elfFormatHandler, flatBinFormatHandler, intelHexFormatHandler, uf2FormatHandler, esp32C3BinFormatHandler } from './platform/formats.js';
+import { BUILTIN_FIRMWARE_FORMATS, elfFormatHandler, flatBinFormatHandler, intelHexFormatHandler, uf2FormatHandler, esp32C3BinFormatHandler, esp8266RomFormatHandler } from './platform/formats.js';
 import { ESP32_C3_ARDUINO_RECIPE, prepareEsp32C3LinkerScripts, esp32C3PlatformAdapter } from './platform/esp32.js';
+import { esp8266BareMetalPlatformAdapter } from './platform/esp8266.js';
 import { stm32BareMetalPlatformAdapter } from './platform/stm32.js';
 
 export {
@@ -25,6 +26,8 @@ export {
   intelHexFormatHandler,
   uf2FormatHandler,
   esp32C3BinFormatHandler,
+  esp8266RomFormatHandler,
+  esp8266BareMetalPlatformAdapter,
   ESP32_C3_ARDUINO_RECIPE,
   prepareEsp32C3LinkerScripts,
   esp32C3PlatformAdapter,
@@ -643,6 +646,7 @@ const buildProject = async (host, toolchain, platforms, project, boardName, requ
       });
 
       const linked = await linkerFn({
+        emitBinary: false,
         preObjects: linkPlan.preObjects,
         objects: linkPlan.objects,
         archives: linkPlan.archives,

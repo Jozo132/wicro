@@ -1,3 +1,4 @@
+import { esp8266BareMetalPlatformAdapter } from './esp8266.js';
 import { WicroPlatformRegistry } from './registry.js';
 import { BUILTIN_ARCHITECTURES } from './architectures.js';
 import { BUILTIN_FRAMEWORKS } from './frameworks.js';
@@ -7,6 +8,7 @@ import { stm32BareMetalPlatformAdapter } from './stm32.js';
 
 /** @type {readonly import('./registry.js').ProgrammerDescriptor[]} */
 export const BUILTIN_PROGRAMMERS = Object.freeze([
+  Object.freeze({ id: 'esp8266-uart', name: 'ESP8266 UART (esptool-js)', protocols: Object.freeze(['esptool-slip']), browserProtocols: Object.freeze(['esptool-slip']), platforms: Object.freeze(['espressif-esp8266-bare-metal']) }),
   Object.freeze({
     id: 'esp32-c3-usb-jtag',
     name: 'ESP32-C3 USB Serial/JTAG (esptool-js + CDC reset)',
@@ -39,6 +41,7 @@ export const createDefaultPlatformRegistry = () => {
   for (const framework of BUILTIN_FRAMEWORKS) registry.registerFramework(framework);
   for (const format of BUILTIN_FIRMWARE_FORMATS) registry.registerFirmwareFormat(format);
   registry.registerPlatform(esp32C3PlatformAdapter);
+  registry.registerPlatform(esp8266BareMetalPlatformAdapter);
   registry.registerPlatform(stm32BareMetalPlatformAdapter);
   for (const programmer of BUILTIN_PROGRAMMERS) registry.registerProgrammer(programmer);
   return registry;
