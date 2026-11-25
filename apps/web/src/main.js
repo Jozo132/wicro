@@ -213,7 +213,7 @@ const bootstrap = async () => {
 
       store.flashStatus = 'success';
       store.flashProgress = { stage: 'done', message: `Flashed ${result.chip} (${firmwareBin.byteLength.toLocaleString()} B)`, percent: 100 };
-      store.appendCompilerLog(`[Flash] Complete: chip=${result.chip}, mac=${result.mac}${result.readback?.verified ? ', readback=VERIFIED' : ''}`);
+      store.appendCompilerLog(`[Flash] Complete: chip=${result.chip}${result.mac ? `, mac=${result.mac}` : ''}${result.readback?.verified ? ', readback=VERIFIED' : ''}`);
       store.emit('flash');
       if (store.autoMonitorAfterFlash) shell.setActiveBottomTab('serial');
       return result;
@@ -330,6 +330,7 @@ const bootstrap = async () => {
   new PlatformConfigurationPanel(/** @type {HTMLElement} */ (root.querySelector('#wicro-platform-configuration')), store, {
     webSerial: deviceService.capabilities.webSerial,
     webUsb: deviceService.capabilities.webUsb,
+    onEnterRom: () => { void deviceService.enterRp2040Rom().catch((error) => store.appendCompilerLog(`[RP2040] ${error instanceof Error ? error.message : String(error)}`)); },
     onEnterDfu: () => { void deviceService.enterCdcDfu(store.currentBoard).catch((error) => store.appendCompilerLog(`[DFU] ${error instanceof Error ? error.message : String(error)}`)); },
     onEditJson: () => { store.setActiveFile('wicro.json'); editorHost.openFile('wicro.json'); }
   });

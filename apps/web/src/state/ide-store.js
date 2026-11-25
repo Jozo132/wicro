@@ -175,7 +175,7 @@ export class IdeStore {
       baudRate: upload.baudRate ?? this.currentBoard?.metadata.uploadBaud ?? 460800,
       monitorBaudRate: upload.monitorBaudRate ?? this.currentBoard?.metadata.monitorBaud ?? 115200,
       verify: upload.verify ?? 'readback',
-      autoMonitor: target.protocol === 'dfuse' ? false : upload.autoMonitor ?? true
+      autoMonitor: ['dfuse', 'picoboot'].includes(target.protocol ?? '') ? false : upload.autoMonitor ?? true
     };
   }
 

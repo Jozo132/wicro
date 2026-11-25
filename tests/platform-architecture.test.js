@@ -266,6 +266,28 @@ test('SDK & compiler cache: atomic install, concurrent deduplication, corruption
   }
 });
 
+test('RP2040-Zero ELF, boot2 CRC BIN and UF2 match between Node WASI and browser WASI', async () => {
+  /** @type {[string,string|Uint8Array][]} */
+  const entries = [['registry/rp2040-zero/package.json', await readFile('registry/rp2040-zero/package.json', 'utf8')]];
+  for (const name of ['wicro.json', 'main.c', 'boot2.s', 'rp2040.ld']) entries.push([`project/${name}`, await readFile(`examples/rp2040-zero/usb-heartbeat/${name}`, 'utf8')]);
+  const nodeStore = new Map(entries), browserStore = new Map(entries);
+  const module = await WebAssembly.compile(await readFile(llvmPath));
+  const engines = [
+    createWicroEngine({ host: { ...createMemoryHost(nodeStore), host: 'node' }, toolchain: new LlvmWasmToolchain({ llvmPath }) }),
+    createWicroEngine({ host: createMemoryHost(browserStore), toolchain: /** @type {any} */ (new BrowserLlvmWasmToolchain({ loadModule: async () => module })) })
+  ];
+  for (const engine of engines) {
+    const result = await engine.execute({ command: 'build', project: 'project' });
+    assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  }
+  for (const extension of ['elf', 'bin', 'uf2']) assert.equal(Buffer.compare(/** @type {Uint8Array} */ (nodeStore.get(`project/.wicro/build/firmware.${extension}`)), /** @type {Uint8Array} */ (browserStore.get(`project/.wicro/build/firmware.${extension}`))), 0);
+  const { validateRp2040Image, rp2040Uf2ToBin } = await import('../packages/runtime/src/rp2040-image.js');
+  const image = /** @type {Uint8Array} */ (nodeStore.get('project/.wicro/build/firmware.bin'));
+  assert.equal(validateRp2040Image(image).valid, true);
+  const decoded = rp2040Uf2ToBin(/** @type {Uint8Array} */ (nodeStore.get('project/.wicro/build/firmware.uf2')));
+  assert.deepEqual(decoded.subarray(0, image.length), image);
+});
+
 test('ESP8266 bare-metal ELF and ROM image match between Node WASI and browser WASI', async () => {
   const project = resolve('examples/esp8266/bare-metal-heartbeat');
   const board = await readFile('registry/esp8266-bare-metal/package.json', 'utf8');

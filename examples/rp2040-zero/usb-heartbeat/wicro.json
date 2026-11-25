@@ -1,0 +1,17 @@
+{
+  "name": "rp2040-zero-usb-heartbeat",
+  "board": "rp2040-zero",
+  "framework": "bare-metal",
+  "toolchain": "llvm-wasm",
+  "build": {
+    "sources": [
+      "main.c"
+    ],
+    "flags": [
+      "-Os"
+    ],
+    "formats": [
+      "rp2040-uf2"
+    ]
+  }
+}

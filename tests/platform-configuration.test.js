@@ -128,6 +128,20 @@ test('platform setup: dependent fields and two-way Monaco JSON synchronization',
       assert.equal(nanoBuild.ok, true, JSON.stringify(nanoBuild.log));
       assert.ok(nanoBuild.bytes > 1000 && nanoBuild.bytes <= 30720);
     }
+    await page.selectOption('#wicro-example', 'rp2040-zero/usb-heartbeat');
+    assert.equal(await page.locator('#config-programmer').inputValue(), 'rp2040-picoboot');
+    assert.equal(await page.locator('#config-protocol').inputValue(), 'picoboot');
+    assert.equal(await page.locator('#config-upload-baud').count(), 0);
+    assert.equal(await page.locator('#config-auto-monitor').count(), 0);
+    assert.equal(await page.locator('#config-enter-rp-rom').count(), 1);
+    const rpBuild = await page.evaluate(async () => {
+      const ide = /** @type {any} */ (window).__wicroIde;
+      const result = await ide.runBuild();
+      return { ok: result?.ok, bin: [...(result?.artifacts?.bin ?? [])], log: ide.store.compilerLog };
+    });
+    assert.equal(rpBuild.ok, true, JSON.stringify(rpBuild.log));
+    const { validateRp2040Image } = await import('../packages/runtime/src/rp2040-image.js');
+    assert.equal(validateRp2040Image(Uint8Array.from(rpBuild.bin)).valid, true);
     const sourcesBeforeFamilyChange = (await json()).build.sources;
     await page.selectOption('#config-family', 'RP2350');
     assert.ok((await page.locator('#config-model option').allTextContents()).every((name) => name.includes('RP2350')));

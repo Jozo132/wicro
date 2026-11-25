@@ -61,7 +61,7 @@ const readExampleFiles = async (/** @type {string} */ rootDir, /** @type {string
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isDirectory()) {
       Object.assign(files, await readExampleFiles(full, rel));
-    } else if (EXAMPLE_SOURCE_RE.test(entry.name)) {
+    } else if (EXAMPLE_SOURCE_RE.test(entry.name) || /^LICENSE(?:[.-].*)?$/i.test(entry.name)) {
       files[rel] = await readFile(full, 'utf8');
     }
   }

@@ -1,3 +1,4 @@
+import { elfToRp2040Bin, validateRp2040Image, rp2040BinToUf2, rp2040Uf2ToBin } from '../../../runtime/src/rp2040-image.js';
 import { elfToAvrBin } from '../../../runtime/src/avr-image.js';
 import { elfToEsp8266Bin, validateEsp8266Image } from '../../../runtime/src/esp8266-image.js';
 import { elfToEsp32Bin, validateEsp32Image } from '../../../runtime/src/elf-utils.js';
@@ -199,7 +200,12 @@ export const avrBinFormatHandler = Object.freeze({
   validate: (image) => ({ valid: image.length >= 4 && image.length <= 30720, errors: image.length >= 4 && image.length <= 30720 ? [] : ['AVR image crosses application bounds'] })
 });
 
-export const BUILTIN_FIRMWARE_FORMATS = Object.freeze([avrBinFormatHandler, esp8266RomFormatHandler,
+/** @type {import('./registry.js').FirmwareFormatHandler} */
+export const rp2040BinFormatHandler = Object.freeze({ id: 'rp2040-bin', extension: '.bin', description: 'RP2040-Zero boot2 flash image', convert: (elf) => elfToRp2040Bin(elf), validate: (bytes) => { try { return validateRp2040Image(bytes); } catch (error) { return { valid: false, errors: [String(error)] }; } } });
+/** @type {import('./registry.js').FirmwareFormatHandler} */
+export const rp2040Uf2FormatHandler = Object.freeze({ id: 'rp2040-uf2', extension: '.uf2', description: 'RP2040 family UF2', convert: async (elf) => rp2040BinToUf2(await elfToRp2040Bin(elf)), validate: (bytes) => { try { return validateRp2040Image(rp2040Uf2ToBin(bytes)); } catch (error) { return { valid: false, errors: [String(error)] }; } } });
+
+export const BUILTIN_FIRMWARE_FORMATS = Object.freeze([rp2040BinFormatHandler, rp2040Uf2FormatHandler, avrBinFormatHandler, esp8266RomFormatHandler,
   elfFormatHandler,
   flatBinFormatHandler,
   intelHexFormatHandler,

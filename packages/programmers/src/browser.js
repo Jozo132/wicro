@@ -265,3 +265,4 @@ export { BrowserCdcDfuProgrammer } from './cdc-dfu-browser.js';
 
 export { flashEsp8266 } from './esp8266.js';
 export { NanoBrowserProgrammer } from './stk500-browser.js';
+export { Rp2040BrowserProgrammer } from './rp2040-browser.js';

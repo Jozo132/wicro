@@ -3,6 +3,7 @@ import { createDefaultPlatformRegistry } from '../../../../packages/core/src/ind
 import {
   BrowserEsp32Programmer,
   NanoBrowserProgrammer,
+  Rp2040BrowserProgrammer,
   flashEsp8266,
   BrowserCdcDfuProgrammer,
   describeWebSerialPort,
@@ -114,6 +115,13 @@ export class IdeDeviceService {
    * }} options
    */
   async flashFirmware(options) {
+    if (options.board.metadata?.platform === 'raspberrypi-rp2040-zero') {
+      const programmer = new Rp2040BrowserProgrammer({ onProgress: options.onProgress });
+      const selection = programmer.requestRomDevice();
+      await this.coordinator.acquireForFlash();
+      try { return await programmer.writeFlash(await selection, options.firmwareBin); }
+      finally { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); }
+    }
     if (options.board.metadata?.cdcDfu) {
       const programmer = new BrowserCdcDfuProgrammer({ profile: options.board.metadata.cdcDfu });
       // Request permission before awaiting monitor cleanup, preserving activation.
@@ -217,6 +225,14 @@ export class IdeDeviceService {
       await programmer.trigger(await selection);
       this.callbacks.onLog('CDC trigger sent. Wait for DFU enumeration, then click Flash and select STM32 BOOTLOADER. First provisioning requires BOOT0/reset.');
     } finally { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); }
+  }
+
+  async enterRp2040Rom() {
+    const programmer = new Rp2040BrowserProgrammer();
+    const selection = programmer.requestRuntimeDevice();
+    await this.coordinator.acquireForFlash();
+    try { await programmer.enterRom(await selection); this.callbacks.onLog('RP2040 ROM entry requested. Click Flash after ROM enumeration; first provisioning requires BOOT + reset.'); }
+    finally { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); }
   }
 
   dispose() {

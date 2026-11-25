@@ -9,7 +9,7 @@ const packageJson = require('../package.json');
 export const version = packageJson.version;
 
 export const help = () => {
-  return `Wicro ${version}\n\nUsage:\n  wicro <command> [options]\n\nCommands:\n  init [name]       Create a Wicro project\n  build             Build firmware with the shared WASM engine\n  rebuild           Rebuild firmware\n  clean             Remove Wicro build and cache directories\n  upload            Upload ESP32-C3, ESP8266 bare-metal or F401RC CDC-DFU firmware\n  monitor           Monitor the ESP32-C3 serial console\n  install           Install packages and transitive dependencies\n  uninstall         Remove installed packages\n  update            Update packages and refresh the lockfile\n  board list        List available boards\n  device list       List detected ESP32-C3 devices\n  package list      List registry packages\n  doctor            Inspect the Node.js host environment\n  test              Run workspace tests\n\nOptions:\n  -h, --help        Show this help message\n  -V, --version     Show the version\n      --json        Emit machine-readable JSON\n`;
+  return `Wicro ${version}\n\nUsage:\n  wicro <command> [options]\n\nCommands:\n  init [name]       Create a Wicro project\n  build             Build firmware with the shared WASM engine\n  rebuild           Rebuild firmware\n  clean             Remove Wicro build and cache directories\n  upload            Upload ESP32-C3, ESP8266, Nano, RP2040-Zero or F401RC firmware\n  monitor           Monitor the ESP32-C3 serial console\n  install           Install packages and transitive dependencies\n  uninstall         Remove installed packages\n  update            Update packages and refresh the lockfile\n  board list        List available boards\n  device list       List detected ESP32-C3 devices\n  package list      List registry packages\n  doctor            Inspect the Node.js host environment\n  test              Run workspace tests\n\nOptions:\n  -h, --help        Show this help message\n  -V, --version     Show the version\n      --json        Emit machine-readable JSON\n`;
 };
 
 /** @returns {Promise<string>} */
@@ -670,6 +670,14 @@ export const main = async (args = []) => {
       if (!uploadBoard && uploadProject) {
         try { uploadBoard = JSON.parse(await readFile(resolve(uploadProject, 'wicro.json'), 'utf8')).board; }
         catch (error) { if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'ENOENT') throw error; }
+      }
+      if (uploadBoard === 'rp2040-zero' || flags.includes('--programmer=picoboot')) {
+        const binary = flags.find((arg) => arg.startsWith('--bin='))?.slice('--bin='.length) ?? (uploadProject ? resolve(uploadProject, '.wicro/build/firmware.bin') : undefined);
+        if (!binary) throw new Error('RP2040-Zero upload requires --project or --bin');
+        const serialNumber = flags.find((arg) => arg.startsWith('--serial='))?.slice('--serial='.length);
+        const result = await new programmerModule.Rp2040NodeProgrammer({ serialNumber }).writeFlash(new Uint8Array(await readFile(resolve(binary))));
+        emit({ command: 'upload', ...result }, json, `Uploaded and verified RP2040-Zero firmware`);
+        return 0;
       }
       if (flags.includes('--programmer=stk500v1') || uploadBoard === 'arduino-nano') {
         if (uploadBoard !== 'arduino-nano') throw new Error('STK500v1 currently requires --board=arduino-nano');

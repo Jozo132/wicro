@@ -516,18 +516,18 @@ export class IdeShell {
   }
 
   renderBuildAndFlashState() {
+    const target = getTargetConfiguration(this.store.currentBoard);
     const busy = this.store.buildStatus === 'building' || this.store.flashStatus === 'flashing';
     const invalid = this.store.configurationIssues.length > 0;
     this.boardSelect.disabled = busy || Boolean(this.store.configurationError);
     this.frameworkSelect.disabled = busy || Boolean(this.store.configurationError);
     this.exampleSelect.disabled = busy;
     this.buildBtn.disabled = busy || invalid;
-    this.monitorBtn.disabled = !this.store.deviceConnected && (busy || invalid || !this.actions.capabilities.webSerial);
+    this.monitorBtn.disabled = !this.store.deviceConnected && (busy || invalid || target.protocol === 'picoboot' || !this.actions.capabilities.webSerial);
     this.buildBtn.textContent = this.store.buildStatus === 'building' ? 'Building…' : 'Build';
 
     const hasBin = Boolean(this.store.lastBuild?.artifacts?.bin instanceof Uint8Array);
-    const target = getTargetConfiguration(this.store.currentBoard);
-    this.flashBtn.disabled = busy || invalid || !hasBin || !(target.protocol === 'dfuse' ? this.actions.capabilities.webUsb : this.actions.capabilities.webSerial) || !target.browserUpload || this.store.uploadSettings.programmer === 'none';
+    this.flashBtn.disabled = busy || invalid || !hasBin || !(['dfuse', 'picoboot'].includes(target.protocol ?? '') ? this.actions.capabilities.webUsb : this.actions.capabilities.webSerial) || !target.browserUpload || this.store.uploadSettings.programmer === 'none';
     this.flashBtn.textContent = this.store.flashStatus === 'flashing' ? 'Flashing…' : 'Flash';
 
     const activeProgress = this.store.flashStatus === 'flashing'
