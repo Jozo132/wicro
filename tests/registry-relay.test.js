@@ -25,6 +25,7 @@ test('artifact relay validates redirect hops and streams ranges without forwardi
     const before = calls;
     for (const url of ['http://dl.registry.platformio.org/download/ok', 'https://example.com/file', 'https://user:pass@github.com/ivankravets/pioreg-ci-mirror/releases/download/tag/item', 'https://dl.registry.platformio.org:444/download/ok']) assert.equal((await relayArtifact(request(url), { fetch: transport })).status, 403);
     assert.equal(calls, before);
+    for (const url of ['https://github.com/owner/repo/releases/download/tag/item', 'https://codeload.github.com/owner/repo/zip/refs/tags/v1', 'https://raw.githubusercontent.com/owner/repo/main/file.bin', 'https://objects.githubusercontent.com/github-production-release-asset-123/item']) assert.equal((await relayArtifact(request(url), { fetch: transport })).status, 206);
     assert.equal((await relayArtifact(request('https://dl.registry.platformio.org/download/evil'), { fetch: transport })).status, 403);
     assert.equal((await relayArtifact(request('https://dl.registry.platformio.org/download/loop'), { fetch: transport })).status, 508);
     assert.equal((await relayArtifact(new Request('https://relay.test/', { method: 'POST' }), { fetch: transport })).status, 405);

@@ -103,9 +103,9 @@ const transferOptions = (id) => ({ control: downloadControls.get(id), progress: 
 
 /** @param {string} origin @param {string} url */
 const resolveAssetUrl = (origin, url) => {
-  if (!['dl.registry.platformio.org', 'github.com'].includes(new URL(url).hostname)) return url;
-  const endpoint = import.meta.env.DEV ? `${origin}/api/asset-download` : import.meta.env.VITE_WICRO_ASSET_RELAY_URL;
-  if (!endpoint) throw new Error('Configure VITE_WICRO_ASSET_RELAY_URL for browser acquisition of upstream archives without CORS');
+  const publicArtifactHosts = new Set(['dl.registry.platformio.org', 'github.com', 'codeload.github.com', 'raw.githubusercontent.com', 'objects.githubusercontent.com', 'release-assets.githubusercontent.com']);
+  if (!publicArtifactHosts.has(new URL(url).hostname)) return url;
+  const endpoint = import.meta.env.DEV ? `${origin}/api/asset-download` : (import.meta.env.VITE_WICRO_ASSET_RELAY_URL ?? `${origin}/api/asset-download`);
   return `${endpoint}${endpoint.includes('?') ? '&' : '?'}url=${encodeURIComponent(url)}`;
 };
 

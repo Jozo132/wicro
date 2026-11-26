@@ -33,7 +33,9 @@ For development, `node scripts/package-stm32-sdk.js` reproduces both ZIPs in ign
 
 ## Production browser transport
 
-The dev server supplies `/api/asset-download`. A static production deployment must configure `VITE_WICRO_ASSET_RELAY_URL` to a deployed instance of `services/registry-relay/worker.js` before building the web app. No production relay has been deployed in this work. Direct GitHub release/CDN downloads are not assumed to permit browser CORS. Node/CLI fetch upstream directly.
+The dev server supplies `/api/asset-download`. Production browser builds use
+`/api/asset-download` on the application origin by default, or can override that
+endpoint with `VITE_WICRO_ASSET_RELAY_URL`. Direct GitHub release/CDN downloads are not assumed to permit browser CORS. Node/CLI fetch upstream directly.
 
 The prepared Cloudflare Worker permits only GET/HEAD/OPTIONS, exact hosts and permitted release/download paths, validates every redirect, strips credentials/cookies, preserves validated range responses and bounds response size. It streams upstream bytes and sets CORS headers. Deployment is an operator action; no account resources are created automatically.
 

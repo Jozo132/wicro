@@ -1,11 +1,14 @@
 /** Read-only public artifact relay. Validate every redirect; forward no cookies,
  * authorization or arbitrary request headers. No SDK archives are stored here.
  */
-const hosts = new Set(['dl.registry.platformio.org', 'github.com', 'release-assets.githubusercontent.com']);
+const hosts = new Set(['dl.registry.platformio.org', 'github.com', 'codeload.github.com', 'raw.githubusercontent.com', 'objects.githubusercontent.com', 'release-assets.githubusercontent.com']);
 /** @param {URL} url */
 const allowed = (url) => url.protocol === 'https:' && (!url.port || url.port === '443') && !url.username && !url.password && hosts.has(url.hostname) && (
   url.hostname === 'dl.registry.platformio.org' ? url.pathname.startsWith('/download/') :
-  url.hostname === 'github.com' ? /^\/(ivankravets\/pioreg-ci-mirror|Jozo132\/wicro)\/releases\/download\//i.test(url.pathname) : url.pathname.startsWith('/github-production-release-asset/')
+  url.hostname === 'github.com' ? /^\/[^/]+\/[^/]+\/(?:releases\/download|archive)\//i.test(url.pathname) :
+  url.hostname === 'codeload.github.com' ? /^\/[^/]+\/[^/]+\/(?:legacy\.zip|zip|tar\.gz)\//i.test(url.pathname) :
+  url.hostname === 'raw.githubusercontent.com' ? /^\/[^/]+\/[^/]+\//.test(url.pathname) :
+  url.hostname === 'objects.githubusercontent.com' ? /^\/github-production-release-asset-/.test(url.pathname) : url.pathname.startsWith('/github-production-release-asset/')
 );
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS', 'Access-Control-Allow-Headers': 'Range, If-Range', 'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges, ETag, Last-Modified' };
 /** @param {string} message @param {number} status */

@@ -23,6 +23,9 @@ response and cannot be used to extract a ZIP or verify its checksum.
 - The production web build includes registry metadata, not compiler WASM or SDK
   archives. The browser resolves the compiler from the canonical registry manifest;
   there is no separate web-only compiler manifest to keep synchronized.
+- Production browser builds resolve public GitHub and PlatformIO artifact URLs
+  through a same-origin `/api/asset-download` relay unless
+  `VITE_WICRO_ASSET_RELAY_URL` explicitly selects another deployed relay.
 - During Vite development only, the cached local compiler is an explicit first
   source, and `dist/assets/<sdk-name>-<version>.zip` is a final SDK candidate.
   Production SDK acquisition uses only the manifest's URL and mirrors.
