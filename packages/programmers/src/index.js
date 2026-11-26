@@ -245,7 +245,7 @@ export const findEsp32C3Ports = (ports) => ports.filter((port) =>
 );
 
 export { NodeCdcDfuProgrammer } from './cdc-dfu-node.js';
-export { STM32F401RC_CDC_DFU_PROFILE, validateCortexMImage } from './cdc-dfu-profile.js';
+export { STM32F401RC_CDC_DFU_PROFILE, STM32_DFU_PROFILES, createStm32DfuProfile, validateCortexMImage } from './cdc-dfu-profile.js';
 export { UsbDfuProgrammer } from './dfu.js';
 export { Esp8266NodeProgrammer } from './esp8266-node.js';
 export { Esp32OriginalNodeProgrammer } from './esp32-original-node.js';

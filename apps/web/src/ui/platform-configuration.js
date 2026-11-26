@@ -1,4 +1,4 @@
-import { getMcuType, getMcuFamily, getTargetConfiguration, OPTIMIZATIONS, setOptimization, toggleBuildFlag } from '../../../../packages/core/src/platform/configuration.js';
+import { getMcuVendor, getMcuFamily, getMcuSeries, getMcuDevice, getTargetConfiguration, OPTIMIZATIONS, setOptimization, toggleBuildFlag } from '../../../../packages/core/src/platform/configuration.js';
 
 /** @param {unknown} value */
 const escape = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] ?? char);
@@ -34,15 +34,17 @@ export class PlatformConfigurationPanel {
     const config = this.store.configuration;
     const board = this.store.currentBoard;
     const target = getTargetConfiguration(board, this.store.framework);
-    const type = board ? getMcuType(board) : '';
+    const type = board ? getMcuVendor(board) : '';
     const family = board ? getMcuFamily(board) : '';
-    const model = String(board?.metadata.mcu ?? '');
-    const types = [...new Set(this.store.boards.map(getMcuType))].sort();
-    const typeBoards = this.store.boards.filter((entry) => getMcuType(entry) === type);
+    const series = board ? getMcuSeries(board) : '';
+    const device = board ? getMcuDevice(board) : '';
+    const types = [...new Set(this.store.boards.map(getMcuVendor))].sort();
+    const typeBoards = this.store.boards.filter((entry) => getMcuVendor(entry) === type);
     const families = [...new Set(typeBoards.map(getMcuFamily))].sort();
     const familyBoards = typeBoards.filter((entry) => getMcuFamily(entry) === family);
-    const models = [...new Set(familyBoards.map((entry) => String(entry.metadata.mcu ?? entry.id)))].sort();
-    const modelBoards = familyBoards.filter((entry) => String(entry.metadata.mcu ?? entry.id) === model);
+    const seriesOptions = [...new Set(familyBoards.map(getMcuSeries))].sort();
+    const seriesBoards = familyBoards.filter((entry) => getMcuSeries(entry) === series);
+    const devices = [...new Set(seriesBoards.map(getMcuDevice))].sort();
     const flags = Array.isArray(config.build?.flags) ? config.build.flags.filter((/** @type {unknown} */ value) => typeof value === 'string') : [];
     const defines = Array.isArray(config.build?.defines) ? config.build.defines : [];
     const optimization = flags.filter((/** @type {string} */ flag) => OPTIMIZATIONS.includes(flag)).at(-1) ?? '';
@@ -59,14 +61,14 @@ export class PlatformConfigurationPanel {
     const issues = this.store.configurationIssues;
     this.root.innerHTML = `
       <div class="config-heading"><div><span class="config-eyebrow">QUICK CONFIGURATION</span><h2>Platform setup</h2></div><button type="button" id="config-close" class="btn-tiny" aria-label="Close platform setup">×</button></div>
-      <div class="config-summary"><strong>${escape(model || 'Choose a device')}</strong><span>${escape(target.architecture)} · ${target.buildKind === 'object' ? 'Object build' : 'Firmware build'}</span></div>
+      <div class="config-summary"><strong>${escape(device || 'Choose a device')}</strong><span>${escape(target.architecture)} · ${target.buildKind === 'object' ? 'Object build' : 'Firmware build'}</span></div>
       <div id="config-errors" class="config-errors" role="status" ${issues.length ? '' : 'hidden'}>${issues.map((issue) => `<p>${escape(issue)}</p>`).join('')}</div>
       <fieldset class="config-form" ${busy || this.store.configurationError ? 'disabled' : ''}>
         <details id="config-target-section" open><summary>01 <span>Device & framework</span></summary><div class="config-fields">
-          ${field('config-type', 'MCU type', select('config-type', choices(types), type))}
+          ${field('config-type', 'MCU manufacturer', select('config-type', choices(types), type))}
           ${field('config-family', 'MCU family', select('config-family', choices(families), family))}
-          ${field('config-model', 'MCU model', select('config-model', choices(models), model))}
-          ${field('config-board', 'Board preset', select('config-board', modelBoards.map((entry) => ({ value: entry.id, label: entry.id })), this.store.boardId))}
+          ${field('config-series', 'MCU series', select('config-series', choices(seriesOptions), series))}
+          ${field('config-device', 'MCU device', select('config-device', choices(devices), device))}
           ${field('config-framework', 'Framework', select('config-framework', choices(target.frameworks), this.store.framework))}
           ${field('config-clock', 'CPU frequency', select('config-clock', [{ value: String(target.clockHz ?? ''), label: target.clockHz ? `${target.clockHz / 1000000} MHz · recipe default` : 'Defined by SDK / startup' }], String(target.clockHz ?? ''), true))}
           <p class="config-help">Clock and overclock control require a board-specific startup or SDK recipe. This preset does not expose an adjustable clock.</p>
@@ -113,21 +115,26 @@ export class PlatformConfigurationPanel {
     /** @param {string} text */
     const lines = (text) => text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
     change('config-type', (input) => {
-      const board = this.store.boards.find((entry) => getMcuType(entry) === input.value);
+      const board = this.store.boards.find((entry) => getMcuVendor(entry) === input.value);
       if (board) this.store.setBoard(board.id);
     });
     change('config-family', (input) => {
-      const type = this.store.currentBoard ? getMcuType(this.store.currentBoard) : '';
-      const board = this.store.boards.find((entry) => getMcuType(entry) === type && getMcuFamily(entry) === input.value);
+      const type = this.store.currentBoard ? getMcuVendor(this.store.currentBoard) : '';
+      const board = this.store.boards.find((entry) => getMcuVendor(entry) === type && getMcuFamily(entry) === input.value);
       if (board) this.store.setBoard(board.id);
     });
-    change('config-model', (input) => {
+    change('config-series', (input) => {
       const family = this.store.currentBoard ? getMcuFamily(this.store.currentBoard) : '';
-      const type = this.store.currentBoard ? getMcuType(this.store.currentBoard) : '';
-      const board = this.store.boards.find((entry) => getMcuType(entry) === type && getMcuFamily(entry) === family && String(entry.metadata.mcu ?? entry.id) === input.value);
+      const type = this.store.currentBoard ? getMcuVendor(this.store.currentBoard) : '';
+      const board = this.store.boards.find((entry) => getMcuVendor(entry) === type && getMcuFamily(entry) === family && getMcuSeries(entry) === input.value);
       if (board) this.store.setBoard(board.id);
     });
-    change('config-board', (input) => this.store.setBoard(input.value));
+    change('config-device', (input) => {
+      const current = this.store.currentBoard;
+      if (!current) return;
+      const board = this.store.boards.find((entry) => getMcuVendor(entry) === getMcuVendor(current) && getMcuFamily(entry) === getMcuFamily(current) && getMcuSeries(entry) === getMcuSeries(current) && getMcuDevice(entry) === input.value);
+      if (board) this.store.setBoard(board.id);
+    });
     change('config-framework', (input) => this.store.setFramework(input.value));
     change('config-optimization', (input) => this.store.updateBuildConfiguration({ flags: setOptimization(flags, input.value) }));
     for (const [id, flag] of [['config-debug', '-g'], ['config-warnings', '-Wall'], ['config-extra-warnings', '-Wextra']]) {

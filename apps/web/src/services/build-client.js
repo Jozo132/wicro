@@ -40,7 +40,7 @@ export class WicroBuildClient {
 
     this.worker.addEventListener('error', (event) => {
       const error = new Error(event.message || 'Wicro build worker crashed');
-      for (const entry of this.pending.values()) entry.reject(error);
+      for (const entry of Array.from(this.pending.values())) entry.reject(error);
       this.pending.clear();
     });
   }
@@ -87,6 +87,10 @@ export class WicroBuildClient {
 
   /** @param {string} requestId @param {'pause'|'resume'|'cancel'} action */
   controlTransfer(requestId, action) { this.worker.postMessage({ type: 'transferControl', payload: { requestId, action } }); }
+
+  discoverStm32Boards(options = {}) {
+    return this.request('discoverStm32Boards', { ...options, origin: new URL(import.meta.env.BASE_URL, window.location.href).href.replace(/\/$/, '') });
+  }
 
   cacheStatus() {
     return this.request('cacheStatus');

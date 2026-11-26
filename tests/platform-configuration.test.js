@@ -69,9 +69,12 @@ test('platform setup: dependent fields and two-way Monaco JSON synchronization',
       ide.editorHost.editor.getModel().setValue(value);
     }, text);
     await editJson(JSON.stringify(config, null, 2));
+    assert.equal(await page.locator('#config-type').inputValue(), 'STMicroelectronics');
     assert.equal(await page.locator('#config-family').inputValue(), 'STM32');
-    assert.equal(await page.locator('#config-model').inputValue(), 'STM32F103CB');
-    assert.equal(await page.locator('#config-board').inputValue(), 'stm32f103cb');
+    assert.equal(await page.locator('#config-series').inputValue(), 'STM32F1');
+    assert.equal(await page.locator('#config-device').inputValue(), 'STM32F103CB');
+    assert.ok((await page.locator('#config-device option').allTextContents()).includes('STM32F103C8'));
+    assert.equal(await page.locator('#config-board').count(), 0);
     assert.equal(await page.locator('#wicro-board').inputValue(), 'stm32f103cb');
     assert.equal(await page.locator('#config-optimization').inputValue(), '-O2');
     assert.equal(await page.locator('#config-debug').isChecked(), false);
@@ -157,11 +160,12 @@ test('platform setup: dependent fields and two-way Monaco JSON synchronization',
     const { validateRp2040Image } = await import('../packages/runtime/src/rp2040-image.js');
     assert.equal(validateRp2040Image(Uint8Array.from(rpBuild.bin)).valid, true);
     await page.selectOption('#wicro-example', 'stm32f103c8/swd-heartbeat');
-    assert.equal(await page.locator('#config-programmer').inputValue(), 'stm32f103-stlink');
-    assert.equal(await page.locator('#config-protocol').inputValue(), 'stlink-swd');
+    assert.equal(await page.locator('#config-programmer').inputValue(), 'stm32-cdc-dfu');
+    assert.equal(await page.locator('#config-protocol').inputValue(), 'dfuse');
     assert.equal(await page.locator('#config-upload-baud').count(), 0);
     assert.equal(await page.locator('#config-auto-monitor').count(), 0);
     assert.equal(await page.locator('#config-verify').count(), 0);
+    assert.equal(await page.locator('#config-enter-dfu').count(), 1);
     const f103Build = await page.evaluate(async () => {
       const ide = /** @type {any} */ (window).__wicroIde;
       const result = await ide.runBuild();
@@ -171,10 +175,11 @@ test('platform setup: dependent fields and two-way Monaco JSON synchronization',
     const { validateStm32F103Image } = await import('../packages/programmers/src/stlink.js');
     assert.ok(validateStm32F103Image(Uint8Array.from(f103Build.bin)).reset & 1);
     const sourcesBeforeFamilyChange = (await json()).build.sources;
-    await page.selectOption('#config-type', 'RP2');
+    const rpManufacturer = await page.evaluate(() => /** @type {any} */ (window).__wicroIde.store.boards.find((board) => board.metadata.mcu === 'RP2350')?.metadata.manufacturer);
+    await page.selectOption('#config-type', rpManufacturer);
     await page.selectOption('#config-family', 'RP2350');
-    assert.ok((await page.locator('#config-model option').allTextContents()).every((name) => name.includes('RP2350')));
-    assert.equal((await json()).board, await page.locator('#config-board').inputValue());
+    assert.ok((await page.locator('#config-series option').allTextContents()).every((name) => name.includes('RP2350')));
+    assert.equal((await json()).board, await page.locator('#wicro-board').inputValue());
     assert.deepEqual((await json()).build.sources, sourcesBeforeFamilyChange, 'target selection must preserve example sources');
     await page.selectOption('#wicro-board', 'esp32-c3-supermini');
     assert.equal(await page.locator('#config-family').inputValue(), 'ESP32');

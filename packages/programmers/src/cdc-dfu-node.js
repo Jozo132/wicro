@@ -113,7 +113,8 @@ export class NodeCdcDfuProgrammer {
     const entered = await this.enterDfu(options);
     const serialNumber = entered.device.serialNumber;
     const session = await openDfuDevice(entered.device, profile);
-    const programmer = new UsbDfuProgrammer({ transport: session.transport, ...session.descriptor, profile, sectors: session.sectors, onProgress: this.options.onProgress });
+    const sectors = session.sectors.length > 0 ? session.sectors : (profile.fallbackSectors ?? []);
+    const programmer = new UsbDfuProgrammer({ transport: session.transport, ...session.descriptor, profile, sectors, onProgress: this.options.onProgress });
     let result;
     let manifestation;
     let leaveError;

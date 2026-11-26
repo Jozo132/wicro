@@ -31,6 +31,7 @@
     "clockHz": 72000000,
     "flashAddress": "0x08000000",
     "sramAddress": "0x20000000",
+    "programmerId": "stm32-cdc-dfu",
     "led": {
       "port": "C",
       "pin": 13,

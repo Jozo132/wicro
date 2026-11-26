@@ -262,6 +262,7 @@ export class BrowserEsp32Programmer {
 }
 
 export { BrowserCdcDfuProgrammer } from './cdc-dfu-browser.js';
+export { STM32F401RC_CDC_DFU_PROFILE, STM32_DFU_PROFILES, createStm32DfuProfile, resolveStm32DfuProfile, validateCortexMImage } from './cdc-dfu-profile.js';
 
 export { flashEsp8266 } from './esp8266.js';
 export { flashEsp32Original } from './esp32-original.js';

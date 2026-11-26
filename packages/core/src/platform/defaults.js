@@ -40,6 +40,7 @@ export const BUILTIN_PROGRAMMERS = Object.freeze([
     id: 'stm32-stlink',
     name: 'STM32 ST-LINK / UART / DFU',
     protocols: Object.freeze(['stlink', 'stm32-uart', 'dfu']),
+    browserProtocols: Object.freeze(['stlink-swd', 'dfuse']),
     platforms: Object.freeze(['st-stm32-bare-metal'])
   })
 ]);

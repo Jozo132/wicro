@@ -420,7 +420,7 @@ export class IdeShell {
         const opt = document.createElement('option');
         opt.value = board.id;
         const arch = board.metadata?.architecture ?? board.metadata?.build?.target ?? '';
-        opt.textContent = `${board.id} (${arch})`;
+        opt.textContent = `${board.metadata?.boardName || board.metadata?.mcu || board.id}`;
         this.boardSelect.appendChild(opt);
       }
       this.boardSelect.value = this.store.boardId;
@@ -490,7 +490,7 @@ export class IdeShell {
   }
 
   renderFilesAndTabs() {
-    const paths = [...this.store.files.keys()].sort();
+    const paths = /** @type {string[]} */ (Array.from(this.store.files.keys())).sort();
     this.fileList.innerHTML = '';
     this.tabsBar.innerHTML = '';
 

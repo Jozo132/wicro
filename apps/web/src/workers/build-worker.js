@@ -11,7 +11,7 @@ import { safeSdkArchivePath, sha256Bytes } from '../../../../packages/registry/s
 import { parseProjectConfiguration } from '../../../../packages/core/src/platform/configuration.js';
 import { downloadBytes, DownloadControl } from '../../../../packages/registry/src/download.js';
 import { composeSdkArchive } from '../../../../packages/registry/src/sdk-composition.js';
-import { preprocessIno } from '../../../../packages/arduino/src/index.js';
+import { discoverStm32Boards, parseBoardsTxt, preprocessIno } from '../../../../packages/arduino/src/index.js';
 
 /**
  * In-memory fallback storage when OPFS is unavailable (e.g., restricted iframes).
@@ -39,7 +39,7 @@ class MemoryAssetStorage {
   /** @param {string} path */
   async remove(path) {
     const prefix = path.replace(/^\/+/, '');
-    for (const key of [...this.files.keys()]) {
+    for (const key of Array.from(this.files.keys())) {
       if (key === prefix || key.startsWith(`${prefix}/`)) this.files.delete(key);
     }
   }
@@ -47,7 +47,8 @@ class MemoryAssetStorage {
   async readdir(path) {
     const prefix = path.replace(/^\/+/, '').replace(/\/+$/, '');
     const names = new Set();
-    for (const key of this.files.keys()) {
+    const keys = /** @type {string[]} */ (Array.from(this.files.keys()));
+    for (const key of keys) {
       const rest = prefix ? (key.startsWith(`${prefix}/`) ? key.slice(prefix.length + 1) : '') : key;
       if (rest) names.add(rest.split('/')[0]);
     }
@@ -296,9 +297,22 @@ const ensureTargetSdk = async (origin, requestId, sdkManifest, offline) => {
     const safeName = safeSdkArchivePath(rawName);
     files.set(safeName, data);
   }
-  const wasiDir = buildWasiDirectoryMap(files.entries());
+  const wasiEntries = /** @type {Array<[string,string|Uint8Array]>} */ (Array.from(files.entries()));
+  const wasiDir = buildWasiDirectoryMap(wasiEntries);
+  /** @type {{files:Map<string,Uint8Array>,wasiDir:Map<string,string|Uint8Array>,cache:string,version:string,sha256:string,dynamicBoards?:any[]}} */
   const loaded = { files, wasiDir, cache: cacheState, version: sdkManifest.version, sha256: distribution.sha256 };
   loadedSdks.set(sdkKey, loaded);
+  if (sdkKey.startsWith('stm32-') || sdkKey.includes('stm32')) {
+    const inventoryPaths = /** @type {string[]} */ (Array.from(files.keys()));
+    const boardsTxtPath = inventoryPaths.find((path) => /(?:^|\/)(?:boards\.txt)$/.test(path) && !path.includes('/examples/'));
+    if (boardsTxtPath) {
+      const boardsTxtBytes = files.get(boardsTxtPath);
+      if (!boardsTxtBytes) throw new Error(`STM32 boards.txt missing after extraction: ${boardsTxtPath}`);
+      const boardsTxt = new TextDecoder().decode(boardsTxtBytes);
+      const discovered = discoverStm32Boards(parseBoardsTxt(boardsTxt), { sourceVersion: sdkManifest.version });
+      if (discovered.length > 0) loaded.dynamicBoards = discovered;
+    }
+  }
   return loaded;
 };
 
@@ -414,7 +428,8 @@ const handleBuild = async (requestId, payload) => {
       const names = new Set();
       if (sdkPrefix && (normalized === sdkPrefix || normalized.startsWith(`${sdkPrefix}/`)) && boardSdk) {
         const sub = normalized === sdkPrefix ? '' : `${normalized.slice(sdkPrefix.length + 1)}/`;
-        for (const key of boardSdk.sdk.files.keys()) {
+        const sdkKeys = /** @type {string[]} */ (Array.from(boardSdk.sdk.files.keys()));
+        for (const key of sdkKeys) {
           if (sub && !key.startsWith(sub)) continue;
           const rest = sub ? key.slice(sub.length) : key;
           const first = rest.split('/')[0];
@@ -423,7 +438,8 @@ const handleBuild = async (requestId, payload) => {
         return [...names].sort();
       }
       const prefix = `${normalized}/`;
-      for (const key of virtualStore.keys()) {
+      const virtualKeys = /** @type {string[]} */ (Array.from(virtualStore.keys()));
+      for (const key of virtualKeys) {
         if (!key.startsWith(prefix)) continue;
         const rest = key.slice(prefix.length);
         const first = rest.split('/')[0];
@@ -542,7 +558,8 @@ const handleDiagnose = async (requestId, payload) => {
   let sdkLoaded = null;
   for (const depName of Object.keys(boardManifest.dependencies ?? {})) {
     if (!depName.endsWith('-sdk')) continue;
-    for (const [key, value] of loadedSdks.entries()) {
+    const sdkEntries = /** @type {Array<[string,any]>} */ (Array.from(loadedSdks.entries()));
+    for (const [key, value] of sdkEntries) {
       if (key.startsWith(`${depName}-`)) {
         sdkLoaded = value;
         break;
@@ -614,7 +631,8 @@ const handleComplete = async (payload) => {
   let sdkLoaded = null;
   for (const depName of Object.keys(boardManifest.dependencies ?? {})) {
     if (!depName.endsWith('-sdk')) continue;
-    for (const [key, value] of loadedSdks.entries()) {
+    const sdkEntries = /** @type {Array<[string,any]>} */ (Array.from(loadedSdks.entries()));
+    for (const [key, value] of sdkEntries) {
       if (key.startsWith(`${depName}-`)) {
         sdkLoaded = value;
         break;
@@ -650,6 +668,31 @@ const handleComplete = async (payload) => {
 /**
  * Inspect persistent cache state in OPFS.
  */
+/** @param {{origin:string,family?:string,families?:string[],offline?:boolean,requestId:string}} payload */
+const handleDiscoverStm32Boards = async (payload) => {
+  const offline = Boolean(payload.offline);
+  const families = Array.isArray(payload.families)
+    ? payload.families.filter((family) => typeof family === 'string' && family.length > 0)
+    : [typeof payload.family === 'string' ? payload.family : 'stm32-f4-arduino-sdk'];
+  /** @type {any[]} */
+  const discovered = [];
+  const familyNames = /** @type {string[]} */ ([...new Set(families)]);
+  for (const familyName of familyNames) {
+    const sdkManifest = await loadRegistryManifest(payload.origin, familyName, offline);
+    const sdk = await ensureTargetSdk(payload.origin, `${payload.requestId}-${familyName}`, sdkManifest, offline);
+    const candidates = /** @type {string[]} */ (Array.from(sdk.files.keys())).filter((path) => /(?:^|\/)(boards\.txt)$/i.test(path));
+    for (const path of candidates) {
+      const data = sdk.files.get(path);
+      if (!data) continue;
+      const text = new TextDecoder().decode(data);
+      discovered.push(...discoverStm32Boards(parseBoardsTxt(text), { family: familyName, sourceVersion: sdkManifest.version }));
+    }
+  }
+  const unique = new Map();
+  for (const board of discovered) unique.set(board.id, board);
+  return { families, boards: /** @type {any[]} */ (Array.from(unique.values())) };
+};
+
 const handleCacheStatus = async () => {
   const storage = await getStorage();
   /** @type {string[]} */
@@ -670,7 +713,7 @@ const handleCacheStatus = async () => {
     compilerCached: hasCompiler,
     compilerLoaded: Boolean(compiledLlvmModule),
     cachedSdks: sdks,
-    loadedSdks: [...loadedSdks.keys()],
+    loadedSdks: /** @type {string[]} */ (Array.from(loadedSdks.keys())),
     incrementalObjects: incrementalObjectCache.size
   };
 };
@@ -780,6 +823,11 @@ self.addEventListener('message', async (event) => {
     }
     if (type === 'complete') {
       const result = await handleComplete(payload);
+      self.postMessage({ type: 'result', id, ok: true, result });
+      return;
+    }
+    if (type === 'discoverStm32Boards') {
+      const result = await handleDiscoverStm32Boards({ ...payload, requestId: id });
       self.postMessage({ type: 'result', id, ok: true, result });
       return;
     }

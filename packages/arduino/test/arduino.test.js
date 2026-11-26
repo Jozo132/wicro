@@ -3,6 +3,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import {
   discoverArduinoLibraries,
+  discoverStm32Boards,
   findMissingHeaders,
   parseBoardsTxt,
   parseLibraryJson,
@@ -41,9 +42,36 @@ test('parses boards.txt menu options and platform metadata', () => {
   assert.equal(boards.uno.properties.upload, undefined);
   assert.equal(boards.uno.properties['upload.protocol'], 'arduino');
   assert.ok(boards.uno.menus.cpu);
+  assert.equal(boards.uno.menus.cpu.atmega328, 'ATmega328P');
+  assert.equal(boards.uno.menuProperties.cpu.atmega328['build.mcu'], 'atmega328p');
 
   const platform = parsePropertyFile(`name=Arduino AVR Boards\narchitecture=avr\n`);
   assert.equal(platform.name, 'Arduino AVR Boards');
+});
+
+test('dynamically discovers STM32 board-menu devices as selectable targets', () => {
+  const boards = parseBoardsTxt(`generic_f401.name=Generic STM32F401RC\ngeneric_f401.build.mcu=STM32F401RC\ngeneric_f401.build.variant=STM32F4xx/F401R(B-C-D-E)T\ngeneric_f401.build.f_cpu=84000000L\ngeneric_f401.upload.maximum_size=262144\ngeneric_f401.build.maximum_ram_size=65536\ngeneric_f401.build.series=STM32F4xx\ngeneric_f411.name=Generic STM32F411CE\ngeneric_f411.build.mcu=STM32F411CE\ngeneric_f411.build.variant=STM32F4xx/F411C(C-E)(U-Y)\ngeneric_f411.build.f_cpu=100000000L\ngeneric_f411.upload.maximum_size=524288\ngeneric_f411.build.maximum_ram_size=131072\ngeneric_f411.build.series=STM32F4xx\ngeneric_f4.name=Generic STM32F4 series\ngeneric_f4.build.mcu=CORTEX-M4\ngeneric_f4.build.series=STM32F4xx\ngeneric_f4.menu.pnum.F401RCTx=Generic F401RCTx\ngeneric_f4.menu.pnum.F401RCTx.build.mcu=STM32F401xC\ngeneric_f4.menu.pnum.F401RCTx.build.product_line=STM32F401xC\ngeneric_f4.menu.pnum.F401RCTx.build.variant=STM32F4xx/F401R(C-D)T\n`);
+  const discovered = discoverStm32Boards(boards, { family: 'stm32-f4-arduino-sdk', sourceVersion: '1.0.0' });
+  assert.equal(discovered.length, 3);
+  assert.ok(discovered.some((board) => board.metadata.mcu === 'STM32F401RC'));
+  assert.ok(discovered.some((board) => board.metadata.mcu === 'STM32F411CE'));
+  assert.ok(discovered.some((board) => board.name === 'Generic STM32F401RC'));
+  assert.ok(discovered.some((board) => board.name === 'Generic STM32F411CE'));
+  assert.ok(discovered.every((board) => board.metadata.mcuType === 'STM32'));
+  assert.ok(discovered.every((board) => board.metadata.mcuFamily === 'STM32'));
+  assert.equal(discovered.find((board) => board.metadata.mcuDevice === 'Generic F401RCTx')?.name, 'Generic STM32F4 series · Generic F401RCTx');
+  assert.equal(discovered.find((board) => board.metadata.mcuDevice === 'Generic F401RCTx')?.metadata.mcuSeries, 'Generic STM32F4 series');
+  assert.equal(discovered.find((board) => board.metadata.mcuDevice === 'Generic F401RCTx')?.metadata.mcu, 'STM32F401XC');
+  assert.equal(discovered.find((board) => board.metadata.mcuDevice === 'Generic F401RCTx')?.metadata.frameworkConfigurations.arduino.metadata.arduino.productLine, 'STM32F401xC');
+  assert.equal(discovered.find((board) => board.metadata.mcuDevice === 'Generic F401RCTx')?.metadata.frameworkConfigurations.arduino.metadata.arduino.variant, 'STM32F4xx/F401R(C-D)T');
+  assert.equal(discovered.find((board) => board.metadata.mcu === 'STM32F401RC')?.metadata.mcuSeries, 'STM32F4');
+  assert.equal(discovered.find((board) => board.metadata.mcu === 'STM32F401RC')?.metadata.mcuDevice, 'STM32F401RC');
+  assert.equal(discovered.find((board) => board.metadata.mcu === 'STM32F401RC')?.id, 'stm32-generic-f401');
+  assert.ok(discovered.every((board) => board.metadata.boardName));
+  assert.ok(discovered.every((board) => board.metadata.boardPreset));
+  assert.ok(discovered.every((board) => board.metadata.dynamic === true));
+  assert.ok(discovered.every((board) => board.metadata.platform === 'st-stm32-bare-metal'));
+  assert.ok(discovered.every((board) => board.metadata.programmerId === 'stm32-cdc-dfu'));
 });
 
 test('parses library.properties, library.json and platformio.ini', () => {

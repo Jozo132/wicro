@@ -19,6 +19,7 @@
     "sramCapacityBytes": 98304,
     "flashAddress": "0x08000000",
     "sramAddress": "0x20000000",
+    "programmerId": "stm32-cdc-dfu",
     "build": {
       "kind": "bare-metal",
       "target": "armv7e-m",
@@ -31,6 +32,7 @@
       "output": ".wicro/build"
     },
     "status": "preset",
+    "programmerId": "stm32-cdc-dfu",
     "platform": "st-stm32-bare-metal",
     "frameworkConfigurations": {
       "arduino": {

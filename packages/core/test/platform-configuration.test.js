@@ -50,7 +50,7 @@ test('manual JSON updates visual state, rejects malformed values and recovers wi
   store.setFileContent('wicro.json', JSON.stringify(configuration));
   assert.equal(store.boardId, 'stm32f103cb');
   assert.equal(store.framework, 'bare-metal');
-  assert.equal(store.uploadSettings.programmer, 'none');
+  assert.equal(store.uploadSettings.programmer, 'stm32-cdc-dfu');
   store.setFileContent('wicro.json', '{ "board":');
   assert.ok(store.configurationError);
   store.setBoard('esp32-c3-supermini');
@@ -79,5 +79,5 @@ test('upload choices persist to JSON and preserve firmware while build changes i
   assert.match(store.configurationIssues.join(' '), /baudRate/);
   store.setBoard('stm32f103cb');
   assert.equal(store.configuration.upload, undefined);
-  assert.equal(store.uploadSettings.programmer, 'none');
+  assert.equal(store.uploadSettings.programmer, 'stm32-cdc-dfu');
 });

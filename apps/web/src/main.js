@@ -344,12 +344,26 @@ const bootstrap = async () => {
   // Load canonical board catalog and example projects from Vite / static endpoints
   try {
     const appBase = new URL(import.meta.env.BASE_URL, window.location.href).href.replace(/\/$/, '');
-    const [boardsResp, examplesResp] = await Promise.all([
-      fetch(`${appBase}/registry/boards.json`, { cache: 'no-cache' }),
-      fetch(`${appBase}/examples/index.json`, { cache: 'no-cache' })
-    ]);
-    if (boardsResp.ok) store.setBoards(await boardsResp.json());
-    if (examplesResp.ok) store.setExamples(await examplesResp.json());
+    const boardsRequest = fetch(`${appBase}/registry/boards.json`, { cache: 'no-cache' });
+    const examplesRequest = fetch(`${appBase}/examples/index.json`, { cache: 'no-cache' }).catch(() => null);
+    const boardsResp = await boardsRequest;
+    if (boardsResp.ok) {
+      const canonicalBoards = await boardsResp.json();
+      store.setBoards(canonicalBoards);
+      void buildClient.discoverStm32Boards({
+        families: ['stm32-f1-arduino-sdk', 'stm32-f4-arduino-sdk', 'stm32-h7-arduino-sdk'],
+        offline: false
+      }).then((discovered) => {
+        if (Array.isArray(discovered?.boards) && discovered.boards.length > 0) {
+          store.mergeBoards(discovered.boards);
+          store.appendCompilerLog(`[STM32] Dynamically discovered ${discovered.boards.length} Arduino targets from boards.txt`);
+        }
+      }).catch((error) => {
+        store.appendCompilerLog(`[STM32] Dynamic board discovery unavailable: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+    const examplesResp = await examplesRequest;
+    if (examplesResp?.ok) store.setExamples(await examplesResp.json());
   } catch {
     // Offline fallback uses FALLBACK_EXAMPLE below.
   }
@@ -367,7 +381,6 @@ const bootstrap = async () => {
     } catch (error) { store.appendCompilerLog(`[Project storage] ${error instanceof Error ? error.message : String(error)}`); }
   });
   editorHost.syncFiles(store.files, store.activeFile);
-  await refreshCacheStatus();
 
   // Expose a clean debugging/automation API on window for Playwright E2E tests
   /** @type {any} */ (window).__wicroIde = {
@@ -379,6 +392,7 @@ const bootstrap = async () => {
     runFlash,
     refreshCacheStatus
   };
+  void refreshCacheStatus();
 
   window.addEventListener('beforeunload', () => {
     editorHost.dispose();

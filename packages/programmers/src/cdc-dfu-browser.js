@@ -43,8 +43,10 @@ export class BrowserCdcDfuProgrammer {
     if (device.vendorId !== p.dfuVendorId || device.productId !== p.dfuProductId || p.serialNumber && device.serialNumber !== p.serialNumber) throw new Error('Selected USB device does not match the DFU profile');
     const session = await openDfuDevice(device, p);
     try {
-      const result = await new UsbDfuProgrammer({ transport: session.transport, ...session.descriptor, profile: p, sectors: session.sectors, onProgress: options.onProgress }).writeFlash([{ address: p.address, data }], { verifyReadback: true });
-      return { ...result, chip: 'STM32F401RC USB DFU', mac: undefined, serialNumber: device.serialNumber, reboot: { confirmed: false } };
+      const sectors = session.sectors.length > 0 ? session.sectors : (p.fallbackSectors ?? []);
+      const result = await new UsbDfuProgrammer({ transport: session.transport, ...session.descriptor, profile: p, sectors, onProgress: options.onProgress }).writeFlash([{ address: p.address, data }], { verifyReadback: true });
+      const chip = session.name || 'STM32 USB DFU';
+      return { ...result, chip, mac: undefined, serialNumber: device.serialNumber, reboot: { confirmed: false } };
     } finally { if (device.opened) await session.close(); }
   }
 }

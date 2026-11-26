@@ -9,6 +9,7 @@ import {
   flashEsp8266,
   flashEsp32Original,
   BrowserCdcDfuProgrammer,
+  resolveStm32DfuProfile,
   describeWebSerialPort,
   detectBrowserCapabilities
 } from '../../../../packages/programmers/src/browser.js';
@@ -56,7 +57,12 @@ export class IdeDeviceService {
     if (!board) return null;
     const platformId = String(board.metadata?.platform ?? '');
     const platform = platformId ? platforms.getPlatform(platformId) : null;
-    const programmerId = board.metadata?.programmerId ?? platform?.programmerId ?? (platformId === 'espressif-esp32c3' ? 'esp32-c3-usb-jtag' : null);
+    const mcu = String(board.metadata?.mcu ?? '').toUpperCase();
+    const stm32Dfu = /^STM32(F1|F4|F7|H7)/.test(mcu);
+    const programmerId = board.metadata?.programmerId
+      ?? (stm32Dfu ? 'stm32-cdc-dfu' : null)
+      ?? platform?.programmerId
+      ?? (platformId === 'espressif-esp32c3' ? 'esp32-c3-usb-jtag' : null);
     if (!programmerId) return null;
     const descriptor = platforms.getProgrammer(programmerId);
     return {
@@ -133,8 +139,20 @@ export class IdeDeviceService {
       try { return await programmer.writeFlash(await selection, options.firmwareBin); }
       finally { await this.coordinator.releaseAfterFlash({ reconnectMonitor: false }); }
     }
-    if (options.board.metadata?.cdcDfu) {
-      const programmer = new BrowserCdcDfuProgrammer({ profile: options.board.metadata.cdcDfu });
+    const resolvedProfile = resolveStm32DfuProfile(String(options.board.metadata?.mcu ?? ''));
+    const boardProfile = options.board.metadata?.cdcDfu;
+    const cdcDfu = resolvedProfile
+      ? {
+          ...resolvedProfile,
+          ...(boardProfile ?? {}),
+          address: Number.parseInt(String(options.board.metadata?.flashAddress ?? '0x08000000'), 0),
+          capacity: Number(options.board.metadata?.flashCapacityBytes ?? resolvedProfile.capacity),
+          ramAddress: Number.parseInt(String(options.board.metadata?.sramAddress ?? '0x20000000'), 0),
+          ramCapacity: Number(options.board.metadata?.sramCapacityBytes ?? resolvedProfile.ramCapacity)
+        }
+      : boardProfile ?? null;
+    if (cdcDfu) {
+      const programmer = new BrowserCdcDfuProgrammer({ profile: cdcDfu });
       // Request permission before awaiting monitor cleanup, preserving activation.
       const selection = programmer.requestDfuDevice();
       await this.coordinator.acquireForFlash();

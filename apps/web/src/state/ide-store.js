@@ -139,6 +139,22 @@ export class IdeStore {
   }
 
   /** @param {ExampleEntry[]} examples */
+  /** Merge dynamically discovered boards by stable id. @param {BoardCatalogEntry[]} boards */
+  mergeBoards(boards) {
+    const merged = [...this.boards];
+    const seenPartNumbers = new Set(merged.map((entry) => String(entry.metadata.boardPreset ?? entry.metadata.boardId ?? entry.metadata.productId ?? entry.metadata.mcu ?? entry.id).toLowerCase()));
+    for (const board of boards) {
+      const partNumber = String(board.metadata.boardPreset ?? board.metadata.boardId ?? board.metadata.productId ?? board.metadata.mcu ?? board.id).toLowerCase();
+      if (seenPartNumbers.has(partNumber)) continue;
+      seenPartNumbers.add(partNumber);
+      const index = merged.findIndex((entry) => entry.id === board.id);
+      if (index >= 0) merged[index] = { ...merged[index], ...board, metadata: { ...merged[index].metadata, ...board.metadata } };
+      else merged.push(board);
+    }
+    this.setBoards(merged);
+  }
+
+  /** @param {ExampleEntry[]} examples */
   setExamples(examples) {
     this.examples = examples;
     this.emit('examples');
@@ -164,7 +180,7 @@ export class IdeStore {
   get configurationIssues() {
     if (this.configurationError) return [this.configurationError];
     const issues = validatePlatformConfiguration(this.configuration, this.boards);
-    const sources = Array.isArray(this.configuration.build?.sources) && this.configuration.build.sources.length ? this.configuration.build.sources : [...this.files.keys()];
+    const sources = Array.isArray(this.configuration.build?.sources) && this.configuration.build.sources.length ? this.configuration.build.sources : /** @type {string[]} */ (Array.from(this.files.keys()));
     if (this.framework !== 'arduino' && sources.some((/** @type {unknown} */ path) => typeof path === 'string' && /\.(ino|pde)$/i.test(path))) issues.push('Arduino sketch sources require the Arduino framework. Select Arduino or update the project sources to C/C++.');
     return issues;
   }
@@ -266,7 +282,7 @@ export class IdeStore {
     this.files.delete(path);
     this.lastBuild = null;
     if (this.activeFile === path) {
-      this.activeFile = [...this.files.keys()][0] ?? '';
+      this.activeFile = /** @type {string[]} */ (Array.from(this.files.keys()))[0] ?? '';
     }
     this.emit('project');
   }
@@ -280,7 +296,7 @@ export class IdeStore {
 
   /** @returns {Record<string, string>} */
   snapshotFiles() {
-    return Object.fromEntries(this.files.entries());
+    return Object.fromEntries(Array.from(this.files.entries()));
   }
 
   /** @param {string} line */

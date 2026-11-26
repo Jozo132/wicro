@@ -53,6 +53,16 @@ test('verified blink ELF is ELF32 RISC-V', async () => {
   assert.equal(elf.readUInt16LE(18), 243);
 });
 
+test('STM32Fx boards expose matching DFU programmer metadata', async () => {
+  const boardNames = ['stm32f103c8', 'stm32f103cb', 'stm32f401rc', 'stm32-nucleo-f401re', 'stm32-black-pill', 'stm32h723vg'];
+  for (const name of boardNames) {
+    const manifest = JSON.parse(await readFile(`registry/${name}/package.json`, 'utf8'));
+    assert.equal(manifest.metadata.programmerId, 'stm32-cdc-dfu');
+    assert.equal(Number.parseInt(manifest.metadata.flashAddress, 0), 0x08000000);
+    assert.ok(Number.isInteger(manifest.metadata.flashCapacityBytes));
+  }
+});
+
 test('STM32F401RC second-MVP metadata is present', async () => {
   const manifest = JSON.parse(await readFile('registry/stm32f401rc/package.json', 'utf8'));
 

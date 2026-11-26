@@ -40,17 +40,45 @@ export const getMcuType = (board) => {
   return family === 'RP2040' || family === 'RP2350' ? 'RP2' : family;
 };
 
-/** MCU series within a platform; models remain individual orderable MCUs.
+/** @param {ConfigurationBoard} board */
+export const getMcuVendor = (board) => String(board.metadata.manufacturer ?? getMcuType(board));
+
+/** Broad MCU family within a platform.
  * @param {ConfigurationBoard} board
  */
 export const getMcuFamily = (board) => {
   if (typeof board.metadata.mcuFamily === 'string') return board.metadata.mcuFamily;
-  const model = String(board.metadata.mcu ?? '').toUpperCase(), type = getMcuType(board);
-  if (type === 'STM32' || type === 'ESP32') return type;
-  if (type === 'RP2') return model;
-  if (type === 'AVR') return model.startsWith('ATMEGA') ? 'ATmega' : 'AVR';
+  const mcu = String(board.metadata.mcu ?? '').toUpperCase(), type = getMcuType(board);
+  if (type === 'STM32') return 'STM32';
+  if (type === 'ESP32') return type;
+  if (type === 'RP2') return String(board.metadata.mcu ?? '').toUpperCase();
+  if (type === 'AVR') return mcu.startsWith('ATMEGA') ? 'ATmega' : 'AVR';
   return type;
 };
+
+/** MCU series within a family; individual MCU models remain a separate choice.
+ * @param {ConfigurationBoard} board
+ */
+export const getMcuSeries = (board) => {
+  if (typeof board.metadata.mcuSeries === 'string') return board.metadata.mcuSeries;
+  const mcu = String(board.metadata.mcu ?? board.id).toUpperCase(), type = getMcuType(board);
+  if (type === 'STM32') {
+    const match = mcu.match(/^STM32(F[1-7]|G[0-4]|H7|L[0-5]|U5|WB|WL)/);
+    return match ? `STM32${match[1]}` : mcu;
+  }
+  if (type === 'ESP32') {
+    const match = mcu.match(/^ESP32-?(C\d|H\d|S\d|P\d)/);
+    return match ? `ESP32-${match[1]}` : 'ESP32';
+  }
+  return getMcuFamily(board);
+};
+
+/** Exact MCU model used to distinguish devices that share a series.
+ * @param {ConfigurationBoard} board
+ */
+export const getMcuDevice = (board) => typeof board.metadata.mcuDevice === 'string'
+  ? board.metadata.mcuDevice
+  : String(board.metadata.mcu ?? board.id).toUpperCase();
 
 /**
  * Resolve choices from the same platform/programmer registry used by the engine.
