@@ -163,29 +163,31 @@ export default defineConfig({
           }
         });
 
-        server.middlewares.use('/toolchain/llvm.wasm', async (_request, response, next) => {
+        server.middlewares.use('/toolchain/llvm.wasm', async (request, response, next) => {
           try {
-            const wasm = await readFile(llvmPath);
-            response.statusCode = 200;
-            response.setHeader('Content-Type', 'application/wasm');
-            response.setHeader('Content-Length', String(wasm.byteLength));
-            response.setHeader('Cache-Control', 'public, max-age=3600');
-            response.end(wasm);
+            const target = 'https://github.com/Jozo132/wicro/releases/download/llvm-wasm-v1.0.0/llvm.wasm';
+            const headers = new Headers();
+            for (const name of ['range', 'if-range']) { const value = request.headers[name]; if (typeof value === 'string') headers.set(name, value); }
+            const result = await relayArtifact(new Request(`http://localhost/api/asset-download?url=${encodeURIComponent(target)}`, { method: request.method, headers }), { fetch });
+            response.writeHead(result.status, Object.fromEntries(result.headers));
+            if (result.body) await pipeline(Readable.fromWeb(/** @type {any} */ (result.body)), response);
+            else response.end();
           } catch (error) {
-            next(error);
+            if (!response.headersSent) next(error); else response.destroy();
           }
         });
 
-        server.middlewares.use('/toolchain/ld.wasm', async (_request, response, next) => {
+        server.middlewares.use('/toolchain/ld.wasm', async (request, response, next) => {
           try {
-            const wasm = await readFile(ldPath);
-            response.statusCode = 200;
-            response.setHeader('Content-Type', 'application/wasm');
-            response.setHeader('Content-Length', String(wasm.byteLength));
-            response.setHeader('Cache-Control', 'public, max-age=3600');
-            response.end(wasm);
-          } catch {
-            next();
+            const target = 'https://github.com/Jozo132/wicro/releases/download/llvm-wasm-v1.0.0/ld.wasm';
+            const headers = new Headers();
+            for (const name of ['range', 'if-range']) { const value = request.headers[name]; if (typeof value === 'string') headers.set(name, value); }
+            const result = await relayArtifact(new Request(`http://localhost/api/asset-download?url=${encodeURIComponent(target)}`, { method: request.method, headers }), { fetch });
+            response.writeHead(result.status, Object.fromEntries(result.headers));
+            if (result.body) await pipeline(Readable.fromWeb(/** @type {any} */ (result.body)), response);
+            else response.end();
+          } catch (error) {
+            if (!response.headersSent) next(error); else response.destroy();
           }
         });
 

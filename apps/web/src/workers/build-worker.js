@@ -176,10 +176,7 @@ const ensureCompilerModule = async (origin, requestId, offline) => {
     ...transferOptions(requestId)
   });
 
-  const resolved = await manager.ensure(localManifest, {
-    offline,
-    localSources: { clang: `${origin}/toolchain/llvm.wasm` }
-  });
+  const resolved = await manager.ensure(localManifest, { offline });
   compilerCacheState = resolved.cache;
 
   emitProgress(requestId, { stage: 'toolchain', message: 'Compiling LLVM WebAssembly module…', percent: 26 });
